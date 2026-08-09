@@ -17,6 +17,67 @@ interface MapViewProps {
   fitKey?: string
 }
 
+function ensureRouteLayers(map: Map) {
+  if (map.getSource('route')) return
+
+  map.addSource('route', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+  map.addLayer({
+    id: 'route-line-casing',
+    type: 'line',
+    source: 'route',
+    paint: {
+      'line-color': '#04140e',
+      'line-width': 10,
+      'line-opacity': 0.55,
+    },
+  })
+  map.addLayer({
+    id: 'route-line',
+    type: 'line',
+    source: 'route',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#d6ff4b',
+      'line-width': 5,
+    },
+  })
+}
+
+function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boolean) {
+  if (!map.isStyleLoaded()) return false
+
+  ensureRouteLayers(map)
+  const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined
+  if (!source) return false
+
+  if (!geo || geo.coordinates.length < 2) {
+    source.setData({ type: 'FeatureCollection', features: [] })
+    return true
+  }
+
+  source.setData({
+    type: 'Feature',
+    properties: {},
+    geometry: geo,
+  })
+
+  if (fit) {
+    const bounds = geo.coordinates.reduce(
+      (b, c) => b.extend(c as [number, number]),
+      new maplibregl.LngLatBounds(
+        geo.coordinates[0] as [number, number],
+        geo.coordinates[0] as [number, number],
+      ),
+    )
+    map.fitBounds(bounds, { padding: 56, duration: 600 })
+  }
+
+  return true
+}
+
 export function MapView({
   waypoints,
   geometry,
@@ -31,6 +92,10 @@ export function MapView({
   const mapRef = useRef<Map | null>(null)
   const markersRef = useRef<Marker[]>([])
   const hoverMarkerRef = useRef<Marker | null>(null)
+  const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
+  const fitKeyRef = useRef(fitKey)
+  geometryRef.current = geometry
+  fitKeyRef.current = fitKey
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -53,31 +118,13 @@ export function MapView({
       'top-right',
     )
 
-    map.on('load', () => {
-      map.addSource('route', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      })
-      map.addLayer({
-        id: 'route-line-casing',
-        type: 'line',
-        source: 'route',
-        paint: {
-          'line-color': '#071510',
-          'line-width': 8,
-          'line-opacity': 0.35,
-        },
-      })
-      map.addLayer({
-        id: 'route-line',
-        type: 'line',
-        source: 'route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': '#167a52',
-          'line-width': 5,
-        },
-      })
+    const paintFromRef = (fit: boolean) => {
+      applyGeometry(map, geometryRef.current, fit)
+    }
+
+    map.on('load', () => paintFromRef(true))
+    map.on('styledata', () => {
+      if (map.isStyleLoaded()) paintFromRef(Boolean(geometryRef.current))
     })
 
     if (onMapClick) {
@@ -132,35 +179,9 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
-    const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined
-    if (!source) return
-
-    if (!geometry || geometry.coordinates.length < 2) {
-      source.setData({ type: 'FeatureCollection', features: [] })
-      return
-    }
-
-    source.setData({
-      type: 'Feature',
-      properties: {},
-      geometry,
-    })
+    if (!map) return
+    applyGeometry(map, geometry, Boolean(fitKey))
   }, [geometry, fitKey])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !geometry || geometry.coordinates.length < 2) return
-
-    const bounds = geometry.coordinates.reduce(
-      (b, c) => b.extend(c as [number, number]),
-      new maplibregl.LngLatBounds(
-        geometry.coordinates[0] as [number, number],
-        geometry.coordinates[0] as [number, number],
-      ),
-    )
-    map.fitBounds(bounds, { padding: 56, duration: 600 })
-  }, [fitKey, geometry])
 
   useEffect(() => {
     const map = mapRef.current
