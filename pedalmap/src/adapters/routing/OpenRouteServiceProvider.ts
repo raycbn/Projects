@@ -11,7 +11,15 @@ import type {
 import { RoutingError } from '@/domain/types'
 import { buildStatsFromProfile } from '@/lib/stats'
 
-const ORS_BASE = 'https://api.openrouteservice.org'
+/**
+ * Recommended HeiGIT base URL (api.openrouteservice.org is deprecated; shut-off 2026-08-24).
+ * No trailing slash.
+ * @see https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912
+ */
+export const ORS_BASE = 'https://api.heigit.org/openrouteservice'
+
+/** @deprecated Use ORS_BASE. Kept only for migration notes/tests. */
+export const ORS_LEGACY_BASE = 'https://api.openrouteservice.org'
 
 /**
  * ORS cycling profiles mapping.
@@ -53,7 +61,6 @@ function buildOptions(preferences: RoutePreference[]) {
 }
 
 function preferenceMode(preferences: RoutePreference[]): 'recommended' | 'shortest' | 'fastest' {
-  // Mutually exclusive: shorter wins over faster if both selected
   if (preferences.includes('prefer_shorter')) return 'shortest'
   if (preferences.includes('prefer_faster')) return 'fastest'
   return 'recommended'
@@ -99,15 +106,13 @@ function decodeGeometry(
 }
 
 function resolveApiKey(): string | undefined {
-  return import.meta.env.VITE_ORS_API_KEY || import.meta.env.VITE_ROUTING_API_KEY
+  const key = import.meta.env.VITE_ORS_API_KEY || import.meta.env.VITE_ROUTING_API_KEY
+  return typeof key === 'string' && key.trim() ? key.trim() : undefined
 }
 
 /**
- * OpenRouteService Directions adapter.
+ * OpenRouteService Directions adapter (HeiGIT).
  * Requires VITE_ORS_API_KEY (or VITE_ROUTING_PROXY_URL). Never commit real keys.
- *
- * Browser CORS may block direct ORS calls depending on HeiGIT status —
- * production should prefer a Cloud Functions proxy.
  */
 export class OpenRouteServiceProvider implements RoutingProvider {
   readonly name = 'openrouteservice'
@@ -116,10 +121,11 @@ export class OpenRouteServiceProvider implements RoutingProvider {
 
   constructor(
     apiKey: string | undefined = resolveApiKey(),
-    baseUrl: string = import.meta.env.VITE_ROUTING_PROXY_URL || ORS_BASE,
+    baseUrl: string = (import.meta.env.VITE_ROUTING_PROXY_URL as string | undefined) || ORS_BASE,
   ) {
     this.apiKey = apiKey
-    this.baseUrl = baseUrl
+    // Normalize: never keep trailing slash (HeiGIT rejects some SDK paths with it)
+    this.baseUrl = baseUrl.replace(/\/+$/, '')
   }
 
   isConfigured(): boolean {
@@ -165,11 +171,14 @@ export class OpenRouteServiceProvider implements RoutingProvider {
       },
     }
 
+    const url = `${this.baseUrl}/v2/directions/${profile}/json`
+
     try {
-      const response = await fetch(`${this.baseUrl}/v2/directions/${profile}/json`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json, application/geo+json',
           ...(this.apiKey ? { Authorization: this.apiKey } : {}),
         },
         body: JSON.stringify(body),
@@ -181,7 +190,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
 
       if (!response.ok) {
         const text = await response.text()
-        console.error('[ORS]', response.status, text)
+        console.error('[ORS]', response.status, text.slice(0, 500))
         if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
           throw new RoutingError('No route found for preferences', 'no_route')
         }

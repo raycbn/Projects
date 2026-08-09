@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   mapBikeProfile,
+  ORS_BASE,
+  ORS_LEGACY_BASE,
   ORS_SUPPORTED_PREFERENCES,
   OpenRouteServiceProvider,
 } from '@/adapters/routing/OpenRouteServiceProvider'
 import { RoutingError } from '@/domain/types'
 
 describe('OpenRouteServiceProvider', () => {
+  it('uses the recommended HeiGIT base URL', () => {
+    expect(ORS_BASE).toBe('https://api.heigit.org/openrouteservice')
+    expect(ORS_LEGACY_BASE).toBe('https://api.openrouteservice.org')
+    expect(ORS_BASE).not.toContain('api.openrouteservice.org')
+  })
+
   it('maps bike types to real ORS profiles', () => {
     expect(mapBikeProfile('road')).toBe('cycling-road')
     expect(mapBikeProfile('mtb')).toBe('cycling-mountain')

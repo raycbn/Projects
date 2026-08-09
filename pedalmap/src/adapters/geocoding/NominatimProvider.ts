@@ -54,10 +54,16 @@ export class NominatimProvider implements GeocodingProvider {
       })
 
       if (!response.ok) {
+        // Public Nominatim often returns 403 to datacenter IPs / missing UA policy.
         throw new GeocodingError('Geocoding provider error', 'provider_error', response.status)
       }
 
-      const data = (await response.json()) as Array<{
+      const raw = await response.text()
+      if (raw.startsWith('Access den')) {
+        throw new GeocodingError('Geocoding provider error', 'provider_error', 'access_denied')
+      }
+
+      const data = JSON.parse(raw) as Array<{
         place_id: number
         display_name: string
         lat: string
@@ -80,6 +86,9 @@ export class NominatimProvider implements GeocodingProvider {
       }))
     } catch (error) {
       if (error instanceof GeocodingError) throw error
+      if (error instanceof SyntaxError) {
+        throw new GeocodingError('Geocoding provider error', 'provider_error', error)
+      }
       throw new GeocodingError('Network error', 'network', error)
     }
   }

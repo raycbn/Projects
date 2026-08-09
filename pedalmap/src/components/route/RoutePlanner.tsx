@@ -109,7 +109,7 @@ export function RoutePlanner() {
             </h1>
             {!routeService.isRoutingConfigured() && (
               <p className="mt-1 text-xs text-amber-800">
-                Falta VITE_ORS_API_KEY en .env.local para calcular rutas reales.
+                Routing no configurado: falta VITE_ORS_API_KEY en el entorno.
               </p>
             )}
           </div>

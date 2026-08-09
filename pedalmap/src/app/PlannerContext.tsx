@@ -185,7 +185,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           setStatus('error')
           if (error instanceof RoutingError && error.code === 'not_configured') {
             setErrorMessage(
-              'El motor de rutas no está configurado. Añade VITE_ORS_API_KEY en tu archivo .env.local (OpenRouteService).',
+              'El motor de rutas no está configurado. Falta la clave de OpenRouteService (VITE_ORS_API_KEY) en el entorno.',
             )
           } else if (error instanceof RoutingError && error.code === 'invalid_request' && routeType === 'circular') {
             setErrorMessage(

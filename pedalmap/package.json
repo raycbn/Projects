@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "validate:mvp": "node scripts/validate-mvp.mjs"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",

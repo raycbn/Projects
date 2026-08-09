@@ -4,52 +4,37 @@
 
 1. Nunca confiar solo en el frontend
 2. Minimizar secretos en el cliente
-3. Reglas Firestore/Storage estrictas
+3. Reglas Firestore estrictas (desplegadas en `pedalmap-79b3a`)
 4. Validación Zod en borde de aplicación
 5. RGPD: minimización + consentimiento
 
 ## API keys
 
-- `VITE_ORS_API_KEY` puede usarse en desarrollo
-- Producción: proxy Cloud Functions (`VITE_ROUTING_PROXY_URL`)
-- Nunca subir `.env`
-- Stripe secrets solo server-side
+- `VITE_ORS_API_KEY` solo vía secrets / `.env.local` (gitignored)
+- Producción: preferir proxy Cloud Functions
+- Nunca subir `.env` / `.env.local`
+- No Firebase Admin / service accounts en el cliente
 
-## Firestore rules (resumen)
+## Firestore rules (validación live 2026-08-09)
 
-| Colección | Lectura | Escritura |
-|-----------|---------|-----------|
-| users | owner | owner (sin auto-upgrade plan) |
-| routes | owner o `isPublic` | owner |
-| routeShares | pública | owner |
-| favorites | owner | owner |
-| activities | owner | owner |
-| subscriptions | owner | **solo Admin/Functions** |
+| Comprobación | Resultado |
+|--------------|-----------|
+| Usuario crea su perfil | 200 |
+| Auto-upgrade `free→premium` | **403** |
+| Crear ruta propia | 200 |
+| Anónimo lee ruta privada | **403** |
+| Anónimo lee ruta pública | 200 |
+| Anónimo lee `routeShares` | 200 |
+| Cliente escribe `subscriptions` | **403** |
 
-Archivo: `firebase/firestore.rules`
+Rules file: `firebase/firestore.rules` — no cambiar sin necesidad.
 
 ## Auth
 
-- Google + email/password + anonymous
-- Reset password vía Firebase
-- Rutas ajenas: comprobación `userId` en repository + rules
+- Email/password + Google + anonymous preparados
+- Dominios autorizados deben incluir el host de preview (Cloudflare) y producción
+- Persistencia: Firebase Auth por defecto (indexedDB)
 
-## Inputs
+## Geocoding
 
-- Waypoints limitados (2–20)
-- Títulos ≤ 120 chars
-- GPX Storage ≤ 5 MB (cuando se active)
-- Mensajes de error al usuario sin stack traces
-
-## Rate limiting
-
-- Entitlements freemium en cliente (UX)
-- Cuotas ORS / Nominatim
-- Rate limit real en Functions (Fase 4)
-
-## Privacidad / RGPD
-
-- No guardar ubicación continua
-- Geolocalización solo con permiso del navegador
-- Analytics stub sin PII
-- Páginas `/privacidad` y `/cookies`
+Nominatim puede bloquear IPs de datacenter (403). Fallback Photon automático. No inventar resultados.
