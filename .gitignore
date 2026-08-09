@@ -1,0 +1,18 @@
+# Dependencies / build
+node_modules/
+dist/
+.firebase/
+
+# Env secrets
+.env
+.env.*
+!.env.example
+
+# Logs / OS
+*.log
+.DS_Store
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/

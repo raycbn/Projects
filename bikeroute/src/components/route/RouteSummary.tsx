@@ -1,0 +1,61 @@
+import type { RouteStats } from '@/domain/types'
+import {
+  difficultyLabel,
+  formatDistance,
+  formatDuration,
+  formatElevation,
+} from '@/lib/stats'
+
+interface RouteSummaryProps {
+  stats: RouteStats
+  compact?: boolean
+}
+
+export function RouteSummary({ stats, compact }: RouteSummaryProps) {
+  const items = [
+    { label: 'Distancia', value: formatDistance(stats.distanceMeters) },
+    { label: 'Desnivel +', value: formatElevation(stats.elevationGainMeters) },
+    { label: 'Desnivel −', value: formatElevation(-stats.elevationLossMeters) },
+    { label: 'Tiempo', value: formatDuration(stats.estimatedDurationSeconds) },
+    { label: 'Dificultad', value: difficultyLabel(stats.difficulty) },
+  ]
+
+  if (!compact) {
+    if (stats.highestPointMeters !== undefined) {
+      items.push({ label: 'Máx.', value: `${stats.highestPointMeters} m` })
+    }
+    if (stats.lowestPointMeters !== undefined) {
+      items.push({ label: 'Mín.', value: `${stats.lowestPointMeters} m` })
+    }
+    if (stats.significantClimbs !== undefined) {
+      items.push({ label: 'Ascensos', value: String(stats.significantClimbs) })
+    }
+    if (stats.surfaceStats?.pavedPercent !== undefined) {
+      items.push({
+        label: 'Asfaltado',
+        value: `${Math.round(stats.surfaceStats.pavedPercent)}%`,
+      })
+    }
+  }
+
+  return (
+    <dl
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+      aria-label="Resumen de la ruta"
+    >
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-[var(--color-fog)]"
+        >
+          <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+            {item.label}
+          </dt>
+          <dd className="mt-1 font-display text-xl font-bold text-[var(--color-forest)]">
+            {item.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
