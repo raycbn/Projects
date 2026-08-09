@@ -11,6 +11,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // Allow Cloudflare quick tunnels / localtunnel hosts for public previews.
+  preview: {
+    host: true,
+    allowedHosts: true,
+  },
+  server: {
+    host: true,
+    allowedHosts: true,
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
