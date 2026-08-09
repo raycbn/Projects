@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Syne:wght@600;700;800&display=swap');
+@import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+@theme {
+  --font-display: 'Syne', sans-serif;
+  --font-sans: 'DM Sans', sans-serif;
+  --color-ink: #071510;
+  --color-forest: #0d3b2b;
+  --color-trail: #167a52;
+  --color-moss: #2f9b6a;
+  --color-signal: #d6ff4b;
+  --color-mist: #eef5f1;
+  --color-fog: #d9e7df;
+  --color-stone: #5b6d64;
+  --color-panel: #0b241c;
+  --color-danger: #c23b3b;
+}
+
+@layer base {
+  :root {
+    color: var(--color-ink);
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(214, 255, 75, 0.18), transparent 55%),
+      radial-gradient(900px 500px at 90% 0%, rgba(22, 122, 82, 0.16), transparent 50%),
+      linear-gradient(180deg, #f4faf6 0%, var(--color-mist) 45%, #e7f0ea 100%);
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-signal) 70%, white);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-trail);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .topo-grid {
+    background-image:
+      linear-gradient(rgba(13, 59, 43, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13, 59, 43, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.55s ease-out both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}

@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidPlan(plan) {
+      return plan in ['free', 'premium'];
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && isValidPlan(request.resource.data.plan);
+      allow update: if isOwner(userId)
+        // Clients cannot self-upgrade to premium (Stripe/Functions will do that).
+        && request.resource.data.plan == resource.data.plan;
+      allow delete: if isOwner(userId);
+    }
+
+    match /routes/{routeId} {
+      allow read: if resource.data.isPublic == true || isOwner(resource.data.userId);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    match /routeShares/{shareSlug} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    match /favorites/{userId}/items/{routeId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /activities/{activityId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /subscriptions/{userId} {
+      allow read: if isOwner(userId);
+      // Writes only via Admin SDK / Cloud Functions
+      allow write: if false;
+    }
+  }
+}
