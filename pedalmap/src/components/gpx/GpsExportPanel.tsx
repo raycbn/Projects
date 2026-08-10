@@ -15,6 +15,12 @@ interface GpsExportPanelProps {
 /** Free / freemium bike GPS apps we can hand a GPX to via share or download. */
 const FREE_GPS_APPS = [
   {
+    id: 'pedalmap',
+    name: 'PedalMap GPS',
+    blurb: 'Graba en PedalMap: al finalizar se guarda sola con análisis Free.',
+    url: '/actividad',
+  },
+  {
     id: 'osmand',
     name: 'OsmAnd',
     blurb: 'Mapas offline y navegación. Abre el GPX con “Abrir con…”.',
@@ -153,10 +159,11 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
             <a
               className="shrink-0 text-xs font-semibold text-[var(--color-trail)] underline"
               href={app.url}
-              target="_blank"
-              rel="noreferrer"
+              {...(app.url.startsWith('http')
+                ? { target: '_blank', rel: 'noreferrer' }
+                : {})}
             >
-              Web
+              {app.url.startsWith('http') ? 'Web' : 'Abrir'}
             </a>
           </li>
         ))}

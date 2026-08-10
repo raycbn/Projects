@@ -328,6 +328,12 @@ export function formatDuration(seconds: number): string {
   return `${h} h ${m.toString().padStart(2, '0')} min`
 }
 
+/** Speed as km/h for cycling UIs. */
+export function formatSpeedKmh(metersPerSecond: number, locale = 'es-ES'): string {
+  const kmh = metersPerSecond * 3.6
+  return `${kmh.toLocaleString(locale, { maximumFractionDigits: 1 })} km/h`
+}
+
 export function difficultyLabel(difficulty: Difficulty): string {
   switch (difficulty) {
     case 'easy':
