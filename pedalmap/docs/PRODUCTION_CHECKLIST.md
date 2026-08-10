@@ -53,9 +53,13 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage --project p
 
 ### Google Auth
 
-- Dominios autorizados OK: `pedalmap-79b3a.web.app`, `firebaseapp.com`, `localhost`
-- Móvil / touch: `signInWithRedirect` (evita `auth/popup-closed-by-user` por COOP)
-- Desktop: popup; si el navegador bloquea → redirect
+- Dominios Auth OK: `pedalmap-79b3a.web.app`, `firebaseapp.com`, `localhost`
+- App usa `authDomain` = hostname Hosting (`*.web.app`) para redirect first-party
+- **Obligatorio en Google Cloud OAuth client** (Web client de Firebase):
+  - Origin: `https://pedalmap-79b3a.web.app`
+  - Redirect: `https://pedalmap-79b3a.web.app/__/auth/handler`
+  - Consola: APIs & Services → Credentials → OAuth 2.0 Client IDs
+- Móvil: `signInWithRedirect`; desktop: popup (fallback redirect si bloquea)
 
 ## 5) Rebuild + redeploy Hosting
 
