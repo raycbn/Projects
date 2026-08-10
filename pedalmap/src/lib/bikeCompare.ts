@@ -55,25 +55,6 @@ export async function compareBikesForWaypoints(input: {
   return results.sort((a, b) => b.score - a.score)
 }
 
-export function nearestPointOnRoute(
-  position: LatLng,
-  coordinates: [number, number][],
-): { distanceMeters: number; index: number; point: LatLng } {
-  let best = Number.POSITIVE_INFINITY
-  let bestIndex = 0
-  let bestPoint: LatLng = position
-  for (let i = 0; i < coordinates.length; i += 1) {
-    const [lng, lat] = coordinates[i]
-    const d = haversine(position, { lat, lng })
-    if (d < best) {
-      best = d
-      bestIndex = i
-      bestPoint = { lat, lng }
-    }
-  }
-  return { distanceMeters: best, index: bestIndex, point: bestPoint }
-}
-
 function haversine(a: LatLng, b: LatLng): number {
   const R = 6371000
   const dLat = ((b.lat - a.lat) * Math.PI) / 180
@@ -85,7 +66,58 @@ function haversine(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
-/** Progress 0..1 along the polyline from nearest vertex. */
+/** Closest point on segment AB to P, in local meters projection. */
+function closestOnSegment(p: LatLng, a: LatLng, b: LatLng): { point: LatLng; t: number } {
+  const ax = a.lng
+  const ay = a.lat
+  const bx = b.lng
+  const by = b.lat
+  const px = p.lng
+  const py = p.lat
+  const dx = bx - ax
+  const dy = by - ay
+  const len2 = dx * dx + dy * dy
+  const t = len2 <= 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2))
+  return {
+    t,
+    point: { lng: ax + t * dx, lat: ay + t * dy },
+  }
+}
+
+/**
+ * Distance to the polyline (segment projection), not only vertices.
+ * `index` is the segment start vertex (or last vertex if empty).
+ */
+export function nearestPointOnRoute(
+  position: LatLng,
+  coordinates: [number, number][],
+): { distanceMeters: number; index: number; point: LatLng } {
+  if (coordinates.length === 0) {
+    return { distanceMeters: Number.POSITIVE_INFINITY, index: 0, point: position }
+  }
+  if (coordinates.length === 1) {
+    const point = { lat: coordinates[0][1], lng: coordinates[0][0] }
+    return { distanceMeters: haversine(position, point), index: 0, point }
+  }
+
+  let best = Number.POSITIVE_INFINITY
+  let bestIndex = 0
+  let bestPoint: LatLng = position
+  for (let i = 1; i < coordinates.length; i += 1) {
+    const a = { lat: coordinates[i - 1][1], lng: coordinates[i - 1][0] }
+    const b = { lat: coordinates[i][1], lng: coordinates[i][0] }
+    const { point } = closestOnSegment(position, a, b)
+    const d = haversine(position, point)
+    if (d < best) {
+      best = d
+      bestIndex = i - 1
+      bestPoint = point
+    }
+  }
+  return { distanceMeters: best, index: bestIndex, point: bestPoint }
+}
+
+/** Progress 0..1 along the polyline toward the nearest point on a segment. */
 export function routeProgress(position: LatLng, coordinates: [number, number][]): number {
   if (coordinates.length < 2) return 0
   const near = nearestPointOnRoute(position, coordinates)
@@ -95,8 +127,16 @@ export function routeProgress(position: LatLng, coordinates: [number, number][])
     const a = { lat: coordinates[i - 1][1], lng: coordinates[i - 1][0] }
     const b = { lat: coordinates[i][1], lng: coordinates[i][0] }
     const seg = haversine(a, b)
-    if (i <= near.index) before += seg
+    if (i - 1 < near.index) before += seg
+    else if (i - 1 === near.index) before += haversine(a, near.point)
     total += seg
   }
   return total > 0 ? Math.min(1, before / total) : 0
+}
+
+/** Off-route threshold that accounts for phone GPS noise. */
+export function offRouteThresholdMeters(accuracyMeters?: number): number {
+  const accuracy = Number.isFinite(accuracyMeters) ? Math.max(0, accuracyMeters as number) : 40
+  // Phone GPS is often 30–80 m; don't nag for standing near the start of a ride.
+  return Math.max(160, accuracy + 100)
 }

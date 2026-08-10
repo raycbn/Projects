@@ -36,6 +36,8 @@ interface MapViewProps {
   /** Surface-colored segments (paved / unpaved / unknown). */
   surfaceOverlay?: FeatureCollection | null
   showUserLocation?: LatLng | null
+  /** Keep the camera on the user (navigation / recording). */
+  followUser?: boolean
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
@@ -473,6 +475,7 @@ export function MapView({
   windCaption,
   surfaceOverlay,
   showUserLocation,
+  followUser = false,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -484,10 +487,12 @@ export function MapView({
   const markersRef = useRef<Marker[]>([])
   const hoverMarkerRef = useRef<Marker | null>(null)
   const userMarkerRef = useRef<Marker | null>(null)
+  const followUserRef = useRef(followUser)
   const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
   const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
   const onMapClickRef = useRef(onMapClick)
+  followUserRef.current = followUser
   geometryRef.current = geometry
   windRef.current = windOverlay
   surfaceRef.current = surfaceOverlay
@@ -646,17 +651,34 @@ export function MapView({
     if (!userMarkerRef.current) {
       const el = document.createElement('div')
       el.className =
-        'h-4 w-4 rounded-full bg-[#2563eb] ring-4 ring-[#2563eb]/35 border-2 border-white shadow'
+        'h-5 w-5 rounded-full bg-[#2563eb] ring-4 ring-[#2563eb]/40 border-2 border-white shadow-md'
       userMarkerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat([showUserLocation.lng, showUserLocation.lat])
         .addTo(map)
     } else {
       userMarkerRef.current.setLngLat([showUserLocation.lng, showUserLocation.lat])
     }
-  }, [showUserLocation])
+
+    if (followUser) {
+      map.resize()
+      const zoom = Math.max(map.getZoom(), 15)
+      map.easeTo({
+        center: [showUserLocation.lng, showUserLocation.lat],
+        zoom,
+        duration: 650,
+        essential: true,
+      })
+    }
+  }, [showUserLocation, followUser])
 
   return (
-    <div className={className ? `relative ${className}` : 'relative h-full min-h-[320px] w-full'}>
+    <div
+      className={
+        className
+          ? `relative h-full min-h-[240px] w-full ${className}`
+          : 'relative h-full min-h-[320px] w-full'
+      }
+    >
       <div
         ref={containerRef}
         className="absolute inset-0 h-full w-full"

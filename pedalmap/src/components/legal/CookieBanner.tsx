@@ -8,6 +8,7 @@ export function CookieBanner() {
   const [visible, setVisible] = useState(false)
   const { pathname } = useLocation()
   const onPlanner = pathname.startsWith('/route-planner')
+  const onNav = pathname.startsWith('/navegacion')
 
   useEffect(() => {
     setVisible(getConsent() === null)
@@ -24,7 +25,7 @@ export function CookieBanner() {
   return (
     <div
       className={
-        onPlanner
+        onPlanner || onNav
           ? 'fixed inset-x-0 bottom-0 z-[70] mx-auto max-w-lg px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
           : 'fixed inset-x-0 z-[70] mx-auto max-w-lg px-3 bottom-[calc(var(--tabbar-h)+0.5rem)] md:bottom-4'
       }

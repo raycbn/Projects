@@ -1,10 +1,14 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { Button } from '@/components/ui/Button'
 import { takeGpsRoute, type GpsRoutePacket } from '@/lib/gpsRouteHandoff'
-import { nearestPointOnRoute, routeProgress } from '@/lib/bikeCompare'
+import {
+  nearestPointOnRoute,
+  offRouteThresholdMeters,
+  routeProgress,
+} from '@/lib/bikeCompare'
 import { formatDistance } from '@/lib/stats'
 import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
 import type { Waypoint } from '@/domain/types'
@@ -13,7 +17,8 @@ const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
 )
 
-const OFF_ROUTE_M = 55
+/** How long you must stay beyond the threshold before the red banner appears. */
+const OFF_ROUTE_HOLD_MS = 12_000
 
 /**
  * Guided ride: follow planned geometry + next instruction + off-route warning.
@@ -29,6 +34,9 @@ export function NavigationPage() {
   const [instructions, setInstructions] = useState<string[]>([])
   const [step, setStep] = useState(0)
   const [voice, setVoice] = useState(false)
+  const [followReady, setFollowReady] = useState(false)
+  const [offRouteAlert, setOffRouteAlert] = useState(false)
+  const offRouteSince = useRef<number | null>(null)
   const { sample, error, supported } = useGeolocation(true)
 
   useEffect(() => {
@@ -58,7 +66,36 @@ export function NavigationPage() {
     return routeProgress(position, coords)
   }, [position, coords])
 
-  const offRoute = nearest ? nearest.distanceMeters > OFF_ROUTE_M : false
+  useEffect(() => {
+    if (position) setFollowReady(true)
+  }, [position])
+
+  useEffect(() => {
+    const distance = nearest?.distanceMeters
+    if (distance == null) {
+      offRouteSince.current = null
+      setOffRouteAlert(false)
+      return
+    }
+
+    const threshold = offRouteThresholdMeters(sample?.accuracyMeters)
+    // Standing near the start with phone GPS jitter (~50–100 m) is normal — don't panic.
+    const nearStart = progress < 0.04 && distance < Math.max(250, threshold + 40)
+    const beyond = distance > threshold && !nearStart
+
+    if (!beyond) {
+      offRouteSince.current = null
+      setOffRouteAlert(false)
+      return
+    }
+
+    const now = Date.now()
+    if (offRouteSince.current == null) offRouteSince.current = now
+    if (now - offRouteSince.current >= OFF_ROUTE_HOLD_MS) {
+      setOffRouteAlert(true)
+    }
+  }, [nearest?.distanceMeters, progress, sample?.accuracyMeters])
+
   const currentInstruction = instructions[Math.min(step, Math.max(0, instructions.length - 1))]
 
   // Advance instruction roughly by progress along the list
@@ -122,22 +159,44 @@ export function NavigationPage() {
     )
   }
 
+  const distanceLabel =
+    position && nearest
+      ? nearest.distanceMeters < 40
+        ? 'En el trazado'
+        : `${formatDistance(nearest.distanceMeters)} al track`
+      : supported
+        ? 'Buscando GPS…'
+        : 'Sin GPS'
+
   return (
-    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col overflow-hidden">
+    <div className="planner-shell flex flex-col overflow-hidden">
       <section className="relative min-h-0 flex-1 bg-[var(--color-fog)]">
-        <Suspense fallback={<p className="p-4 text-sm">Cargando mapa…</p>}>
+        <Suspense
+          fallback={
+            <p className="flex h-full items-center justify-center p-4 text-sm text-[var(--color-stone)]">
+              Cargando mapa…
+            </p>
+          }
+        >
           <MapView
-            className="absolute inset-0"
+            className="h-full w-full"
             waypoints={waypoints}
             geometry={packet.geometry}
             surfaceOverlay={surfaceOverlay}
             showUserLocation={position}
-            fitKey={`${coords.length}-${packet.title}`}
+            followUser={Boolean(position)}
+            fitKey={followReady ? undefined : `${coords.length}-${packet.title}`}
           />
         </Suspense>
-        {offRoute && (
+        {!position && supported && !error && (
+          <p className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-center text-sm font-medium text-[var(--color-forest)] shadow">
+            Activando GPS… acepta el permiso de ubicación si el móvil lo pide.
+          </p>
+        )}
+        {offRouteAlert && (
           <p className="absolute left-3 right-3 top-3 z-10 rounded-xl bg-[#fff4f4] px-3 py-2 text-sm font-semibold text-[var(--color-danger)] shadow">
-            Fuera de ruta (~{Math.round(nearest?.distanceMeters ?? 0)} m). Vuelve al trazado.
+            Te has alejado del trazado (~{Math.round(nearest?.distanceMeters ?? 0)} m). Vuelve a la
+            ruta cuando puedas.
           </p>
         )}
       </section>
@@ -153,11 +212,7 @@ export function NavigationPage() {
           <p className="text-right text-xs text-[var(--color-stone)]">
             {Math.round(progress * 100)}%
             <br />
-            {position && nearest
-              ? `${formatDistance(nearest.distanceMeters)} al track`
-              : supported
-                ? 'Buscando GPS…'
-                : 'Sin GPS'}
+            {distanceLabel}
           </p>
         </div>
 
