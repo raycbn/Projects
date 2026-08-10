@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { activityRepository } from '@/services/ActivityRepository'
+import {
+  gpsSyncService,
+  type GpsProviderId,
+  type GpsProviderStatus,
+} from '@/services/GpsSyncService'
 import type { Activity } from '@/domain/types'
 import {
   formatDistance,
@@ -15,14 +20,40 @@ import {
 export function MyActivitiesPage() {
   usePageMeta({
     title: 'Mis actividades | PedalMap',
-    description: 'Historial de salidas GPS con análisis Free (movimiento, VAM, potencia estimada).',
+    description:
+      'Historial GPS nativo + sync oficial (iGPSPORT, Wahoo, Garmin) con análisis Free.',
     path: '/actividades',
   })
 
   const { user, firebaseReady } = useAuth()
+  const [params] = useSearchParams()
   const [items, setItems] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [providers, setProviders] = useState<GpsProviderStatus[]>([])
+  const [busyProvider, setBusyProvider] = useState<GpsProviderId | null>(null)
+
+  async function reload() {
+    if (!user || user.isAnonymous || !activityRepository.isConfigured()) return
+    const list = await activityRepository.listForUser(user.uid)
+    setItems(list)
+  }
+
+  useEffect(() => {
+    const flag = params.get('gps')
+    const provider = params.get('provider')
+    if (flag === 'connected') {
+      setMessage(
+        provider
+          ? `${provider} conectado. Las nuevas salidas se cargarán solas en PedalMap.`
+          : 'GPS conectado. Las nuevas salidas se cargarán solas en PedalMap.',
+      )
+    }
+    if (flag === 'error') {
+      setMessage(`No se pudo conectar el GPS (${params.get('reason') || 'error'}).`)
+    }
+  }, [params])
 
   useEffect(() => {
     let cancelled = false
@@ -34,6 +65,10 @@ export function MyActivitiesPage() {
       try {
         const list = await activityRepository.listForUser(user.uid)
         if (!cancelled) setItems(list)
+        if (gpsSyncService.isApiReady()) {
+          const st = await gpsSyncService.status()
+          if (!cancelled) setProviders(st)
+        }
       } catch (err) {
         console.error('[activities]', err)
         if (!cancelled) setError('No se pudieron cargar las actividades.')
@@ -47,25 +82,146 @@ export function MyActivitiesPage() {
     }
   }, [user, firebaseReady])
 
+  async function connect(provider: GpsProviderId) {
+    setBusyProvider(provider)
+    setMessage(null)
+    try {
+      const { url } = await gpsSyncService.startConnect(provider)
+      window.location.assign(url)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'No se pudo abrir la conexión GPS')
+      setBusyProvider(null)
+    }
+  }
+
+  async function disconnect(provider: GpsProviderId) {
+    setBusyProvider(provider)
+    try {
+      await gpsSyncService.disconnect(provider)
+      setProviders((prev) =>
+        prev.map((p) => (p.id === provider ? { ...p, connected: false, externalUserId: null } : p)),
+      )
+      setMessage(`${provider} desconectado.`)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'No se pudo desconectar')
+    } finally {
+      setBusyProvider(null)
+    }
+  }
+
+  async function syncNow(provider: GpsProviderId) {
+    setBusyProvider(provider)
+    setMessage(null)
+    try {
+      const result = await gpsSyncService.sync(provider)
+      await reload()
+      setMessage(`Sync ${provider}: ${result.imported} nuevas · ${result.skipped} ya estaban.`)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Sync falló')
+    } finally {
+      setBusyProvider(null)
+    }
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-            GPS nativo
+            GPS
           </p>
           <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
             Mis actividades
           </h1>
           <p className="mt-2 max-w-xl text-sm text-[var(--color-stone)]">
-            Al finalizar una salida se guarda sola en PedalMap y abre el análisis — sin pasos
-            extra ni apps intermedias.
+            Graba en PedalMap o conecta tu ciclocomputador: al terminar la salida se carga sola, con
+            más análisis Free que el básico de terceros.
           </p>
         </div>
         <Link to="/actividad">
           <Button>Nueva actividad</Button>
         </Link>
       </div>
+
+      <section className="mt-6 rounded-2xl bg-[var(--color-mist)]/50 p-4 ring-1 ring-[var(--color-fog)]">
+        <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
+          Conectar tu GPS
+        </h2>
+        <p className="mt-1 text-sm text-[var(--color-stone)]">
+          APIs oficiales (iGPSPORT, Wahoo, Garmin). Una vez conectado, el auto-upload llega por
+          webhook al Worker — sin pasos manuales.
+        </p>
+        {!user || user.isAnonymous ? (
+          <p className="mt-3 text-sm text-[var(--color-stone)]">
+            <Link to="/login" className="font-semibold text-[var(--color-trail)]">
+              Inicia sesión
+            </Link>{' '}
+            con una cuenta real para vincular el GPS.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {(providers.length
+              ? providers
+              : ([
+                  { id: 'igpsport', label: 'iGPSPORT', configured: false, connected: false, externalUserId: null },
+                  { id: 'wahoo', label: 'Wahoo', configured: false, connected: false, externalUserId: null },
+                  { id: 'garmin', label: 'Garmin', configured: false, connected: false, externalUserId: null },
+                ] as GpsProviderStatus[])
+            ).map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/90 px-3 py-2 ring-1 ring-[var(--color-fog)]"
+              >
+                <div>
+                  <p className="font-semibold text-[var(--color-forest)]">{p.label}</p>
+                  <p className="text-xs text-[var(--color-stone)]">
+                    {!p.configured
+                      ? 'Pendiente de API / secrets (ver docs)'
+                      : p.connected
+                        ? 'Conectado · auto-upload activo'
+                        : 'Listo para conectar'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!p.configured ? null : !p.connected ? (
+                    <Button
+                      size="sm"
+                      disabled={busyProvider === p.id}
+                      onClick={() => void connect(p.id)}
+                    >
+                      Conectar
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        disabled={busyProvider === p.id}
+                        onClick={() => void syncNow(p.id)}
+                      >
+                        Sincronizar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busyProvider === p.id}
+                        onClick={() => void disconnect(p.id)}
+                      >
+                        Quitar
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {message && (
+        <p className="mt-4 rounded-xl bg-white px-3 py-2 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]">
+          {message}
+        </p>
+      )}
 
       {!user || user.isAnonymous ? (
         <p className="mt-6 text-sm text-[var(--color-stone)]">
@@ -83,8 +239,8 @@ export function MyActivitiesPage() {
           Aún no hay actividades.{' '}
           <Link to="/actividad" className="font-semibold text-[var(--color-trail)]">
             Empieza a grabar
-          </Link>
-          .
+          </Link>{' '}
+          o conecta tu GPS arriba.
         </p>
       ) : (
         <ul className="mt-6 space-y-3">
@@ -101,6 +257,7 @@ export function MyActivitiesPage() {
                     </p>
                     <p className="text-xs text-[var(--color-stone)]">
                       {new Date(a.startedAt).toLocaleString('es-ES')}
+                      {a.source && a.source !== 'gps' ? ` · ${a.source}` : ''}
                       {a.status !== 'finished' ? ` · ${a.status}` : ''}
                     </p>
                   </div>
@@ -114,11 +271,9 @@ export function MyActivitiesPage() {
                   {a.stats.averageSpeedMetersPerSecond !== undefined
                     ? ` · ${formatSpeedKmh(a.stats.averageSpeedMetersPerSecond)}`
                     : ''}
-                  {a.stats.estimatedPowerWatts !== undefined || a.stats.averagePowerWatts !== undefined
+                  {a.stats.estimatedPowerWatts !== undefined ||
+                  a.stats.averagePowerWatts !== undefined
                     ? ` · ${a.stats.estimatedPowerWatts ?? a.stats.averagePowerWatts} W`
-                    : ''}
-                  {a.stats.vamMetersPerHour !== undefined
-                    ? ` · VAM ${a.stats.vamMetersPerHour}`
                     : ''}
                 </p>
               </Link>

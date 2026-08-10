@@ -15,6 +15,15 @@ import {
   handleStravaOAuthStart,
   handleStravaStatus,
 } from './strava'
+import {
+  handleGpsDisconnect,
+  handleGpsOAuthCallback,
+  handleGpsOAuthStart,
+  handleGpsStatus,
+  handleGpsSync,
+  handleGpsWebhook,
+  isGpsProvider,
+} from './gps'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
@@ -255,6 +264,67 @@ export default {
             request,
             await handleStravaImportActivity(env, identity, importMatch[1]),
           )
+        }
+      }
+
+      if (path === '/gps/status' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        return withCors(env, request, await handleGpsStatus(env, identity))
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/oauth\/start$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          const limited = await enforceRateLimit(request, {
+            limit: 20,
+            windowSec: 60,
+            prefix: 'gps-oauth',
+            key: identity.uid,
+          })
+          if (limited) return withCors(env, request, limited)
+          return withCors(env, request, await handleGpsOAuthStart(request, env, identity, m[1]))
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/oauth\/callback$/)
+        if (m && request.method === 'GET' && isGpsProvider(m[1])) {
+          return handleGpsOAuthCallback(request, env, m[1])
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/disconnect$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          return withCors(env, request, await handleGpsDisconnect(env, identity, m[1]))
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/sync$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          const limited = await enforceRateLimit(request, {
+            limit: 10,
+            windowSec: 60,
+            prefix: 'gps-sync',
+            key: identity.uid,
+          })
+          if (limited) return withCors(env, request, limited)
+          return withCors(env, request, await handleGpsSync(env, identity, m[1]))
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/webhook$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          return handleGpsWebhook(request, env, m[1])
         }
       }
 

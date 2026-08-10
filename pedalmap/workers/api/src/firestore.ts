@@ -358,3 +358,295 @@ export async function deleteStravaConnection(env: Env, uid: string): Promise<voi
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/stravaConnections/${uid}`
   await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
 }
+
+export type GpsProvider = 'wahoo' | 'igpsport' | 'garmin'
+
+export type GpsConnection = {
+  provider: GpsProvider
+  externalUserId: string
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+  scope?: string
+}
+
+function gpsDocId(uid: string, provider: GpsProvider): string {
+  return `${uid}__${provider}`
+}
+
+function providerIndexId(provider: GpsProvider, externalUserId: string): string {
+  return `${provider}__${externalUserId}`.replace(/[/\\]/g, '_')
+}
+
+function importIndexId(externalId: string): string {
+  return externalId.replace(/[/\\]/g, '_')
+}
+
+export async function readGpsConnection(
+  env: Env,
+  uid: string,
+  provider: GpsProvider,
+): Promise<GpsConnection | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/gpsConnections/${gpsDocId(uid, provider)}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return null
+  const json = (await res.json()) as {
+    fields?: {
+      provider?: { stringValue?: string }
+      externalUserId?: { stringValue?: string }
+      accessToken?: { stringValue?: string }
+      refreshToken?: { stringValue?: string }
+      expiresAt?: { integerValue?: string; doubleValue?: number }
+      scope?: { stringValue?: string }
+    }
+  }
+  const accessToken = json.fields?.accessToken?.stringValue
+  const refreshToken = json.fields?.refreshToken?.stringValue
+  const expiresAt = Number(
+    json.fields?.expiresAt?.integerValue ?? json.fields?.expiresAt?.doubleValue ?? 0,
+  )
+  const externalUserId = json.fields?.externalUserId?.stringValue || ''
+  if (!accessToken || !refreshToken || !expiresAt) return null
+  return {
+    provider,
+    externalUserId,
+    accessToken,
+    refreshToken,
+    expiresAt,
+    scope: json.fields?.scope?.stringValue,
+  }
+}
+
+export async function listGpsConnections(env: Env, uid: string): Promise<GpsConnection[]> {
+  const providers: GpsProvider[] = ['wahoo', 'igpsport', 'garmin']
+  const out: GpsConnection[] = []
+  for (const p of providers) {
+    const c = await readGpsConnection(env, uid, p)
+    if (c) out.push(c)
+  }
+  return out
+}
+
+export async function writeGpsConnection(
+  env: Env,
+  uid: string,
+  conn: GpsConnection,
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT missing — GPS tokens not persisted')
+    return
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/gpsConnections/${gpsDocId(uid, conn.provider)}?updateMask.fieldPaths=provider&updateMask.fieldPaths=uid&updateMask.fieldPaths=externalUserId&updateMask.fieldPaths=accessToken&updateMask.fieldPaths=refreshToken&updateMask.fieldPaths=expiresAt&updateMask.fieldPaths=scope&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        provider: { stringValue: conn.provider },
+        uid: { stringValue: uid },
+        externalUserId: { stringValue: conn.externalUserId },
+        accessToken: { stringValue: conn.accessToken },
+        refreshToken: { stringValue: conn.refreshToken },
+        expiresAt: { integerValue: String(Math.floor(conn.expiresAt)) },
+        ...(conn.scope ? { scope: { stringValue: conn.scope } } : {}),
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`gpsConnections write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
+export async function deleteGpsConnection(
+  env: Env,
+  uid: string,
+  provider: GpsProvider,
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/gpsConnections/${gpsDocId(uid, provider)}`
+  await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+}
+
+/** Map provider athlete id → PedalMap uid (for webhooks). Pass uid=null to delete. */
+export async function writeGpsProviderIndex(
+  env: Env,
+  provider: GpsProvider,
+  externalUserId: string,
+  uid: string | null,
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa || !externalUserId) return
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const docPath = `gpsProviderIndex/${providerIndexId(provider, externalUserId)}`
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}`
+  if (!uid) {
+    await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+    return
+  }
+  const patchUrl = `${url}?updateMask.fieldPaths=uid&updateMask.fieldPaths=provider&updateMask.fieldPaths=externalUserId&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(patchUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        uid: { stringValue: uid },
+        provider: { stringValue: provider },
+        externalUserId: { stringValue: externalUserId },
+        updatedAt: { timestampValue: new Date().toISOString() },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`gpsProviderIndex write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
+export async function readGpsUidByProviderUser(
+  env: Env,
+  provider: GpsProvider,
+  externalUserId: string,
+): Promise<string | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa || !externalUserId) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/gpsProviderIndex/${providerIndexId(provider, externalUserId)}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return null
+  const json = (await res.json()) as { fields?: { uid?: { stringValue?: string } } }
+  return json.fields?.uid?.stringValue || null
+}
+
+export async function findActivityByExternalId(
+  env: Env,
+  uid: string,
+  externalId: string,
+): Promise<string | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/gpsImportIndex/${importIndexId(externalId)}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return null
+  const json = (await res.json()) as {
+    fields?: { activityId?: { stringValue?: string }; userId?: { stringValue?: string } }
+  }
+  if (json.fields?.userId?.stringValue && json.fields.userId.stringValue !== uid) return null
+  return json.fields?.activityId?.stringValue || null
+}
+
+export async function writeImportedActivity(
+  env: Env,
+  uid: string,
+  input: {
+    title: string
+    bikeType: string
+    source: string
+    externalId: string
+    startedAt: string
+    finishedAt?: string
+    track: unknown[]
+    stats: Record<string, unknown>
+  },
+): Promise<string> {
+  const sa = parseServiceAccount(env)
+  if (!sa) throw new Error('FIREBASE_SERVICE_ACCOUNT required for GPS auto-import')
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const monthKey = `${new Date(input.startedAt).getUTCFullYear()}-${String(new Date(input.startedAt).getUTCMonth() + 1).padStart(2, '0')}`
+
+  const toValue = (v: unknown): Record<string, unknown> => {
+    if (v === null || v === undefined) return { nullValue: null }
+    if (typeof v === 'string') return { stringValue: v }
+    if (typeof v === 'boolean') return { booleanValue: v }
+    if (typeof v === 'number') {
+      return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
+    }
+    if (Array.isArray(v)) {
+      return { arrayValue: { values: v.map((x) => toValue(x)) } }
+    }
+    if (typeof v === 'object') {
+      const fields: Record<string, unknown> = {}
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        if (val !== undefined) fields[k] = toValue(val)
+      }
+      return { mapValue: { fields } }
+    }
+    return { stringValue: String(v) }
+  }
+
+  const createUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/activities`
+  const createRes = await fetch(createUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        userId: { stringValue: uid },
+        title: { stringValue: input.title },
+        bikeType: { stringValue: input.bikeType },
+        source: { stringValue: input.source },
+        externalId: { stringValue: input.externalId },
+        status: { stringValue: 'finished' },
+        startedAt: { stringValue: input.startedAt },
+        ...(input.finishedAt ? { finishedAt: { stringValue: input.finishedAt } } : {}),
+        track: toValue(input.track),
+        stats: toValue(input.stats),
+        monthKey: { stringValue: monthKey },
+        createdAt: { timestampValue: now },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!createRes.ok) {
+    const t = await createRes.text()
+    throw new Error(`activity import failed: ${createRes.status} ${t.slice(0, 400)}`)
+  }
+  const created = (await createRes.json()) as { name?: string }
+  const activityId = created.name?.split('/').pop()
+  if (!activityId) throw new Error('activity import missing id')
+
+  const indexUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/gpsImportIndex/${importIndexId(input.externalId)}?updateMask.fieldPaths=activityId&updateMask.fieldPaths=userId&updateMask.fieldPaths=externalId&updateMask.fieldPaths=updatedAt`
+  await fetch(indexUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        activityId: { stringValue: activityId },
+        userId: { stringValue: uid },
+        externalId: { stringValue: input.externalId },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+
+  return activityId
+}

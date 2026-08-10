@@ -281,7 +281,7 @@ export class GeocodingError extends Error {
 
 /** Live GPS activity (Fase 5) + Strava imports. */
 export type ActivityStatus = 'recording' | 'paused' | 'finished'
-export type ActivitySource = 'gps' | 'strava'
+export type ActivitySource = 'gps' | 'strava' | 'wahoo' | 'igpsport' | 'garmin'
 
 export interface ActivityTrackPoint {
   position: LatLng
