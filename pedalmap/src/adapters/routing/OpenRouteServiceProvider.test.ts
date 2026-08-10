@@ -48,6 +48,34 @@ describe('OpenRouteServiceProvider', () => {
     expect(profile.at(-1)?.distanceMeters).toBeGreaterThan(1000)
   })
 
+  it('normalizes DEM zeros/missing Z for every ORS cycling profile geometry', () => {
+    const { profile } = geometryFromOrsCoordinates([
+      [-3.62, 40.38, 600],
+      [-3.619, 40.379, 0],
+      [-3.618, 40.378], // missing Z
+      [-3.617, 40.377, 610],
+    ])
+    expect(profile.every((p) => Number.isFinite(p.elevationMeters))).toBe(true)
+    expect(Math.min(...profile.map((p) => p.elevationMeters))).toBeGreaterThan(400)
+  })
+
+  it('maps every PedalMap bike type through a real ORS cycling profile', () => {
+    const mapped = {
+      road: mapBikeProfile('road'),
+      mtb: mapBikeProfile('mtb'),
+      ebike: mapBikeProfile('ebike'),
+      gravel: mapBikeProfile('gravel'),
+      urban: mapBikeProfile('urban'),
+    }
+    expect(mapped).toEqual({
+      road: 'cycling-road',
+      mtb: 'cycling-mountain',
+      ebike: 'cycling-electric',
+      gravel: 'cycling-regular',
+      urban: 'cycling-regular',
+    })
+  })
+
   it('only claims supported preferences that map to ORS', () => {
     expect(ORS_SUPPORTED_PREFERENCES).toEqual([
       'prefer_shorter',

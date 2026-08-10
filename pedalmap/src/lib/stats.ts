@@ -6,11 +6,20 @@ const EARTH_RADIUS_M = 6371000
  * Threshold for counting climb toward cycling elevation gain (“desnivel positivo”).
  * ORS elevations are DEM-based (not barometric). Strava uses ~10 m for DEM / non-baro
  * sources and ~2–3 m for barometric. We use the DEM threshold here.
+ *
+ * Applies to EVERY PedalMap bike profile (road / mtb / gravel / urban / ebike)
+ * and every ORS cycling-* profile — never MTB-only.
  */
 export const CYCLING_ELEVATION_THRESHOLD_M = 10
 
 /** Moving-average window (samples) to damp DEM stair-steps before gain. */
 export const CYCLING_ELEVATION_SMOOTH_WINDOW = 5
+
+/**
+ * Max plausible jump between consecutive DEM samples before treating as glitch.
+ * Shared by all cycling profiles (road DEM has the same artifacts as MTB).
+ */
+export const CYCLING_ELEVATION_MAX_STEP_M = 80
 
 export function haversineMeters(a: LatLng, b: LatLng): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180
@@ -32,9 +41,17 @@ export function pathDistanceMeters(points: LatLng[]): number {
   return total
 }
 
+function isUsableElevation(v: number | undefined | null): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
 /**
- * Fix DEM/ORS glitches: isolated 0/null elevations surrounded by real terrain
- * (common on cycling-mountain) that otherwise create fake thousands of meters.
+ * Fix DEM/ORS glitches for ALL cycling profiles:
+ * - missing / NaN elevations
+ * - isolated 0 (or near-sea) samples when neighbors are inland
+ * - single-sample spikes that snap back (fake cliffs)
+ *
+ * Same pipeline for road, mtb, gravel, urban and ebike.
  */
 export function sanitizeElevationProfile(profile: ElevationPoint[]): ElevationPoint[] {
   if (profile.length === 0) return profile
@@ -43,19 +60,48 @@ export function sanitizeElevationProfile(profile: ElevationPoint[]): ElevationPo
   const nearest = (from: number, step: -1 | 1): number | undefined => {
     for (let i = from + step; i >= 0 && i < values.length; i += step) {
       const v = values[i]
-      if (v !== 0 && Number.isFinite(v)) return v
+      if (isUsableElevation(v) && Math.abs(v) > 0.5) return v
     }
     return undefined
   }
 
   const cleaned = values.map((v, i) => {
-    const invalid = !Number.isFinite(v) || (v === 0 && (nearest(i, -1) ?? 0) > 40)
-    if (!invalid) return v
     const prev = nearest(i, -1)
     const next = nearest(i, 1)
+    const inlandNeighbor = Math.max(prev ?? 0, next ?? 0)
+
+    const missing = !isUsableElevation(v)
+    const seaLevelGlitch = isUsableElevation(v) && Math.abs(v) <= 0.5 && inlandNeighbor > 40
+    const spike =
+      isUsableElevation(v) &&
+      prev !== undefined &&
+      next !== undefined &&
+      Math.abs(v - prev) > CYCLING_ELEVATION_MAX_STEP_M &&
+      Math.abs(v - next) > CYCLING_ELEVATION_MAX_STEP_M &&
+      Math.abs(prev - next) < CYCLING_ELEVATION_MAX_STEP_M
+
+    if (!missing && !seaLevelGlitch && !spike) return v
+
     if (prev !== undefined && next !== undefined) return (prev + next) / 2
-    return prev ?? next ?? v
+    return prev ?? next ?? (isUsableElevation(v) ? v : 0)
   })
+
+  // Second pass: only clip impossible cliffs between NEARBY DEM samples.
+  // Sparse points (GPX / long ORS segments) can legitimately change >80 m.
+  for (let i = 1; i < cleaned.length; i += 1) {
+    const spacing = Math.abs(profile[i].distanceMeters - profile[i - 1].distanceMeters)
+    if (spacing > 60) continue
+
+    const delta = cleaned[i] - cleaned[i - 1]
+    if (Math.abs(delta) <= CYCLING_ELEVATION_MAX_STEP_M) continue
+    const prev = cleaned[i - 1]
+    const next = i + 1 < cleaned.length ? cleaned[i + 1] : undefined
+    if (next !== undefined && Math.abs(next - prev) <= CYCLING_ELEVATION_MAX_STEP_M) {
+      cleaned[i] = (prev + next) / 2
+    } else {
+      cleaned[i] = prev + Math.sign(delta) * CYCLING_ELEVATION_MAX_STEP_M
+    }
+  }
 
   return profile.map((p, i) => ({ ...p, elevationMeters: cleaned[i] }))
 }
@@ -82,8 +128,16 @@ export function smoothElevationProfile(
 }
 
 /**
+ * Canonical elevation profile for UI + stats (all bike / ORS cycling profiles).
+ */
+export function normalizeCyclingElevationProfile(profile: ElevationPoint[]): ElevationPoint[] {
+  return sanitizeElevationProfile(profile)
+}
+
+/**
  * Cycling elevation gain/loss: cumulative positive/negative change after DEM
  * sanitize + smooth + noise threshold (Strava-like “desnivel positivo”).
+ * Profile-agnostic: road / mtb / gravel / urban / ebike share this logic.
  */
 export function computeElevationStats(
   profile: ElevationPoint[],
@@ -95,18 +149,17 @@ export function computeElevationStats(
   lowest?: number
   significantClimbs: number
 } {
-  const cleaned = smoothElevationProfile(sanitizeElevationProfile(profile))
+  const sanitized = normalizeCyclingElevationProfile(profile)
+  const cleaned = smoothElevationProfile(sanitized)
   if (cleaned.length === 0) {
     return { gain: 0, loss: 0, significantClimbs: 0 }
   }
 
   let gain = 0
   let loss = 0
-  // Track extrema on sanitized (unsmoothed) values for display honesty.
-  const forExtremes = sanitizeElevationProfile(profile)
-  let highest = forExtremes[0].elevationMeters
-  let lowest = forExtremes[0].elevationMeters
-  for (const p of forExtremes) {
+  let highest = sanitized[0].elevationMeters
+  let lowest = sanitized[0].elevationMeters
+  for (const p of sanitized) {
     highest = Math.max(highest, p.elevationMeters)
     lowest = Math.min(lowest, p.elevationMeters)
   }
@@ -149,7 +202,8 @@ export function computeElevationStats(
 
 /**
  * Prefer a sane cycling gain: sanitized profile first; use provider ascent only
- * when it agrees roughly (provider DEM glitches can report thousands of meters).
+ * when it agrees roughly (provider DEM glitches can report thousands of meters
+ * on any cycling-* profile, not only mountain).
  */
 export function resolveCyclingElevationGain(options: {
   profile: ElevationPoint[]
@@ -230,6 +284,7 @@ export function buildStatsFromProfile(
   providerAscent?: number,
   providerDescent?: number,
 ): RouteStats {
+  // bikeType only affects duration estimate — elevation gain is profile-agnostic.
   const elev = resolveCyclingElevationGain({
     profile,
     providerAscent,

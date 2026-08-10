@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import type { Activity, ActivityStatus, ActivityTrackPoint, BikeType } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
-import { computeElevationStats, pathDistanceMeters } from '@/lib/stats'
+import { computeElevationStats, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
 
 function monthKeyNow(): string {
   const d = new Date()
@@ -46,11 +46,16 @@ export function computeActivityStats(
   const start = Date.parse(startedAt)
   const end = Date.parse(finishedAt ?? new Date().toISOString())
   const durationSeconds = Math.max(0, Math.round((end - start) / 1000))
-  const profile = track.map((p, i) => ({
-    distanceMeters: i === 0 ? 0 : pathDistanceMeters(positions.slice(0, i + 1)),
-    elevationMeters: p.elevationMeters ?? 0,
-    position: p.position,
-  }))
+  const profile = normalizeCyclingElevationProfile(
+    track.map((p, i) => ({
+      distanceMeters: i === 0 ? 0 : pathDistanceMeters(positions.slice(0, i + 1)),
+      elevationMeters:
+        p.elevationMeters !== undefined && Number.isFinite(p.elevationMeters)
+          ? p.elevationMeters
+          : Number.NaN,
+      position: p.position,
+    })),
+  )
   const elev = computeElevationStats(profile)
   return {
     distanceMeters,

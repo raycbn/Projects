@@ -36,10 +36,17 @@
 | Secundarias / evitar principales | `weightings.green` (ORS cycling no admite `avoid highways`) |
 | Evitar ferry/vado | `avoid_features: ferries, fords` (+ steps siempre) |
 
-### Desnivel positivo ciclista
+### Desnivel positivo ciclista (todos los perfiles)
 
-ORS DEM puede devolver ceros aislados → se sanitiza, se suaviza y se aplica umbral ~10 m
-(estilo Strava DEM) antes de sumar el **desnivel +**.
+Misma lógica para **road / mtb / gravel / urban / ebike** y para todos los
+`cycling-*` de ORS (incl. fallbacks):
+
+1. No inventar elevación `0` si falta Z
+2. Sanitizar ceros/NaN/spikes del DEM
+3. Suavizar tracks densos + umbral ~10 m (estilo Strava DEM)
+4. Rechazar `ascent` absurdo del provider
+
+Nunca corregir solo MTB: el artefacto DEM aparece en cualquier perfil.
 
 ### Circular / alternativas
 

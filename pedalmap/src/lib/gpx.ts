@@ -1,5 +1,5 @@
 import type { ElevationPoint, LatLng, RouteDraft, RouteGeometry } from '@/domain/types'
-import { buildStatsFromProfile, pathDistanceMeters } from '@/lib/stats'
+import { buildStatsFromProfile, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
 
 function escapeXml(value: string): string {
   return value
@@ -97,7 +97,10 @@ export function parseGpx(xml: string): ImportedGpx {
     }
     elevationProfile.push({
       distanceMeters: distance,
-      elevationMeters: points[i].elevationMeters ?? 0,
+      elevationMeters:
+        points[i].elevationMeters !== undefined && Number.isFinite(points[i].elevationMeters)
+          ? (points[i].elevationMeters as number)
+          : Number.NaN,
       position: { lat: points[i].lat, lng: points[i].lng },
     })
   }
@@ -107,7 +110,7 @@ export function parseGpx(xml: string): ImportedGpx {
     description,
     points,
     geometry,
-    elevationProfile,
+    elevationProfile: normalizeCyclingElevationProfile(elevationProfile),
     distanceMeters: pathDistanceMeters(points.map((p) => ({ lat: p.lat, lng: p.lng }))),
   }
 }

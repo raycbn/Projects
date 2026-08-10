@@ -9,7 +9,7 @@ import type {
   RouteStats,
 } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
-import { buildStatsFromProfile, sanitizeElevationProfile } from '@/lib/stats'
+import { buildStatsFromProfile, normalizeCyclingElevationProfile } from '@/lib/stats'
 import {
   surfaceStatsFromOrsExtras,
   waytypeBreakdownFromOrsExtras,
@@ -166,7 +166,9 @@ export function geometryFromOrsCoordinates(
     const row = raw[i]
     const lng = row[0]
     const lat = row[1]
-    const elev = row.length > 2 ? row[2] : 0
+    // Never invent sea-level 0 when Z is missing — sanitize interpolates NaN.
+    const elev =
+      row.length > 2 && Number.isFinite(row[2] as number) ? Number(row[2]) : Number.NaN
     coordinates.push([lng, lat])
 
     if (i > 0) {
@@ -184,12 +186,12 @@ export function geometryFromOrsCoordinates(
 
     profile.push({
       distanceMeters: distance,
-      elevationMeters: elev ?? 0,
+      elevationMeters: elev,
       position: { lat, lng },
     })
   }
 
-  return { coordinates, profile }
+  return { coordinates, profile: normalizeCyclingElevationProfile(profile) }
 }
 
 function featureToPartialResult(
@@ -206,14 +208,14 @@ function featureToPartialResult(
     throw new RoutingError('No route found for preferences', 'no_route')
   }
 
-  const { coordinates: coords, profile: elevationProfileRaw } = geometryFromOrsCoordinates(rawCoords)
-  const elevationProfile = sanitizeElevationProfile(elevationProfileRaw)
+  const { coordinates: coords, profile: elevationProfile } = geometryFromOrsCoordinates(rawCoords)
   const summary = feature.properties?.summary
   const distanceMeters = summary?.distance ?? 0
   const durationSeconds = summary?.duration ? Math.round(summary.duration) : undefined
   const ascent = feature.properties?.ascent ?? summary?.ascent
   const descent = feature.properties?.descent ?? summary?.descent
 
+  // Elevation gain is profile-agnostic (same for road/mtb/gravel/urban/ebike).
   let stats = buildStatsFromProfile(
     distanceMeters,
     elevationProfile,
