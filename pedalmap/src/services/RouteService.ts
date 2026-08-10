@@ -2,7 +2,6 @@ import { createRoutingProvider } from '@/adapters/routing/createRoutingProvider'
 import { routingRequestSchema } from '@/domain/schemas'
 import type {
   BikeType,
-  RouteAlternative,
   RouteDraft,
   RoutePreference,
   RouteType,
@@ -10,6 +9,7 @@ import type {
   Waypoint,
 } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
+import { rankRouteOptions } from '@/lib/routeOptions'
 
 export interface CalculateRouteInput {
   waypoints: Waypoint[]
@@ -64,13 +64,25 @@ export class RouteService {
           ? `${startName} → ${endName}`
           : 'Nueva ruta')
 
-    const alternatives: RouteAlternative[] | undefined = result.alternatives?.map((alt, index) => ({
-      id: `alt-${index + 1}`,
-      label: `Alternativa ${index + 1}`,
-      geometry: alt.geometry,
-      elevationProfile: alt.elevationProfile,
-      stats: alt.stats,
-    }))
+    const candidates = [
+      {
+        geometry: result.geometry,
+        elevationProfile: result.elevationProfile,
+        stats: result.stats,
+        instructions: result.rawInstructions,
+        surfaceEdges: result.surfaceEdges,
+      },
+      ...(result.alternatives ?? []).map((alt) => ({
+        geometry: alt.geometry,
+        elevationProfile: alt.elevationProfile,
+        stats: alt.stats,
+        instructions: alt.rawInstructions ?? result.rawInstructions,
+        surfaceEdges: alt.surfaceEdges ?? result.surfaceEdges,
+      })),
+    ]
+
+    const ranked = rankRouteOptions(candidates)
+    const extras = ranked.routeOptions.filter((o) => o.id !== ranked.selectedOptionId)
 
     return {
       title,
@@ -78,15 +90,18 @@ export class RouteService {
       bikeType: input.bikeType,
       preferences: input.preferences,
       waypoints: sorted,
-      geometry: result.geometry,
-      elevationProfile: result.elevationProfile,
-      stats: result.stats,
+      geometry: ranked.active.geometry,
+      elevationProfile: ranked.active.elevationProfile,
+      stats: ranked.active.stats,
       circularDistanceMeters: input.circularDistanceMeters,
       targetElevationGainMeters: input.targetElevationGainMeters,
       circularSeed: input.circularSeed,
-      instructions: result.rawInstructions?.filter(Boolean).slice(0, 40),
-      surfaceEdges: result.surfaceEdges,
-      alternatives,
+      instructions: ranked.active.instructions,
+      surfaceEdges: ranked.active.surfaceEdges,
+      routeOptions: ranked.routeOptions.length > 1 ? ranked.routeOptions : undefined,
+      selectedOptionId: ranked.routeOptions.length > 1 ? ranked.selectedOptionId : undefined,
+      // Legacy field: non-selected options only (older UI).
+      alternatives: extras.length ? extras : undefined,
     }
   }
 }

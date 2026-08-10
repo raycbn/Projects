@@ -61,9 +61,19 @@ export interface SurfaceStats {
 export interface RouteAlternative {
   id: string
   label: string
+  /** 1-based display rank within routeOptions. */
+  rank?: number
   geometry: RouteGeometry
   elevationProfile: ElevationPoint[]
   stats: RouteStats
+  instructions?: string[]
+  surfaceEdges?: Array<{
+    length?: number
+    surface?: string
+    road_class?: string
+    use?: string
+    cycle_lane?: string
+  }>
 }
 
 export interface RouteGeometry {
@@ -109,7 +119,13 @@ export interface RouteDraft {
     use?: string
     cycle_lane?: string
   }>
-  /** Extra alternatives (index 0 is usually the active geometry). */
+  /**
+   * All ranked route options for this calculation (Opción 1..N), including the active one.
+   * `geometry` / `stats` / `elevationProfile` always mirror `selectedOptionId`.
+   */
+  routeOptions?: RouteAlternative[]
+  selectedOptionId?: string
+  /** @deprecated Prefer routeOptions; kept as non-selected extras for older clients. */
   alternatives?: RouteAlternative[]
 }
 
@@ -214,6 +230,8 @@ export interface RoutingResult {
     geometry: RouteGeometry
     elevationProfile: ElevationPoint[]
     stats: RouteStats
+    rawInstructions?: string[]
+    surfaceEdges?: RoutingResult['surfaceEdges']
   }>
 }
 

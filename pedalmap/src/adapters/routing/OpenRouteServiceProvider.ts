@@ -339,9 +339,9 @@ export class OpenRouteServiceProvider implements RoutingProvider {
             tryBodies.unshift({
               ...body,
               alternative_routes: {
-                target_count: 2,
+                target_count: 3,
                 share_factor: 0.55,
-                weight_factor: 1.5,
+                weight_factor: 1.6,
               },
             })
           }
@@ -425,33 +425,26 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                 )
               }
 
-              const primary = featureToPartialResult(features[0], request.bikeType)
-              const alternatives =
-                features.length > 1
-                  ? features.slice(1).map((feature) => {
-                      const partial = featureToPartialResult(feature, request.bikeType)
-                      return {
-                        geometry: partial.geometry,
-                        elevationProfile: partial.elevationProfile,
-                        stats: partial.stats,
-                      }
-                    })
-                  : undefined
+              const featurePartials = features.map((feature) =>
+                featureToPartialResult(feature, request.bikeType),
+              )
 
-              // Score every geometry (primary + alts); keep the best surface fit for this bike.
-              const pool = [
-                primary,
-                ...(alternatives ?? []).map((a) => ({
-                  ...a,
-                  rawInstructions: primary.rawInstructions,
-                })),
-              ]
-              pool.sort(
+              // Score every geometry; keep the best surface fit active, retain all as alternatives.
+              const pool = [...featurePartials].sort(
                 (a, b) =>
                   (b.stats.surfaceStats?.suitability?.score ?? 0) -
                   (a.stats.surfaceStats?.suitability?.score ?? 0),
               )
               const chosen = pool[0]
+              const alternatives =
+                pool.length > 1
+                  ? pool.slice(1).map((partial) => ({
+                      geometry: partial.geometry,
+                      elevationProfile: partial.elevationProfile,
+                      stats: partial.stats,
+                      rawInstructions: partial.rawInstructions,
+                    }))
+                  : undefined
 
               const candidate: RoutingResult = {
                 geometry: chosen.geometry,

@@ -11,10 +11,7 @@ import {
   type ValhallaEdgeAttr,
 } from '@/lib/valhallaSurfaces'
 
-type BikeRouteResponse = {
-  ok?: boolean
-  error?: string
-  provider?: string
+type BikeRoutePayload = {
   coordinates?: [number, number][]
   elevationProfile?: ElevationPoint[]
   edges?: ValhallaEdgeAttr[]
@@ -23,11 +20,48 @@ type BikeRouteResponse = {
   instructions?: string[]
 }
 
+type BikeRouteResponse = BikeRoutePayload & {
+  ok?: boolean
+  error?: string
+  provider?: string
+  alternatives?: BikeRoutePayload[]
+}
+
 function resolveProxyUrl(): string | undefined {
   const proxy =
     import.meta.env.VITE_PEDALMAP_API_URL || import.meta.env.VITE_ROUTING_PROXY_URL
   if (typeof proxy !== 'string' || !proxy.trim()) return undefined
   return proxy.trim().replace(/\/+$/, '')
+}
+
+function payloadToPartial(
+  data: BikeRoutePayload,
+  bikeType: RoutingRequest['bikeType'],
+): Omit<RoutingResult, 'provider' | 'alternatives'> {
+  const elevationProfile = normalizeCyclingElevationProfile(data.elevationProfile ?? [])
+  const surfaceStats = surfaceStatsFromValhallaEdges(bikeType, data.edges ?? [])
+  const distanceMeters = data.distanceMeters ?? 0
+  const durationSeconds = data.durationSeconds
+  const stats = buildStatsFromProfile(
+    distanceMeters,
+    elevationProfile,
+    bikeType,
+    durationSeconds,
+  )
+  stats.surfaceStats = surfaceStats
+  return {
+    geometry: { type: 'LineString', coordinates: data.coordinates ?? [] },
+    elevationProfile,
+    stats,
+    rawInstructions: data.instructions ?? [],
+    surfaceEdges: (data.edges ?? []).map((e) => ({
+      length: e.length,
+      surface: e.surface,
+      road_class: e.road_class,
+      use: e.use,
+      cycle_lane: e.cycle_lane,
+    })),
+  }
 }
 
 /**
@@ -80,6 +114,7 @@ export class ValhallaProvider implements RoutingProvider {
           targetElevationGainMeters: request.targetElevationGainMeters,
           circularSeed: request.circularSeed,
           language: request.language ?? 'es',
+          wantAlternatives: Boolean(request.wantAlternatives),
         }),
       })
     } catch (error) {
@@ -105,34 +140,24 @@ export class ValhallaProvider implements RoutingProvider {
       )
     }
 
-    const elevationProfile = normalizeCyclingElevationProfile(data.elevationProfile ?? [])
-    const surfaceStats = surfaceStatsFromValhallaEdges(
-      request.bikeType,
-      data.edges ?? [],
-    )
-    const distanceMeters = data.distanceMeters ?? 0
-    const durationSeconds = data.durationSeconds
-    const stats = buildStatsFromProfile(
-      distanceMeters,
-      elevationProfile,
-      request.bikeType,
-      durationSeconds,
-    )
-    stats.surfaceStats = surfaceStats
+    const primary = payloadToPartial(data, request.bikeType)
+    const alternatives = (data.alternatives ?? [])
+      .filter((alt) => (alt.coordinates?.length ?? 0) >= 2)
+      .map((alt) => {
+        const partial = payloadToPartial(alt, request.bikeType)
+        return {
+          geometry: partial.geometry,
+          elevationProfile: partial.elevationProfile,
+          stats: partial.stats,
+          rawInstructions: partial.rawInstructions,
+          surfaceEdges: partial.surfaceEdges,
+        }
+      })
 
     return {
-      geometry: { type: 'LineString', coordinates: data.coordinates },
-      elevationProfile,
-      stats,
+      ...primary,
       provider: this.name,
-      rawInstructions: data.instructions ?? [],
-      surfaceEdges: (data.edges ?? []).map((e) => ({
-        length: e.length,
-        surface: e.surface,
-        road_class: e.road_class,
-        use: e.use,
-        cycle_lane: e.cycle_lane,
-      })),
+      alternatives: alternatives.length ? alternatives : undefined,
     }
   }
 }

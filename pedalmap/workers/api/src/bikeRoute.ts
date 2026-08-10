@@ -21,6 +21,8 @@ interface BikeRouteRequest {
   targetElevationGainMeters?: number
   language?: string
   circularSeed?: number
+  /** When true on A→B, ask Valhalla for up to 2 alternate geometries (3 options total). */
+  wantAlternatives?: boolean
 }
 
 type ValhallaAction = 'route' | 'trace_attributes' | 'height'
@@ -272,17 +274,20 @@ type ElevPoint = {
   position: { lng: number; lat: number }
 }
 
-type TripJson = {
-  trip?: {
-    legs?: Array<{
-      shape?: string
-      summary?: { length?: number; time?: number }
-      elevation?: Array<number | null>
-      elevation_interval?: number
-      maneuvers?: Array<{ instruction?: string }>
-    }>
+type ValhallaTrip = {
+  legs?: Array<{
+    shape?: string
     summary?: { length?: number; time?: number }
-  }
+    elevation?: Array<number | null>
+    elevation_interval?: number
+    maneuvers?: Array<{ instruction?: string }>
+  }>
+  summary?: { length?: number; time?: number }
+}
+
+type TripJson = {
+  trip?: ValhallaTrip
+  alternates?: ValhallaTrip[]
   error?: string
 }
 
@@ -425,6 +430,7 @@ async function routeLocations(
   locations: Array<{ lat: number; lon: number; type: string }>,
   costing: Record<string, number | string>,
   language: string,
+  options?: { alternates?: number },
 ) {
   const routeJson = (await valhallaPost(env, 'route', {
     locations,
@@ -436,12 +442,116 @@ async function routeLocations(
     },
     // Stadia/Valhalla: dense elevation along the ride (30 m ≈ DEM source resolution).
     elevation_interval: ROUTE_ELEVATION_INTERVAL_M,
+    ...(options?.alternates && options.alternates > 0
+      ? { alternates: Math.min(3, Math.floor(options.alternates)) }
+      : {}),
   })) as TripJson
 
   if (routeJson.error || !routeJson.trip?.legs?.length) {
     throw new Error(routeJson.error || 'No route found')
   }
-  return enrichTrip(env, routeJson.trip, costing)
+
+  const primary = await enrichTrip(env, routeJson.trip, costing)
+  const alternateTrips = Array.isArray(routeJson.alternates) ? routeJson.alternates : []
+  const alternatives = (
+    await Promise.all(
+      alternateTrips.map((trip) =>
+        trip?.legs?.length
+          ? enrichTrip(env, trip, costing).catch((err) => {
+              console.warn('[bike-route] alternate enrich failed', err)
+              return null
+            })
+          : Promise.resolve(null),
+      ),
+    )
+  ).filter((x): x is Awaited<ReturnType<typeof enrichTrip>> => Boolean(x))
+
+  return { ...primary, alternatives }
+}
+
+type EnrichedRoute = Awaited<ReturnType<typeof enrichTrip>>
+
+function routeFingerprint(route: EnrichedRoute): string {
+  const coords = route.coordinates
+  const mid = coords[Math.floor(coords.length / 2)] ?? coords[0]
+  const end = coords[coords.length - 1] ?? coords[0]
+  return [
+    Math.round(route.distanceMeters / 80),
+    mid[0].toFixed(3),
+    mid[1].toFixed(3),
+    end[0].toFixed(3),
+    end[1].toFixed(3),
+  ].join('|')
+}
+
+function costingVariant(
+  base: Record<string, number | string>,
+  tweak: 'roads' | 'hills' | 'mixed',
+): Record<string, number | string> {
+  const next = { ...base }
+  const num = (key: string, fallback: number) =>
+    typeof next[key] === 'number' ? (next[key] as number) : fallback
+  if (tweak === 'roads') {
+    next.use_roads = Math.min(1, num('use_roads', 0.5) + 0.28)
+    next.use_hills = Math.max(0, num('use_hills', 0.2) - 0.08)
+    next.avoid_bad_surfaces = Math.min(1, num('avoid_bad_surfaces', 0.5) + 0.15)
+  } else if (tweak === 'hills') {
+    next.use_hills = Math.min(1, num('use_hills', 0.2) + 0.35)
+    next.use_roads = Math.max(0.1, num('use_roads', 0.5) - 0.12)
+  } else {
+    next.use_roads = Math.max(0.15, num('use_roads', 0.5) - 0.22)
+    next.avoid_bad_surfaces = Math.max(0, num('avoid_bad_surfaces', 0.5) - 0.25)
+    next.use_hills = Math.min(1, num('use_hills', 0.2) + 0.12)
+  }
+  return next
+}
+
+function mergeUniqueRoutes(routes: EnrichedRoute[], max = 3): EnrichedRoute[] {
+  const out: EnrichedRoute[] = []
+  const seen = new Set<string>()
+  for (const route of routes) {
+    if (!route?.coordinates || route.coordinates.length < 2) continue
+    const key = routeFingerprint(route)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(route)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+/**
+ * Primary Valhalla route + native alternates, topped up with costing variants in parallel
+ * so A→B usually returns 2–3 distinct options even when `alternates` is empty.
+ */
+async function routeLocationsWithOptions(
+  env: Env,
+  locations: Array<{ lat: number; lon: number; type: string }>,
+  costing: Record<string, number | string>,
+  language: string,
+): Promise<EnrichedRoute & { alternatives: EnrichedRoute[] }> {
+  const [mainSettled, roadsSettled, hillsSettled] = await Promise.allSettled([
+    routeLocations(env, locations, costing, language, { alternates: 2 }),
+    routeLocations(env, locations, costingVariant(costing, 'roads'), language),
+    routeLocations(env, locations, costingVariant(costing, 'mixed'), language),
+  ])
+
+  if (mainSettled.status !== 'fulfilled') {
+    // Fall back to any successful costing variant
+    const fallback = [roadsSettled, hillsSettled].find((r) => r.status === 'fulfilled')
+    if (!fallback || fallback.status !== 'fulfilled') throw mainSettled.reason
+    return { ...fallback.value, alternatives: [] }
+  }
+
+  const main = mainSettled.value
+  const extras: EnrichedRoute[] = [...(main.alternatives ?? [])]
+  if (roadsSettled.status === 'fulfilled') extras.push(roadsSettled.value)
+  if (hillsSettled.status === 'fulfilled') extras.push(hillsSettled.value)
+
+  const unique = mergeUniqueRoutes([main, ...extras], 3)
+  const primary = unique[0] ?? main
+  const alternatives = unique.slice(1)
+  return { ...primary, alternatives }
 }
 
 /**
@@ -465,6 +575,7 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
     targetElevationGainMeters,
     language = 'es',
     circularSeed = 0,
+    wantAlternatives = false,
   } = body
 
   if (!Array.isArray(waypoints) || waypoints.length < 1) {
@@ -484,54 +595,61 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
         { bearing: (circularSeed * 47) % 360, legFactor: 5.0 },
         { bearing: (circularSeed * 47 + 90) % 360, legFactor: 4.2 },
       ]
+
+      const settled = await Promise.all(
+        attempts.map(async ({ bearing, legFactor }, i) => {
+          const leg = circularDistanceMeters / legFactor
+          const via1 = offsetLatLng(start, bearing, leg)
+          const via2 = offsetLatLng(start, bearing + 120, leg)
+          try {
+            const candidate = await routeLocations(
+              env,
+              [
+                { lat: start.lat, lon: start.lng, type: 'break' },
+                { lat: via1.lat, lon: via1.lng, type: 'break' },
+                { lat: via2.lat, lon: via2.lng, type: 'break' },
+                { lat: start.lat, lon: start.lng, type: 'break' },
+              ],
+              costing,
+              language,
+            )
+            const distErr =
+              Math.abs(candidate.distanceMeters - circularDistanceMeters) /
+              Math.max(1, circularDistanceMeters)
+            let elevErr = 0
+            if (targetElevationGainMeters && targetElevationGainMeters > 0) {
+              let gain = 0
+              for (let p = 1; p < candidate.elevationProfile.length; p += 1) {
+                const d =
+                  candidate.elevationProfile[p].elevationMeters -
+                  candidate.elevationProfile[p - 1].elevationMeters
+                if (d > 3) gain += d
+              }
+              elevErr =
+                Math.abs(gain - targetElevationGainMeters) /
+                Math.max(40, targetElevationGainMeters)
+            }
+            return { candidate, score: distErr * 100 + elevErr * 40, i }
+          } catch (err) {
+            console.warn('[bike-route] circular attempt failed', i, err)
+            return null
+          }
+        }),
+      )
+
       let best: Awaited<ReturnType<typeof routeLocations>> | null = null
       let bestScore = Number.POSITIVE_INFINITY
-
-      for (let i = 0; i < attempts.length; i += 1) {
-        const { bearing, legFactor } = attempts[i]
-        const leg = circularDistanceMeters / legFactor
-        const via1 = offsetLatLng(start, bearing, leg)
-        const via2 = offsetLatLng(start, bearing + 120, leg)
-        try {
-          const candidate = await routeLocations(
-            env,
-            [
-              { lat: start.lat, lon: start.lng, type: 'break' },
-              { lat: via1.lat, lon: via1.lng, type: 'break' },
-              { lat: via2.lat, lon: via2.lng, type: 'break' },
-              { lat: start.lat, lon: start.lng, type: 'break' },
-            ],
-            costing,
-            language,
-          )
-          const distErr =
-            Math.abs(candidate.distanceMeters - circularDistanceMeters) /
-            Math.max(1, circularDistanceMeters)
-          let elevErr = 0
-          if (targetElevationGainMeters && targetElevationGainMeters > 0) {
-            let gain = 0
-            for (let p = 1; p < candidate.elevationProfile.length; p += 1) {
-              const d =
-                candidate.elevationProfile[p].elevationMeters -
-                candidate.elevationProfile[p - 1].elevationMeters
-              if (d > 3) gain += d
-            }
-            elevErr =
-              Math.abs(gain - targetElevationGainMeters) / Math.max(40, targetElevationGainMeters)
-          }
-          const score = distErr * 100 + elevErr * 40
-          if (score < bestScore) {
-            bestScore = score
-            best = candidate
-          }
-          if (distErr < 0.2 && elevErr < 0.35) break
-        } catch (err) {
-          console.warn('[bike-route] circular attempt failed', i, err)
+      for (const row of settled) {
+        if (!row) continue
+        if (row.score < bestScore) {
+          bestScore = row.score
+          best = row.candidate
         }
       }
 
       if (!best) return json({ error: 'No circular route found' }, 404)
-      return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...best })
+      const { alternatives: _alts, ...primary } = best
+      return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...primary })
     }
 
     // A→B and out-and-back
@@ -541,7 +659,10 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
     const pts =
       routeType === 'out_and_back' ? [...waypoints, waypoints[0]] : waypoints
     const locations = pts.map((w) => ({ lat: w.lat, lon: w.lng, type: 'break' }))
-    const result = await routeLocations(env, locations, costing, language)
+    const result =
+      wantAlternatives && routeType === 'a_to_b'
+        ? await routeLocationsWithOptions(env, locations, costing, language)
+        : await routeLocations(env, locations, costing, language)
     return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Valhalla bike-route failed'

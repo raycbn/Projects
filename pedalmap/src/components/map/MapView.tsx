@@ -183,13 +183,7 @@ const WIND_ARROW_IMAGES: Record<string, string> = {
 
 function ensureWindArrowImages(map: Map) {
   for (const [id, fill] of Object.entries(WIND_ARROW_IMAGES)) {
-    if (map.hasImage(id)) {
-      try {
-        map.removeImage(id)
-      } catch {
-        /* ignore */
-      }
-    }
+    if (map.hasImage(id)) continue
     const img = createWindArrowImage(fill)
     map.addImage(id, img, { pixelRatio: 2 })
   }
@@ -534,11 +528,13 @@ export function MapView({
         paintFromRef(true)
       })
     })
+    // Only repair wind stack if layers were dropped (style swap), not on every styledata tick.
     map.on('styledata', () => {
-      if (map.isStyleLoaded()) {
+      if (!map.isStyleLoaded()) return
+      if (!map.getLayer('route-wind-segments') && windRef.current?.features?.length) {
         rebuildWindLayers(map)
-        paintFromRef(Boolean(geometryRef.current))
       }
+      paintFromRef(false)
     })
     map.on('error', (e: { error?: Error }) => {
       console.error('[maplibre]', e.error ?? e)
@@ -613,9 +609,7 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    if (windOverlay?.features?.length) {
-      rebuildWindLayers(map)
-    }
+    // Hour/day changes only need setData — never tear down wind layers.
     applyWindOverlay(map, windOverlay)
   }, [windOverlay])
 

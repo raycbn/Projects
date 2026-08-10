@@ -46,10 +46,10 @@ export class CompositeRoutingProvider implements RoutingProvider {
       throw new RoutingError('ORS fallback is not configured', 'not_configured')
     }
 
-    // Slim fallback request: avoid multi-seed / multi-strategy storms that freeze the UI
+    // Keep alternatives when the user asked for them; otherwise keep the slim failover.
     return this.ors.calculateRoute({
       ...request,
-      wantAlternatives: false,
+      wantAlternatives: Boolean(request.wantAlternatives),
       circularSeed: request.circularSeed ?? 0,
     })
   }

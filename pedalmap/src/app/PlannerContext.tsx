@@ -23,6 +23,7 @@ import { canCreateRoute, canUseAdvancedCircular, clampPreferencesForPlan } from 
 import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
 import { loadCloudDraft, saveCloudDraft } from '@/services/DraftRepository'
+import { applySelectedOption } from '@/lib/routeOptions'
 
 const GUEST_CREATES_KEY = 'pedalmap_guest_creates'
 const LAST_DRAFT_KEY = 'pedalmap_last_draft'
@@ -64,6 +65,7 @@ interface PlannerContextValue {
   cancelEditing: () => void
   saveEdits: () => Promise<void>
   selectAlternative: (index: number) => void
+  selectRouteOption: (optionId: string) => void
   setHoverPoint: (p: LatLng | null) => void
   setDraftFromImport: (draft: RouteDraft) => void
   clearRoute: () => void
@@ -163,7 +165,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [circularDistanceMeters, setCircularDistanceMeters] = useState(25000)
   const [targetElevationGainMeters, setTargetElevationGainMeters] = useState(0)
   const [circularSeed, setCircularSeed] = useState(0)
-  const [wantAlternatives, setWantAlternatives] = useState(false)
+  const [wantAlternatives, setWantAlternatives] = useState(true)
   const [hydratedProfile, setHydratedProfile] = useState(false)
   const [hydratedStorage, setHydratedStorage] = useState(false)
 
@@ -563,16 +565,36 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         }
       },
       selectAlternative(index) {
-        if (!draft?.alternatives?.length) return
-        const alt = draft.alternatives[index]
-        if (!alt) return
-        const next = {
-          ...draft,
-          geometry: alt.geometry,
-          elevationProfile: alt.elevationProfile,
-          stats: alt.stats,
-          title: `${draft.title.replace(/ · alt.*$/i, '')} · ${alt.label}`,
+        if (!draft) return
+        let options = draft.routeOptions
+        if (!options?.length && draft.alternatives?.length) {
+          options = [
+            {
+              id: 'opt-1',
+              label: 'Opción 1',
+              rank: 1,
+              geometry: draft.geometry,
+              elevationProfile: draft.elevationProfile,
+              stats: draft.stats,
+              instructions: draft.instructions,
+              surfaceEdges: draft.surfaceEdges,
+            },
+            ...draft.alternatives.map((alt, i) => ({
+              ...alt,
+              id: alt.id || `opt-${i + 2}`,
+              rank: i + 2,
+            })),
+          ]
         }
+        const option = options?.[index]
+        if (!option || !options) return
+        const next = applySelectedOption({ ...draft, routeOptions: options }, option.id)
+        setDraft(next)
+        persistDraft(next, user && !user.isAnonymous ? user.uid : null)
+      },
+      selectRouteOption(optionId) {
+        if (!draft?.routeOptions?.length) return
+        const next = applySelectedOption(draft, optionId)
         setDraft(next)
         persistDraft(next, user && !user.isAnonymous ? user.uid : null)
       },

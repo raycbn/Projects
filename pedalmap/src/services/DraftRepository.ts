@@ -41,13 +41,35 @@ export async function clearCloudDraft(uid: string): Promise<void> {
 }
 
 function leanDraft(draft: RouteDraft): RouteDraft {
-  const coords = draft.geometry?.coordinates ?? []
-  if (coords.length <= 800) return draft
-  const step = Math.ceil(coords.length / 600)
-  const sampled = coords.filter((_, i) => i % step === 0 || i === coords.length - 1)
+  const downsample = (coords: [number, number][]) => {
+    if (coords.length <= 800) return coords
+    const step = Math.ceil(coords.length / 600)
+    return coords.filter((_, i) => i % step === 0 || i === coords.length - 1) as [number, number][]
+  }
+
+  const geometryCoords = downsample(draft.geometry?.coordinates ?? [])
+  const routeOptions = draft.routeOptions?.map((opt) => ({
+    ...opt,
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: downsample(opt.geometry.coordinates),
+    },
+    elevationProfile: opt.elevationProfile?.filter((_, i) => i % 2 === 0) ?? [],
+  }))
+  const alternatives = draft.alternatives?.map((opt) => ({
+    ...opt,
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: downsample(opt.geometry.coordinates),
+    },
+    elevationProfile: opt.elevationProfile?.filter((_, i) => i % 2 === 0) ?? [],
+  }))
+
   return {
     ...draft,
-    geometry: { type: 'LineString', coordinates: sampled as [number, number][] },
+    geometry: { type: 'LineString', coordinates: geometryCoords },
     elevationProfile: draft.elevationProfile?.filter((_, i) => i % 2 === 0) ?? [],
+    routeOptions,
+    alternatives,
   }
 }

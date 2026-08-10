@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, startTransition, useDeferredValue, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
@@ -61,6 +61,7 @@ export function RoutePlanner() {
     cancelEditing,
     saveEdits,
     selectAlternative,
+    selectRouteOption,
     paywallReason,
     clearPaywall,
     showPaywall,
@@ -86,27 +87,29 @@ export function RoutePlanner() {
   const [shareBusy, setShareBusy] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
+  const deferredWindHour = useDeferredValue(selectedWindHour)
+  const deferredWindWindow = useDeferredValue(selectedWindWindow)
 
   const activeDraft = editDraft ?? draft
   const vias = waypoints.filter((w) => w.kind === 'via')
   const fitKey = useMemo(
     () =>
       activeDraft
-        ? `${activeDraft.stats.distanceMeters}-${activeDraft.geometry.coordinates.length}-${activeDraft.title}`
+        ? `${activeDraft.stats.distanceMeters}-${activeDraft.geometry.coordinates.length}-${activeDraft.selectedOptionId ?? 'main'}`
         : '',
     [activeDraft],
   )
 
   const windOverlay = useMemo(() => {
     if (!activeDraft?.geometry) return null
-    if (!selectedWindHour && !selectedWindWindow) return null
+    if (!deferredWindHour && !deferredWindWindow) return null
     return buildRouteWindOverlay(activeDraft.geometry, {
       routeType: activeDraft.type,
-      hour: selectedWindHour,
-      window: selectedWindHour ? null : selectedWindWindow,
-      sampleCount: 22,
+      hour: deferredWindHour,
+      window: deferredWindHour ? null : deferredWindWindow,
+      sampleCount: 18,
     })
-  }, [activeDraft, selectedWindHour, selectedWindWindow])
+  }, [activeDraft, deferredWindHour, deferredWindWindow])
 
   const surfaceOverlay = useMemo(() => {
     if (!activeDraft?.geometry) return null
@@ -146,14 +149,14 @@ export function RoutePlanner() {
   }, [activeDraft])
 
   const windCaption = useMemo(() => {
-    if (selectedWindHour) {
-      return `${formatWeatherHourCaption(selectedWindHour.time)} · ${Math.round(selectedWindHour.windSpeedKmh)} km/h desde ${Math.round(selectedWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
+    if (deferredWindHour) {
+      return `${formatWeatherHourCaption(deferredWindHour.time)} · ${Math.round(deferredWindHour.windSpeedKmh)} km/h desde ${Math.round(deferredWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
     }
-    if (selectedWindWindow) {
-      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
+    if (deferredWindWindow) {
+      return `${formatWeatherWindowCaption(deferredWindWindow.startHour, deferredWindWindow.endHour)} · ${deferredWindWindow.windSpeedKmh} km/h ${deferredWindWindow.windDirLabel} (${deferredWindWindow.relative})`
     }
     return null
-  }, [selectedWindHour, selectedWindWindow])
+  }, [deferredWindHour, deferredWindWindow])
 
   async function handleSave() {
     if (!draft) return
@@ -535,7 +538,7 @@ export function RoutePlanner() {
                 checked={wantAlternatives}
                 onChange={(e) => setWantAlternatives(e.target.checked)}
               />
-              Pedir alternativas (si el motor las ofrece)
+              Pedir varias opciones de ruta (hasta 3)
             </label>
           )}
 
@@ -590,7 +593,44 @@ export function RoutePlanner() {
                 </details>
               )}
 
-              {draft?.alternatives && draft.alternatives.length > 0 && (
+              {(draft?.routeOptions?.length ?? 0) > 1 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                    Opciones de ruta ({draft!.routeOptions!.length})
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {draft!.routeOptions!.map((opt) => {
+                      const active = (draft!.selectedOptionId ?? draft!.routeOptions![0]?.id) === opt.id
+                      const score = opt.stats.surfaceStats?.suitability?.score
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className={clsx(
+                            'rounded-xl px-3 py-2 text-left text-xs ring-1 transition',
+                            active
+                              ? 'bg-[var(--color-signal)] font-semibold text-[var(--color-ink)] ring-[var(--color-trail)]'
+                              : 'bg-[var(--color-mist)] font-semibold text-[var(--color-forest)] ring-[var(--color-fog)]',
+                          )}
+                          onClick={() => selectRouteOption(opt.id)}
+                        >
+                          <span className="block">
+                            {opt.label}
+                            {active ? ' · activa' : ''}
+                          </span>
+                          <span className="mt-0.5 block font-medium text-[var(--color-stone)]">
+                            {formatDistance(opt.stats.distanceMeters)} ·{' '}
+                            {formatElevation(opt.stats.elevationGainMeters)}
+                            {score != null ? ` · aptitud ${Math.round(score)}` : ''}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!draft?.routeOptions?.length && draft?.alternatives && draft.alternatives.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -678,8 +718,18 @@ export function RoutePlanner() {
                     route={activeDraft}
                     selectedWindow={selectedWindWindow}
                     selectedHour={selectedWindHour}
-                    onSelectWindow={setSelectedWindWindow}
-                    onSelectHour={setSelectedWindHour}
+                    onSelectWindow={(w) => {
+                      startTransition(() => {
+                        setSelectedWindWindow(w)
+                        setSelectedWindHour(null)
+                      })
+                    }}
+                    onSelectHour={(h) => {
+                      startTransition(() => {
+                        setSelectedWindHour(h)
+                        if (h) setSelectedWindWindow(null)
+                      })
+                    }}
                   />
                 </div>
               </details>
