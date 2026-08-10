@@ -1,8 +1,16 @@
 import { useEffect, useRef } from 'react'
 import * as maplibregl from 'maplibre-gl'
+import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
 import type { LatLng, RouteGeometry, Waypoint } from '@/domain/types'
 import { getMapStyleUrl } from '@/lib/mapTiles'
+
+/**
+ * Vite bundles MapLibre into a chunk, so its relative worker URL breaks
+ * (browser receives index.html instead of the worker). Point at the files
+ * copied into dist/assets by vite.config.ts.
+ */
+setWorkerUrl(`${import.meta.env.BASE_URL}assets/maplibre-gl-worker.mjs`)
 
 const STYLE_URL = getMapStyleUrl()
 
@@ -93,9 +101,7 @@ export function MapView({
   const markersRef = useRef<Marker[]>([])
   const hoverMarkerRef = useRef<Marker | null>(null)
   const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
-  const fitKeyRef = useRef(fitKey)
   geometryRef.current = geometry
-  fitKeyRef.current = fitKey
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -122,10 +128,21 @@ export function MapView({
       applyGeometry(map, geometryRef.current, fit)
     }
 
-    map.on('load', () => paintFromRef(true))
+    const resize = () => map.resize()
+
+    map.on('load', () => {
+      resize()
+      paintFromRef(true)
+    })
     map.on('styledata', () => {
       if (map.isStyleLoaded()) paintFromRef(Boolean(geometryRef.current))
     })
+    map.on('error', (e: { error?: Error }) => {
+      console.error('[maplibre]', e.error ?? e)
+    })
+
+    const ro = new ResizeObserver(() => resize())
+    ro.observe(containerRef.current)
 
     if (onMapClick) {
       map.on('click', (e: MapMouseEvent) => {
@@ -135,6 +152,7 @@ export function MapView({
 
     mapRef.current = map
     return () => {
+      ro.disconnect()
       markersRef.current.forEach((m) => m.remove())
       hoverMarkerRef.current?.remove()
       map.remove()
