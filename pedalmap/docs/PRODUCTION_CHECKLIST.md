@@ -8,8 +8,7 @@ Estado actual (2026-08-10):
 | Mirror | ✅ https://pedalmap-79b3a.firebaseapp.com |
 | Worker API | ✅ https://pedalmap-api.broken-dietician.workers.dev |
 | Health | ✅ ORS + Stripe + Firestore admin |
-| Firestore rules/indexes deploy | ⏳ necesita login Firebase (owner) |
-| Storage rules deploy | ⏳ necesita login Firebase (owner) |
+| Google Auth (`web.app` OAuth redirect) | ✅ login Google OK en producción |
 | Worker `APP_URL` → Hosting | ✅ redeployed (`APP_URL` + Origin Stripe returns) |
 
 ## 1) Ya hecho
