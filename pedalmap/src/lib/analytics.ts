@@ -8,6 +8,7 @@ export type AnalyticsEvent =
   | 'gpx_imported'
   | 'weather_forecast_loaded'
   | 'premium_clicked'
+  | 'premium_activated'
   | 'signup_started'
   | 'signup_completed'
   | 'activity_started'
