@@ -18,6 +18,10 @@ import { track } from '@/lib/analytics'
 import { routeService } from '@/services/RouteService'
 import { formatDistance } from '@/lib/stats'
 import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
+import {
+  formatWeatherHourCaption,
+  formatWeatherWindowCaption,
+} from '@/lib/weatherFormat'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 import clsx from 'clsx'
 
@@ -90,10 +94,10 @@ export function RoutePlanner() {
 
   const windCaption = useMemo(() => {
     if (selectedWindHour) {
-      return `${selectedWindHour.time.slice(0, 10)} ${selectedWindHour.time.slice(11, 16)} · ${Math.round(selectedWindHour.windSpeedKmh)} km/h desde ${Math.round(selectedWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
+      return `${formatWeatherHourCaption(selectedWindHour.time)} · ${Math.round(selectedWindHour.windSpeedKmh)} km/h desde ${Math.round(selectedWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
     }
     if (selectedWindWindow) {
-      return `${selectedWindWindow.startHour.slice(0, 10)} ${selectedWindWindow.startHour.slice(11, 16)}–${selectedWindWindow.endHour.slice(11, 16)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
+      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
     }
     return null
   }, [selectedWindHour, selectedWindWindow])

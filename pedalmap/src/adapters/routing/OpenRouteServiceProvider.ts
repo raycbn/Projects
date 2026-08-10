@@ -290,10 +290,10 @@ export class OpenRouteServiceProvider implements RoutingProvider {
         ? Array.from({ length: 5 }, (_, i) => i)
         : [request.circularSeed ?? 0]
 
-    // For A→B / out-and-back: try modality strategies until surface fit is good enough.
-    // Cap extra ORS calls to keep free-tier / latency reasonable.
+    // For A→B / out-and-back: try all modality strategies until surface fit ≥90.
+    // Cap slightly to protect free-tier ORS quota on huge preference stacks.
     const maxSurfaceAttempts =
-      request.routeType === 'circular' ? 1 : Math.min(3, strategies.length)
+      request.routeType === 'circular' ? 1 : Math.min(5, strategies.length)
 
     let lastMaintenance: string | undefined
     let bestElev: RoutingResult | undefined

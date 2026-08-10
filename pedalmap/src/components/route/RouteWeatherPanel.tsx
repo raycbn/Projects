@@ -7,6 +7,7 @@ import {
   type RouteWeatherForecast,
 } from '@/services/WeatherService'
 import { track } from '@/lib/analytics'
+import { formatWeatherDay, formatWeatherHour, formatWeatherWindowCaption, meteoDayKey } from '@/lib/weatherFormat'
 import clsx from 'clsx'
 
 interface RouteWeatherPanelProps {
@@ -16,15 +17,6 @@ interface RouteWeatherPanelProps {
   onForecast?: (forecast: RouteWeatherForecast | null) => void
   onSelectWindow: (window: RideWindowAdvice | null) => void
   onSelectHour: (hour: HourlyWeatherPoint | null) => void
-}
-
-function formatWindowDay(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
-function formatHourRange(start: string, end: string): string {
-  return `${start.slice(11, 16)}–${end.slice(11, 16)}`
 }
 
 function scoreClass(label: RideWindowAdvice['label']): string {
@@ -67,7 +59,7 @@ export function RouteWeatherPanel({
         setForecast(data)
         onForecast?.(data)
         const best = data.windows[0] ?? null
-        const day = best?.startHour.slice(0, 10) ?? null
+        const day = best ? meteoDayKey(best.startHour) : null
         setSelectedDay(day)
         onSelectWindow(best)
         onSelectHour(null)
@@ -96,15 +88,19 @@ export function RouteWeatherPanel({
   ])
 
   const days = forecast
-    ? [...new Set(forecast.windows.map((w) => w.startHour.slice(0, 10)))]
+    ? [...new Set(forecast.windows.map((w) => meteoDayKey(w.startHour)))]
     : []
   const dayWindows = forecast?.windows
-    .filter((w) => !selectedDay || w.startHour.startsWith(selectedDay))
+    .filter((w) => !selectedDay || meteoDayKey(w.startHour) === selectedDay)
     .sort((a, b) => a.startHour.localeCompare(b.startHour))
 
   const dayHours = useMemo(() => {
     if (!forecast || !selectedDay) return []
-    return forecast.hours.filter((h) => h.time.startsWith(selectedDay) && Number(h.time.slice(11, 13)) >= 6 && Number(h.time.slice(11, 13)) <= 21)
+    return forecast.hours.filter((h) => {
+      if (meteoDayKey(h.time) !== selectedDay) return false
+      const hour = Number(formatWeatherHour(h.time).slice(0, 2))
+      return hour >= 6 && hour <= 21
+    })
   }, [forecast, selectedDay])
 
   const top = forecast?.windows[0]
@@ -137,34 +133,39 @@ export function RouteWeatherPanel({
                 {' '}
                 · Mejor ventana:{' '}
                 <strong className="text-[var(--color-forest)]">
-                  {formatWindowDay(top.startHour)} {formatHourRange(top.startHour, top.endHour)} (
-                  {top.score}/100)
+                  {formatWeatherWindowCaption(top.startHour, top.endHour)} ({top.score}/100)
                 </strong>
               </>
             )}
           </p>
 
-          <div className="flex flex-wrap gap-1.5">
-            {days.map((day) => (
-              <button
-                key={day}
-                type="button"
-                className={clsx(
-                  'rounded-lg px-2.5 py-1 text-xs font-semibold',
-                  selectedDay === day
-                    ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
-                    : 'bg-white ring-1 ring-[var(--color-fog)]',
-                )}
-                onClick={() => {
-                  setSelectedDay(day)
-                  const first = forecast.windows.find((w) => w.startHour.startsWith(day)) ?? null
-                  onSelectWindow(first)
-                  onSelectHour(null)
-                }}
-              >
-                {formatWindowDay(`${day}T12:00`)}
-              </button>
-            ))}
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+              Día
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {days.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  className={clsx(
+                    'rounded-lg px-2.5 py-1.5 text-xs font-semibold',
+                    selectedDay === day
+                      ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
+                      : 'bg-white ring-1 ring-[var(--color-fog)]',
+                  )}
+                  onClick={() => {
+                    setSelectedDay(day)
+                    const first =
+                      forecast.windows.find((w) => meteoDayKey(w.startHour) === day) ?? null
+                    onSelectWindow(first)
+                    onSelectHour(null)
+                  }}
+                >
+                  {formatWeatherDay(`${day}T12:00`)}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -188,9 +189,9 @@ export function RouteWeatherPanel({
                       onSelectHour(h)
                       onSelectWindow(null)
                     }}
-                    title={`${Math.round(h.windSpeedKmh)} km/h`}
+                    title={`${formatWeatherDay(h.time)} · ${Math.round(h.windSpeedKmh)} km/h`}
                   >
-                    {h.time.slice(11, 16)}
+                    {formatWeatherHour(h.time)}
                   </button>
                 )
               })}
@@ -228,7 +229,7 @@ export function RouteWeatherPanel({
                         {w.label} · {w.score}
                       </span>
                       <span className="text-sm font-semibold text-[var(--color-forest)]">
-                        {formatHourRange(w.startHour, w.endHour)}
+                        {formatWeatherWindowCaption(w.startHour, w.endHour)}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-[var(--color-stone)]">

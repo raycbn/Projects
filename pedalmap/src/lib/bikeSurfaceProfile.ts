@@ -98,7 +98,7 @@ export const BIKE_MODALITY_PROFILES: Record<BikeType, BikeModalityProfile> = {
       'Prioriza asfalto/hormigón y vías ciclistas o carreteras. Evita tierra, grava suelta, senderos y pistas.',
     idealSurfaces: ['Asfalto', 'Hormigón', 'Pavimentado', 'Carril bici'],
     avoidSurfaces: ['Tierra', 'Grava', 'Arena', 'Hierba', 'Sendero', 'Pista'],
-    acceptScore: 72,
+    acceptScore: 90,
     strategies: [
       strategy('road-primary', 'cycling-road', {
         avoidFeatures: ['steps', 'ferries', 'fords'],
@@ -156,7 +156,7 @@ export const BIKE_MODALITY_PROFILES: Record<BikeType, BikeModalityProfile> = {
       'Mezcla ideal: grava compacta, pistas y caminos anchos, con algo de asfalto. Evita singletrack técnico, arena y barro profundo.',
     idealSurfaces: ['Grava compacta', 'Grava fina', 'Grava', 'Pista', 'Asfalto ligero'],
     avoidSurfaces: ['Arena', 'Hierba', 'Sendero muy estrecho', 'Escaleras'],
-    acceptScore: 65,
+    acceptScore: 90,
     strategies: [
       // Regular + green finds mixed/quiet roads better for gravel adventure.
       strategy('gravel-mixed', 'cycling-regular', {
@@ -214,7 +214,7 @@ export const BIKE_MODALITY_PROFILES: Record<BikeType, BikeModalityProfile> = {
       'Prioriza senderos, pistas y tierra/grava. Evita autovía urbana densa; el asfalto largo baja la idoneidad.',
     idealSurfaces: ['Tierra', 'Grava', 'Sendero', 'Pista', 'Suelo'],
     avoidSurfaces: ['Solo asfalto urbano', 'Escaleras', 'Ferry'],
-    acceptScore: 62,
+    acceptScore: 90,
     strategies: [
       strategy('mtb-primary', 'cycling-mountain', {
         avoidFeatures: ['steps', 'ferries'],
@@ -271,7 +271,7 @@ export const BIKE_MODALITY_PROFILES: Record<BikeType, BikeModalityProfile> = {
       'Carriles bici, calles calmadas y pavimento. Evita pistas, tierra y tramos sin pavimentar.',
     idealSurfaces: ['Carril bici', 'Asfalto', 'Calle', 'Pavimentado'],
     avoidSurfaces: ['Pista', 'Tierra', 'Grava', 'Sendero'],
-    acceptScore: 70,
+    acceptScore: 90,
     strategies: [
       strategy('urban-lanes', 'cycling-regular', {
         avoidFeatures: ['steps', 'ferries', 'fords'],
@@ -327,7 +327,7 @@ export const BIKE_MODALITY_PROFILES: Record<BikeType, BikeModalityProfile> = {
       'Pavimento y carril bici con perfil eléctrico (acepta más desnivel). Evita senderos técnicos y sin pavimentar exigente.',
     idealSurfaces: ['Asfalto', 'Carril bici', 'Calle', 'Hormigón'],
     avoidSurfaces: ['Sendero técnico', 'Arena', 'Barro', 'Escaleras'],
-    acceptScore: 68,
+    acceptScore: 90,
     strategies: [
       strategy('ebike-primary', 'cycling-electric', {
         avoidFeatures: ['steps', 'ferries', 'fords'],
@@ -484,15 +484,43 @@ export function primaryOrsProfile(
   return resolveRoutingStrategies(bikeType, preferences)[0]?.profile ?? 'cycling-regular'
 }
 
+/** Minimum suitability to consider a route recommended for the selected bike profile. */
+export const PROFILE_MIN_SCORE = 90
+
 function labelFromScore(score: number): SuitabilityLabel {
-  if (score >= 80) return 'excelente'
-  if (score >= 65) return 'buena'
-  if (score >= 50) return 'aceptable'
+  if (score >= 90) return 'excelente'
+  if (score >= 75) return 'buena'
+  if (score >= 55) return 'aceptable'
   return 'poco_adecuada'
+}
+
+function distanceShare(
+  rows: Array<{ distanceMeters: number; value?: number }>,
+  allowed: Set<number>,
+): number {
+  const total = rows.reduce((sum, row) => sum + row.distanceMeters, 0)
+  if (total <= 0) return 0
+  const good = rows.reduce(
+    (sum, row) => (row.value != null && allowed.has(row.value) ? sum + row.distanceMeters : sum),
+    0,
+  )
+  return (good / total) * 100
+}
+
+function wayShare(
+  rows: Array<{ distanceMeters: number; percent: number; value?: number; type: string }>,
+  allowed: Set<number>,
+): number {
+  const normalized = rows.map((row) => ({
+    distanceMeters: row.distanceMeters,
+    value: row.value ?? waytypeIdFromLabel(row.type),
+  }))
+  return distanceShare(normalized, allowed)
 }
 
 /**
  * Score 0–100 how well ORS surface/waytype extras fit the bike modality.
+ * Recommended profiles require PROFILE_MIN_SCORE (90)+.
  */
 export function scoreSurfaceSuitability(
   bikeType: BikeType,
@@ -503,80 +531,128 @@ export function scoreSurfaceSuitability(
 
   if (!surfaceStats?.surfaces?.length && !surfaceStats?.waytypes?.length) {
     return {
-      score: 55,
-      label: 'aceptable',
-      notes: ['ORS no devolvió detalle de superficie; se usó el perfil de modalidad por defecto.'],
+      score: 40,
+      label: 'poco_adecuada',
+      notes: [
+        'ORS no devolvió detalle de superficie; no podemos garantizar idoneidad ≥90% para este perfil.',
+      ],
       bikeType,
     }
   }
 
-  let weighted = 0
-  let total = 0
-
-  // Prefer numeric IDs when present on surfaces (added by orsExtras).
   const surfaces = surfaceStats.surfaces ?? []
-  for (const row of surfaces) {
-    const id = (row as { value?: number }).value
-    const w = id != null ? (modality.surfaceWeights[id] ?? 0) : 0
-    weighted += w * row.distanceMeters
-    total += row.distanceMeters
-  }
-
   const waytypes = surfaceStats.waytypes ?? []
-  let wayWeighted = 0
-  let wayTotal = 0
-  for (const row of waytypes) {
-    const id = (row as { value?: number }).value
-    // waytypes from breakdown may only have labels — match by Spanish label if no id
-    const fromLabel = id == null ? waytypeIdFromLabel(row.type) : id
-    const w = fromLabel != null ? (modality.waytypeWeights[fromLabel] ?? 0) : 0
-    wayWeighted += w * row.distanceMeters
-    wayTotal += row.distanceMeters
-  }
-
-  const surfaceScore =
-    total > 0 ? ((weighted / total + 1.2) / 2.4) * 100 : 55
-  const wayScore =
-    wayTotal > 0 ? ((wayWeighted / wayTotal + 1.2) / 2.4) * 100 : surfaceScore
-  let score = Math.round(Math.max(0, Math.min(100, surfaceScore * 0.62 + wayScore * 0.38)))
-
   const paved = surfaceStats.pavedPercent ?? 0
   const unpaved = surfaceStats.unpavedPercent ?? 0
 
-  if (bikeType === 'road' || bikeType === 'urban' || bikeType === 'ebike') {
-    if (unpaved > 25) {
-      score = Math.min(score, 48)
-      notes.push(`Hay un ${Math.round(unpaved)}% sin pavimentar: poco adecuado para ${modality.label}.`)
-    } else if (unpaved > 12) {
-      score = Math.min(score, 62)
-      notes.push(`Tramos sin pavimentar (${Math.round(unpaved)}%).`)
-    } else if (paved >= 85) {
-      notes.push(`Superficie mayoritariamente pavimentada (${Math.round(paved)}%).`)
-    }
-  }
+  const ROAD_SURFACES = new Set([
+    SURFACE.paved,
+    SURFACE.asphalt,
+    SURFACE.concrete,
+    SURFACE.pavingStones,
+    SURFACE.sett,
+    SURFACE.grassPaver,
+  ])
+  const MTB_SURFACES = new Set([
+    SURFACE.dirt,
+    SURFACE.ground,
+    SURFACE.gravel,
+    SURFACE.fineGravel,
+    SURFACE.compacted,
+    SURFACE.unpaved,
+    SURFACE.woodchips,
+    SURFACE.grass,
+    SURFACE.wood,
+  ])
 
-  if (bikeType === 'mtb') {
-    if (paved > 70) {
-      score = Math.min(score, 52)
-      notes.push(`Demasiado asfalto (${Math.round(paved)}%) para una salida MTB tipica.`)
-    } else if (unpaved >= 40) {
-      notes.push(`Buen porcentaje de tierra/grava (${Math.round(unpaved)}%).`)
-    }
-  }
+  const ROAD_WAYS = new Set([WAYTYPE.cycleway, WAYTYPE.street, WAYTYPE.road, WAYTYPE.stateRoad])
+  const MTB_WAYS = new Set([WAYTYPE.path, WAYTYPE.track, WAYTYPE.footway, WAYTYPE.cycleway])
 
-  if (bikeType === 'gravel') {
+  let score = 0
+
+  if (bikeType === 'road' || bikeType === 'ebike') {
+    const surf = surfaces.length ? distanceShare(surfaces, ROAD_SURFACES) : paved
+    const ways = waytypes.length ? wayShare(waytypes, ROAD_WAYS) : surf
+    const trailPenalty = wayShare(waytypes, new Set([WAYTYPE.path, WAYTYPE.track, WAYTYPE.steps]))
+    score = Math.round(surf * 0.7 + ways * 0.3 - trailPenalty * 0.35)
+    if (unpaved > 8) {
+      score = Math.min(score, 88)
+      notes.push(`Sin pavimentar ${Math.round(unpaved)}% (máx. recomendable ~8% en ${modality.label}).`)
+    }
+    if (surf >= 92 && trailPenalty < 8) {
+      notes.push(`Pavimento/vías adecuadas ≈ ${Math.round(surf)}%.`)
+    }
+  } else if (bikeType === 'urban') {
+    const surf = surfaces.length ? distanceShare(surfaces, ROAD_SURFACES) : paved
+    const cycle = wayShare(waytypes, new Set([WAYTYPE.cycleway, WAYTYPE.street]))
+    const bad = wayShare(waytypes, new Set([WAYTYPE.track, WAYTYPE.path, WAYTYPE.steps]))
+    score = Math.round(surf * 0.55 + cycle * 0.45 - bad * 0.4)
+    if (unpaved > 10) {
+      score = Math.min(score, 85)
+      notes.push(`Hay ${Math.round(unpaved)}% sin pavimentar: poco urbano.`)
+    }
+    if (cycle >= 40) notes.push(`Buen peso de calle/carril bici (~${Math.round(cycle)}%).`)
+  } else if (bikeType === 'gravel') {
+    const gravelSurf = distanceShare(
+      surfaces,
+      new Set([
+        SURFACE.compacted,
+        SURFACE.fineGravel,
+        SURFACE.gravel,
+        SURFACE.unpaved,
+        SURFACE.dirt,
+        SURFACE.ground,
+      ]),
+    )
+    const trackShare = wayShare(waytypes, new Set([WAYTYPE.track, WAYTYPE.path, WAYTYPE.road]))
     if (unpaved >= 25 && unpaved <= 75) {
-      notes.push(`Mezcla gravel saludable (~${Math.round(unpaved)}% sin pavimentar).`)
-    } else if (unpaved < 10) {
-      score = Math.min(score, 58)
-      notes.push('Casi todo pavimentado: más carretera que gravel.')
-    } else if (unpaved > 85) {
-      notes.push('Muy poco asfalto: comprueba si hay tramos demasiado técnicos.')
+      // Healthy gravel mix — start high and nudge with surface/way detail.
+      score = Math.round(90 + Math.min(8, gravelSurf * 0.06) + Math.min(2, trackShare * 0.02))
+      notes.push(`Mezcla gravel ~${Math.round(unpaved)}% sin pavimentar.`)
+    } else if (unpaved < 25) {
+      score = Math.round(Math.max(35, unpaved * 3.2 + gravelSurf * 0.25))
+      if (unpaved < 15) score = Math.min(score, 82)
+      notes.push('Demasiado asfalto para gravel (busca más pista/grava).')
+    } else {
+      score = Math.round(Math.max(35, (100 - unpaved) * 3.2 + trackShare * 0.2))
+      score = Math.min(score, 86)
+      notes.push('Casi sin asfalto: puede volverse demasiado técnico.')
+    }
+  } else {
+    // mtb
+    const surf = surfaces.length ? distanceShare(surfaces, MTB_SURFACES) : unpaved
+    const trails = wayShare(waytypes, MTB_WAYS)
+    const asphaltWays = wayShare(waytypes, new Set([WAYTYPE.stateRoad, WAYTYPE.road, WAYTYPE.street]))
+    score = Math.round(surf * 0.55 + trails * 0.4 + Math.max(0, 100 - asphaltWays) * 0.05)
+    if (paved > 55) {
+      score = Math.min(score, 78)
+      notes.push(`Demasiado asfalto (${Math.round(paved)}%) para MTB.`)
+    } else if (unpaved >= 45 && trails >= 40) {
+      notes.push(`Tierra/sendero/pista sólidos (~${Math.round(unpaved)}% sin pavimentar).`)
     }
   }
 
-  if (!notes.length) {
-    notes.push(`Ajuste a modalidad ${modality.label}: ${labelFromScore(score)}.`)
+  // Soft weight blend as a tie-breaker (±6 pts) when extras exist.
+  let soft = 0
+  let softN = 0
+  for (const row of surfaces) {
+    if (row.value == null) continue
+    soft += (modality.surfaceWeights[row.value] ?? 0) * row.distanceMeters
+    softN += row.distanceMeters
+  }
+  if (softN > 0) {
+    const softNorm = ((soft / softN + 1.2) / 2.4) * 100
+    score = Math.round(score * 0.88 + softNorm * 0.12)
+  }
+
+  score = Math.max(0, Math.min(100, score))
+
+  if (score < PROFILE_MIN_SCORE) {
+    notes.unshift(
+      `No recomendada para ${modality.label}: ${score}/100 (objetivo ≥${PROFILE_MIN_SCORE}%).`,
+    )
+  } else if (!notes.some((n) => n.includes('sólidos') || n.includes('Pavimento') || n.includes('Mezcla'))) {
+    notes.unshift(`Recomendada para ${modality.label}: ${score}/100.`)
   }
 
   return { score, label: labelFromScore(score), notes, bikeType }

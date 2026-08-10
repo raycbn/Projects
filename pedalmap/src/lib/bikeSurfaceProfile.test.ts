@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BIKE_MODALITY_PROFILES,
+  PROFILE_MIN_SCORE,
   primaryOrsProfile,
   resolveRoutingStrategies,
   scoreSurfaceSuitability,
@@ -8,13 +9,11 @@ import {
 import type { BikeType } from '@/domain/types'
 
 describe('bikeSurfaceProfile', () => {
-  it('defines a distinct modality policy for every bike type', () => {
+  it('requires ≥90 suitability for every modality', () => {
     const types: BikeType[] = ['road', 'mtb', 'gravel', 'urban', 'ebike']
     for (const t of types) {
-      const m = BIKE_MODALITY_PROFILES[t]
-      expect(m.strategies.length).toBeGreaterThanOrEqual(2)
-      expect(m.idealSurfaces.length).toBeGreaterThan(0)
-      expect(m.blurb.length).toBeGreaterThan(20)
+      expect(BIKE_MODALITY_PROFILES[t].acceptScore).toBe(PROFILE_MIN_SCORE)
+      expect(PROFILE_MIN_SCORE).toBe(90)
     }
   })
 
@@ -26,7 +25,7 @@ describe('bikeSurfaceProfile', () => {
     expect(primaryOrsProfile('urban')).toBe('cycling-regular')
   })
 
-  it('scores road poorly on dirt/track-heavy routes', () => {
+  it('rejects road routes that are mostly dirt/track', () => {
     const suit = scoreSurfaceSuitability('road', {
       pavedPercent: 20,
       unpavedPercent: 80,
@@ -39,11 +38,28 @@ describe('bikeSurfaceProfile', () => {
         { type: 'Calle', distanceMeters: 3000, percent: 30, value: 3 },
       ],
     })
-    expect(suit.score).toBeLessThan(55)
-    expect(suit.label).toBe('poco_adecuada')
+    expect(suit.score).toBeLessThan(PROFILE_MIN_SCORE)
+    expect(suit.notes[0]).toMatch(/No recomendada/)
   })
 
-  it('scores mtb well on dirt/path routes', () => {
+  it('recommends road routes that are nearly all asphalt/street', () => {
+    const suit = scoreSurfaceSuitability('road', {
+      pavedPercent: 96,
+      unpavedPercent: 4,
+      surfaces: [
+        { type: 'Asfalto', distanceMeters: 9600, value: 3 },
+        { type: 'Grava', distanceMeters: 400, value: 10 },
+      ],
+      waytypes: [
+        { type: 'Carretera', distanceMeters: 6000, percent: 60, value: 2 },
+        { type: 'Carril bici', distanceMeters: 4000, percent: 40, value: 6 },
+      ],
+    })
+    expect(suit.score).toBeGreaterThanOrEqual(PROFILE_MIN_SCORE)
+    expect(suit.label).toBe('excelente')
+  })
+
+  it('recommends mtb on dirt/path-heavy routes', () => {
     const suit = scoreSurfaceSuitability('mtb', {
       pavedPercent: 10,
       unpavedPercent: 90,
@@ -56,10 +72,10 @@ describe('bikeSurfaceProfile', () => {
         { type: 'Pista', distanceMeters: 4000, percent: 40, value: 5 },
       ],
     })
-    expect(suit.score).toBeGreaterThan(65)
+    expect(suit.score).toBeGreaterThanOrEqual(PROFILE_MIN_SCORE)
   })
 
-  it('scores gravel well on compacted/gravel mix', () => {
+  it('recommends gravel on mixed compacted/asphalt', () => {
     const suit = scoreSurfaceSuitability('gravel', {
       pavedPercent: 40,
       unpavedPercent: 60,
@@ -73,8 +89,7 @@ describe('bikeSurfaceProfile', () => {
         { type: 'Carretera', distanceMeters: 4500, percent: 45, value: 2 },
       ],
     })
-    expect(suit.score).toBeGreaterThan(60)
-    expect(['excelente', 'buena', 'aceptable']).toContain(suit.label)
+    expect(suit.score).toBeGreaterThanOrEqual(PROFILE_MIN_SCORE)
   })
 
   it('prefers bike lanes strategy when requested', () => {

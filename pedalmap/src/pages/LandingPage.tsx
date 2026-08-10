@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: '¿Qué cambia según el tipo de bici?',
-    a: 'Carretera prioriza asfalto; urbana, carril bici; gravel, pistas y grava compacta; MTB, senderos y tierra; e-bike, perfil eléctrico sobre pavimento. Si el suelo no encaja, probamos otra estrategia ORS y te mostramos la idoneidad.',
+    a: 'Carretera prioriza asfalto; urbana, carril bici; gravel, pistas y grava compacta; MTB, senderos y tierra; e-bike, perfil eléctrico sobre pavimento. Solo marcamos recomendada si la idoneidad es ≥90%; si no, avisamos para que cambies perfil o puntos.',
   },
   {
     q: '¿Cómo crear una ruta GPX?',
@@ -40,9 +40,9 @@ export function LandingPage() {
 
   return (
     <main>
-      <section className="relative min-h-[88vh] overflow-hidden topo-grid">
+      <section className="relative min-h-[88vh]">
         <div
-          className="absolute inset-0 bg-cover bg-center"
+          className="absolute inset-0 overflow-hidden bg-cover bg-center"
           style={{
             backgroundImage:
               'linear-gradient(115deg, rgba(7,21,16,0.78), rgba(13,59,43,0.28)), url(https://images.unsplash.com/photo-1541625602330-2277a4c46182?auto=format&fit=crop&w=2000&q=80)',
@@ -51,7 +51,7 @@ export function LandingPage() {
           aria-label="Ciclistas en carretera entre paisaje abierto"
         />
         <div className="relative mx-auto flex min-h-[88vh] max-w-6xl flex-col justify-end px-4 pb-16 pt-24 md:justify-center md:px-6">
-          <p className="animate-rise font-display text-5xl font-extrabold tracking-tight text-white drop-shadow md:text-7xl">
+          <p className="animate-rise font-display text-[clamp(2.5rem,11vw,4.5rem)] font-extrabold leading-[0.95] tracking-[-0.03em] text-white drop-shadow md:text-7xl">
             PEDALMAP
           </p>
           <h1
