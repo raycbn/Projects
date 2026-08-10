@@ -35,13 +35,13 @@ export function canExportGpx(profile: UserProfile | null): boolean {
 }
 
 export function canUseAdvancedFilters(profile: UserProfile | null): boolean {
-  // Guests can try filters (capped by maxActivePreferences via null→free limits).
-  if (!profile) return true
+  // Guests (null profile) share Free limits — signing in must not reduce capability.
+  if (!profile) return FREE_LIMITS.advancedFilters || FREE_LIMITS.maxActivePreferences > 0
   return getLimits(profile.plan).advancedFilters || getLimits(profile.plan).maxActivePreferences > 0
 }
 
 export function canUseAdvancedCircular(profile: UserProfile | null): boolean {
-  if (!profile) return true
+  if (!profile) return FREE_LIMITS.advancedCircular
   return getLimits(profile.plan).advancedCircular
 }
 

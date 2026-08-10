@@ -142,7 +142,8 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
     const ok = await verifyStripeSignature(payload, signature, env.STRIPE_WEBHOOK_SECRET)
     if (!ok) return json({ error: 'Invalid signature' }, 400)
   } else {
-    console.warn('[stripe] STRIPE_WEBHOOK_SECRET missing — accepting unsigned webhook (dev only)')
+    console.error('[stripe] STRIPE_WEBHOOK_SECRET missing — rejecting webhook')
+    return json({ error: 'Webhook secret not configured' }, 500)
   }
 
   const event = JSON.parse(payload) as {

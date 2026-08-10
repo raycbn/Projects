@@ -3,12 +3,16 @@ import { json } from './types'
 /** Simple per-isolate + Cache API rate limit (Workers free, no KV required). */
 export async function enforceRateLimit(
   request: Request,
-  opts: { limit: number; windowSec: number; prefix: string },
+  opts: { limit: number; windowSec: number; prefix: string; key?: string },
 ): Promise<Response | null> {
-  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for') || 'unknown'
+  const id =
+    opts.key ||
+    request.headers.get('CF-Connecting-IP') ||
+    request.headers.get('x-forwarded-for') ||
+    'unknown'
   const bucket = Math.floor(Date.now() / (opts.windowSec * 1000))
   const cacheKey = new Request(
-    `https://pedalmap-rl.internal/${opts.prefix}/${encodeURIComponent(ip)}/${bucket}`,
+    `https://pedalmap-rl.internal/${opts.prefix}/${encodeURIComponent(id)}/${bucket}`,
   )
 
   try {

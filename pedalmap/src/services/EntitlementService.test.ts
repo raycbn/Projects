@@ -46,7 +46,8 @@ describe('entitlements', () => {
     expect(canExportGpx(profile({ plan: 'premium' }))).toBe(true)
   })
 
-  it('gates advanced circular for free signed-in users', () => {
+  it('gates advanced circular for free signed-in users and guests', () => {
+    expect(canUseAdvancedCircular(null)).toBe(false)
     expect(canUseAdvancedCircular(profile({ plan: 'free' }))).toBe(false)
     expect(canUseAdvancedCircular(profile({ plan: 'premium' }))).toBe(true)
   })

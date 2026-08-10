@@ -5,6 +5,7 @@ import type {
   RoutingResult,
 } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
+import { routingAuthHeaders } from '@/lib/routingAuth'
 import { buildStatsFromProfile, normalizeCyclingElevationProfile } from '@/lib/stats'
 import {
   surfaceStatsFromValhallaEdges,
@@ -101,10 +102,7 @@ export class ValhallaProvider implements RoutingProvider {
     try {
       response = await fetch(`${this.baseUrl}/valhalla/bike-route`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers: await routingAuthHeaders({ Accept: 'application/json' }),
         body: JSON.stringify({
           bikeType: request.bikeType,
           preferences: request.preferences,

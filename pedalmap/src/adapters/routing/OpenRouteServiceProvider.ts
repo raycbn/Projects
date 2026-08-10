@@ -9,6 +9,7 @@ import type {
   RouteStats,
 } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
+import { routingAuthHeaders } from '@/lib/routingAuth'
 import { buildStatsFromProfile, normalizeCyclingElevationProfile } from '@/lib/stats'
 import {
   surfaceStatsFromOrsExtras,
@@ -360,11 +361,15 @@ export class OpenRouteServiceProvider implements RoutingProvider {
               try {
                 response = await fetch(url, {
                   method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json, application/geo+json',
-                    ...(this.apiKey ? { Authorization: this.apiKey } : {}),
-                  },
+                  headers: this.viaProxy
+                    ? await routingAuthHeaders({
+                        Accept: 'application/json, application/geo+json',
+                      })
+                    : {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json, application/geo+json',
+                        ...(this.apiKey ? { Authorization: this.apiKey } : {}),
+                      },
                   body: JSON.stringify(tryBodies[bi]),
                 })
               } catch (fetchErr) {

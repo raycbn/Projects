@@ -18,8 +18,21 @@ service cloud.firestore {
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
         && isValidPlan(request.resource.data.plan);
+      // Plan is frozen; usage counters may only stay equal or increase (no client resets).
       allow update: if isOwner(userId)
-        && request.resource.data.plan == resource.data.plan;
+        && request.resource.data.plan == resource.data.plan
+        && (
+          !('usage' in request.resource.data)
+          || !('usage' in resource.data)
+          || (
+            request.resource.data.usage.routesSaved >= resource.data.usage.routesSaved
+            && (
+              request.resource.data.usage.monthKey != resource.data.usage.monthKey
+              || request.resource.data.usage.routesCreatedThisMonth
+                >= resource.data.usage.routesCreatedThisMonth
+            )
+          )
+        );
       allow delete: if isOwner(userId);
     }
 

@@ -171,10 +171,32 @@ export async function writeSubscriptionCustomerId(
   uid: string,
   customerId: string,
 ): Promise<void> {
-  await upsertSubscriptionAndPlan(env, {
-    uid,
-    plan: 'free',
-    status: 'none',
-    stripeCustomerId: customerId,
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT missing — customer id not persisted')
+    return
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  // Only touch subscriptions — never force users.plan to free (ops/allowlist premium).
+  const subUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/subscriptions/${uid}?updateMask.fieldPaths=userId&updateMask.fieldPaths=stripeCustomerId&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(subUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        userId: { stringValue: uid },
+        stripeCustomerId: { stringValue: customerId },
+        updatedAt: { timestampValue: now },
+      },
+    }),
   })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`subscriptions customer write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
 }

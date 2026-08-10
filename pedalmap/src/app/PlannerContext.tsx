@@ -226,7 +226,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setPaywallReason(entitlement.reason ?? 'create_limit')
         return
       }
-      if (routeType === 'circular' && profile && !canUseAdvancedCircular(profile)) {
+      if (routeType === 'circular' && !canUseAdvancedCircular(profile)) {
         setPaywallReason('circular_premium')
         return
       }
@@ -340,7 +340,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setErrorMessage(null)
         setStatus('idle')
         setCircularSeed(0)
-        setWantAlternatives(false)
+        // Keep "varias opciones" when switching A→B ↔ ida-vuelta; only clear for circular.
+        if (next === 'circular') setWantAlternatives(false)
         // Drop points that don't apply to the new mode to avoid stale A→B ends on Objetivo.
         setWaypoints((prev) => {
           if (next === 'circular') {

@@ -5,12 +5,31 @@ import { handleValhallaProxy } from './valhalla'
 import { handleBikeRoute } from './bikeRoute'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
 import { enforceRateLimit } from './rateLimit'
+import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
   const cors = corsHeaders(env, request)
   for (const [k, v] of Object.entries(cors)) headers.set(k, String(v))
   return new Response(response.body, { status: response.status, headers })
+}
+
+async function requireFirebaseUser(
+  env: Env,
+  request: Request,
+): Promise<FirebaseIdentity | Response> {
+  try {
+    return await verifyFirebaseIdToken(env, request.headers.get('Authorization'))
+  } catch {
+    return json(
+      {
+        error: 'Authentication required',
+        code: 'auth_required',
+        hint: 'Send Authorization: Bearer <Firebase ID token> (anonymous guests OK)',
+      },
+      401,
+    )
+  }
 }
 
 export default {
@@ -30,15 +49,13 @@ export default {
           json({
             ok: true,
             service: 'pedalmap-api',
-            hint: 'ORS + Valhalla bike routing proxies',
+            hint: 'ORS + Valhalla bike routing proxies (auth required)',
             health: '/health',
           }),
         )
       }
 
       if (path === '/health' && request.method === 'GET') {
-        const stadia = Boolean(env.STADIA_API_KEY)
-        const valhallaUrl = env.VALHALLA_URL || 'https://valhalla1.openstreetmap.de'
         return withCors(
           env,
           request,
@@ -46,58 +63,57 @@ export default {
             ok: true,
             service: 'pedalmap-api',
             stack: 'cloudflare-workers',
-            blaze: false,
-            orsConfigured: Boolean(env.ORS_API_KEY),
-            valhalla: {
-              mode: stadia ? 'stadiamaps' : 'url',
-              url: stadia ? 'https://api.stadiamaps.com' : valhallaUrl,
-              commercialReady: stadia,
-            },
-            stripeConfigured: Boolean(env.STRIPE_SECRET_KEY),
-            firestoreAdminConfigured: Boolean(env.FIREBASE_SERVICE_ACCOUNT),
-            prices: {
-              month: env.STRIPE_PRICE_MONTHLY,
-              year: env.STRIPE_PRICE_YEARLY,
-            },
           }),
         )
       }
 
       if (path.startsWith('/v2/directions/') && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
         const limited = await enforceRateLimit(request, {
           limit: 40,
           windowSec: 60,
           prefix: 'ors',
+          key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleOrsProxy(request, env, path))
       }
 
       if (path === '/valhalla/bike-route' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
         const limited = await enforceRateLimit(request, {
           limit: 30,
           windowSec: 60,
           prefix: 'valhalla-bike',
+          key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleBikeRoute(request, env))
       }
 
       if (path === '/valhalla/route' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
         const limited = await enforceRateLimit(request, {
           limit: 40,
           windowSec: 60,
           prefix: 'valhalla',
+          key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleValhallaProxy(request, env, 'route'))
       }
 
       if (path === '/valhalla/trace_attributes' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
         const limited = await enforceRateLimit(request, {
           limit: 60,
           windowSec: 60,
           prefix: 'valhalla-attr',
+          key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(
@@ -108,10 +124,13 @@ export default {
       }
 
       if (path === '/valhalla/height' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
         const limited = await enforceRateLimit(request, {
           limit: 60,
           windowSec: 60,
           prefix: 'valhalla-height',
+          key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleValhallaProxy(request, env, 'height'))
