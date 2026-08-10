@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
@@ -492,6 +492,20 @@ function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefine
   return true
 }
 
+function setWindArrowLayersVisible(map: Map, visible: boolean) {
+  const value = visible ? 'visible' : 'none'
+  for (const id of [
+    'route-wind-barbs',
+    'route-wind-arrowheads',
+    'route-wind-arrows',
+    'route-wind-labels',
+  ]) {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, 'visibility', value)
+    }
+  }
+}
+
 /** Full rebuild of wind layers (recovers from style glitches / missing images). */
 function rebuildWindLayers(map: Map) {
   for (const id of [
@@ -533,11 +547,15 @@ export function MapView({
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
   const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
   const onMapClickRef = useRef(onMapClick)
+  const [showWindArrows, setShowWindArrows] = useState(true)
+  const showWindArrowsRef = useRef(showWindArrows)
+  const hasWindOverlay = Boolean(windOverlay?.features?.length)
   followUserRef.current = followUser
   geometryRef.current = geometry
   windRef.current = windOverlay
   surfaceRef.current = surfaceOverlay
   onMapClickRef.current = onMapClick
+  showWindArrowsRef.current = showWindArrows
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -564,6 +582,7 @@ export function MapView({
       applyGeometry(map, geometryRef.current, fit)
       applySurfaceOverlay(map, surfaceRef.current)
       applyWindOverlay(map, windRef.current)
+      setWindArrowLayersVisible(map, showWindArrowsRef.current)
     }
 
     const resize = () => map.resize()
@@ -645,6 +664,7 @@ export function MapView({
     applyGeometry(map, geometry, Boolean(fitKey))
     applySurfaceOverlay(map, surfaceRef.current)
     applyWindOverlay(map, windRef.current)
+    setWindArrowLayersVisible(map, showWindArrowsRef.current)
   }, [geometry, fitKey])
 
   useEffect(() => {
@@ -656,9 +676,9 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    // Hour/day changes only need setData — never tear down wind layers.
     applyWindOverlay(map, windOverlay)
-  }, [windOverlay])
+    setWindArrowLayersVisible(map, showWindArrows)
+  }, [windOverlay, showWindArrows])
 
   useEffect(() => {
     const map = mapRef.current
@@ -726,7 +746,17 @@ export function MapView({
         role="application"
         aria-label="Mapa de rutas ciclistas"
       />
-      {surfaceOverlay?.features?.length ? (
+      {hasWindOverlay ? (
+        <button
+          type="button"
+          className="absolute right-3 top-[7.25rem] z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]"
+          aria-pressed={showWindArrows}
+          onClick={() => setShowWindArrows((v) => !v)}
+        >
+          {showWindArrows ? 'Ocultar flechas' : 'Mostrar flechas'}
+        </button>
+      ) : null}
+      {surfaceOverlay?.features?.length && !hasWindOverlay ? (
         <div className="pointer-events-none absolute left-3 top-3 z-10 flex gap-2 rounded-xl bg-white/90 px-2 py-1.5 text-[10px] text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]">
           <span className="inline-flex items-center gap-1">
             <span className="size-2 rounded-full bg-[var(--color-forest)]" /> Asfalto
@@ -744,7 +774,8 @@ export function MapView({
           <p className="font-semibold">Viento en ruta</p>
           <p className="text-[var(--color-stone)]">{windCaption}</p>
           <p className="mt-1 hidden text-[10px] text-[var(--color-stone)] sm:block">
-            Verde = cola · Azul = lateral · Naranja = cara · Flecha = hacia dónde sopla
+            Verde = cola · Azul = lateral · Naranja = cara
+            {showWindArrows ? ' · Flecha = hacia dónde sopla' : ''}
           </p>
         </div>
       )}
