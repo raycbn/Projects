@@ -309,12 +309,36 @@ export interface Activity {
   track: ActivityTrackPoint[]
   stats: {
     distanceMeters: number
+    /** Elapsed wall-clock time (includes pauses / stops). */
     durationSeconds: number
+    /** Time actually moving — Free (Strava Free often only shows elapsed). */
+    movingTimeSeconds?: number
+    stoppedTimeSeconds?: number
     elevationGainMeters: number
+    elevationLossMeters?: number
+    elevationHighestMeters?: number
+    elevationLowestMeters?: number
     averageHeartRateBpm?: number
     averageCadenceRpm?: number
     averagePowerWatts?: number
+    /** Modelled power when no meter — Free analytics. */
+    estimatedPowerWatts?: number
     averageSpeedMetersPerSecond?: number
+    maxSpeedMetersPerSecond?: number
+    averageGradePercent?: number
+    maxGradePercent?: number
+    /** Vertical ascent metres per hour while moving. */
+    vamMetersPerHour?: number
+    estimatedCaloriesKcal?: number
+    coastingPercent?: number
+    /** Per-km splits — Free (Strava locks richer split tooling behind Premium). */
+    splits?: Array<{
+      index: number
+      distanceMeters: number
+      durationSeconds: number
+      averageSpeedMetersPerSecond: number
+      elevationGainMeters: number
+    }>
   }
   createdAt: string
   updatedAt: string

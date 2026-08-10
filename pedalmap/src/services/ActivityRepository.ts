@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -19,7 +20,9 @@ import type {
   BikeType,
 } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
-import { computeElevationStats, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
+import { computeActivityStats } from '@/lib/activityStats'
+
+export { computeActivityStats } from '@/lib/activityStats'
 
 function monthKeyNow(): string {
   const d = new Date()
@@ -45,53 +48,15 @@ function mapActivity(id: string, data: DocumentData): Activity {
   }
 }
 
-export function computeActivityStats(
-  track: ActivityTrackPoint[],
-  startedAt: string,
-  finishedAt?: string,
-): Activity['stats'] {
-  const positions = track.map((p) => p.position)
-  const distanceMeters = Math.round(pathDistanceMeters(positions))
-  const start = Date.parse(startedAt)
-  const end = Date.parse(finishedAt ?? new Date().toISOString())
-  const durationSeconds = Math.max(0, Math.round((end - start) / 1000))
-  const profile = normalizeCyclingElevationProfile(
-    track.map((p, i) => ({
-      distanceMeters: i === 0 ? 0 : pathDistanceMeters(positions.slice(0, i + 1)),
-      elevationMeters:
-        p.elevationMeters !== undefined && Number.isFinite(p.elevationMeters)
-          ? p.elevationMeters
-          : Number.NaN,
-      position: p.position,
-    })),
-  )
-  const elev = computeElevationStats(profile)
-
-  const hrs = track.map((p) => p.heartRateBpm).filter((v): v is number => Number.isFinite(v))
-  const cads = track.map((p) => p.cadenceRpm).filter((v): v is number => Number.isFinite(v))
-  const watts = track.map((p) => p.powerWatts).filter((v): v is number => Number.isFinite(v))
-  const speeds = track
-    .map((p) => p.speedMetersPerSecond)
-    .filter((v): v is number => Number.isFinite(v))
-  const avg = (arr: number[]) =>
-    arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : undefined
-
-  return {
-    distanceMeters,
-    durationSeconds,
-    elevationGainMeters: Math.round(elev.gain),
-    averageHeartRateBpm: avg(hrs),
-    averageCadenceRpm: avg(cads),
-    averagePowerWatts: avg(watts),
-    averageSpeedMetersPerSecond: speeds.length
-      ? speeds.reduce((a, b) => a + b, 0) / speeds.length
-      : undefined,
-  }
-}
-
 export class ActivityRepository {
   isConfigured(): boolean {
     return isFirebaseConfigured()
+  }
+
+  async getById(activityId: string): Promise<Activity | null> {
+    const snap = await getDoc(doc(getDb(), 'activities', activityId))
+    if (!snap.exists()) return null
+    return mapActivity(snap.id, snap.data())
   }
 
   async listForUser(userId: string): Promise<Activity[]> {
@@ -148,7 +113,7 @@ export class ActivityRepository {
     return mapActivity(ref.id, { ...payload, createdAt: startedAt, updatedAt: startedAt })
   }
 
-  /** Upsert a finished import (Strava). Skips if externalId already exists. */
+  /** Upsert a finished import. Recomputes PedalMap Free analytics from the track. */
   async importFinished(
     userId: string,
     input: Omit<Activity, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
@@ -159,6 +124,14 @@ export class ActivityRepository {
     }
     const track = downsampleTrack(input.track, 3500)
     const now = new Date().toISOString()
+    const computed = computeActivityStats(track, input.startedAt, input.finishedAt)
+    const stats: Activity['stats'] = {
+      ...computed,
+      averageHeartRateBpm:
+        computed.averageHeartRateBpm ?? input.stats.averageHeartRateBpm,
+      averageCadenceRpm: computed.averageCadenceRpm ?? input.stats.averageCadenceRpm,
+      averagePowerWatts: computed.averagePowerWatts ?? input.stats.averagePowerWatts,
+    }
     const payload = {
       userId,
       title: input.title,
@@ -170,7 +143,7 @@ export class ActivityRepository {
       startedAt: input.startedAt,
       finishedAt: input.finishedAt,
       track,
-      stats: input.stats,
+      stats,
       monthKey: monthKeyNow(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
