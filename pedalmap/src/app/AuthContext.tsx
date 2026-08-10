@@ -9,6 +9,7 @@ import type { User } from 'firebase/auth'
 import type { UserProfile } from '@/domain/types'
 import { authErrorMessage, authService } from '@/services/AuthService'
 import { isFirebaseConfigured } from '@/lib/firebase'
+import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
 
 interface AuthContextValue {
   user: User | null
@@ -62,9 +63,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const p = await authService.ensureProfile(next)
           if (cancelled) return
-          setProfile(p)
+          setProfile(
+            applyPremiumAllowlist({
+              ...p,
+              email: p.email ?? next.email,
+            }),
+          )
           unsubProfile = authService.watchProfile(next.uid, (live) => {
-            if (live) setProfile(live)
+            if (live) {
+              setProfile(
+                applyPremiumAllowlist({
+                  ...live,
+                  email: live.email ?? next.email,
+                }),
+              )
+            }
           })
         } catch (error) {
           console.error('[auth] profile', error)

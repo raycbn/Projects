@@ -17,6 +17,7 @@ import type { UserProfile } from '@/domain/types'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
+import { applyPremiumAllowlist, isAllowlistedPremiumEmail } from '@/lib/premiumAllowlist'
 
 const googleProvider = new GoogleAuthProvider()
 
@@ -54,12 +55,13 @@ export function authErrorMessage(error: unknown, fallback: string): string {
 
 function emptyProfile(user: User): UserProfile {
   const now = new Date().toISOString()
+  const email = user.email
   return {
     uid: user.uid,
-    email: user.email,
+    email,
     displayName: user.displayName,
     photoURL: user.photoURL,
-    plan: 'free',
+    plan: isAllowlistedPremiumEmail(email) ? 'premium' : 'free',
     bikePreferences: {
       bikeType: 'road',
       preferences: [],
@@ -100,7 +102,10 @@ export class AuthService {
       } catch (error) {
         console.warn('[auth] public profile', error)
       }
-      return snap.data() as UserProfile
+      return applyPremiumAllowlist({
+        ...(snap.data() as UserProfile),
+        email: (snap.data() as UserProfile).email ?? user.email,
+      })
     }
     const profile = emptyProfile(user)
     await setDoc(ref, {
@@ -117,12 +122,16 @@ export class AuthService {
     } catch (error) {
       console.warn('[auth] public profile', error)
     }
-    return profile
+    return applyPremiumAllowlist(profile)
   }
 
   watchProfile(uid: string, callback: (profile: UserProfile | null) => void): () => void {
     return onSnapshot(doc(getDb(), 'users', uid), (snap) => {
-      callback(snap.exists() ? (snap.data() as UserProfile) : null)
+      if (!snap.exists()) {
+        callback(null)
+        return
+      }
+      callback(applyPremiumAllowlist(snap.data() as UserProfile))
     })
   }
 
