@@ -1,4 +1,3 @@
-import polyline from '@mapbox/polyline'
 import type { RoutingProvider } from '@/adapters/routing/RoutingProvider'
 import type {
   BikeType,
@@ -87,30 +86,48 @@ function preferenceMode(preferences: RoutePreference[]): 'recommended' | 'shorte
   return 'recommended'
 }
 
-function decodeGeometry(
-  encoded: string,
-  elevation = true,
+type OrsGeoJsonResponse = {
+  features?: Array<{
+    geometry?: {
+      type?: string
+      coordinates?: Array<[number, number] | [number, number, number]>
+    }
+    properties?: {
+      summary?: { distance?: number; duration?: number; ascent?: number; descent?: number }
+      ascent?: number
+      descent?: number
+      segments?: Array<{ steps?: Array<{ instruction?: string }> }>
+    }
+  }>
+}
+
+/**
+ * Build map geometry + elevation profile from ORS GeoJSON coordinates.
+ * Prefer /geojson over encoded polyline: with elevation=true the polyline is 3D
+ * and a 2D decoder produces garbage scribbles on the map.
+ */
+export function geometryFromOrsCoordinates(
+  raw: Array<[number, number] | [number, number, number]>,
 ): { coordinates: [number, number][]; profile: ElevationPoint[] } {
-  const decoded = polyline.decode(encoded, 6) as Array<[number, number] | [number, number, number]>
   const coordinates: [number, number][] = []
   const profile: ElevationPoint[] = []
   let distance = 0
 
-  for (let i = 0; i < decoded.length; i += 1) {
-    const row = decoded[i]
-    const lat = row[0]
-    const lng = row[1]
-    const elev = elevation && row.length > 2 ? row[2] : 0
+  for (let i = 0; i < raw.length; i += 1) {
+    const row = raw[i]
+    const lng = row[0]
+    const lat = row[1]
+    const elev = row.length > 2 ? row[2] : 0
     coordinates.push([lng, lat])
 
     if (i > 0) {
-      const prev = decoded[i - 1]
+      const prev = raw[i - 1]
       const R = 6371000
-      const dLat = ((lat - prev[0]) * Math.PI) / 180
-      const dLng = ((lng - prev[1]) * Math.PI) / 180
+      const dLat = ((lat - prev[1]) * Math.PI) / 180
+      const dLng = ((lng - prev[0]) * Math.PI) / 180
       const a =
         Math.sin(dLat / 2) ** 2 +
-        Math.cos((prev[0] * Math.PI) / 180) *
+        Math.cos((prev[1] * Math.PI) / 180) *
           Math.cos((lat * Math.PI) / 180) *
           Math.sin(dLng / 2) ** 2
       distance += 2 * R * Math.asin(Math.sqrt(a))
@@ -198,7 +215,8 @@ export class OpenRouteServiceProvider implements RoutingProvider {
     try {
       for (let i = 0; i < profiles.length; i += 1) {
         const profile = profiles[i]
-        const url = `${this.baseUrl}/v2/directions/${profile}/json`
+        // Use GeoJSON so elevation-enabled coordinates stay [lng, lat, ele].
+        const url = `${this.baseUrl}/v2/directions/${profile}/geojson`
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -235,16 +253,10 @@ export class OpenRouteServiceProvider implements RoutingProvider {
           throw new RoutingError('Provider error', 'provider_error', text)
         }
 
-        const data = (await response.json()) as {
-          routes?: Array<{
-            summary?: { distance?: number; duration?: number; ascent?: number; descent?: number }
-            geometry?: string
-            segments?: Array<{ steps?: Array<{ instruction?: string }> }>
-          }>
-        }
-
-        const route = data.routes?.[0]
-        if (!route?.geometry) {
+        const data = (await response.json()) as OrsGeoJsonResponse
+        const feature = data.features?.[0]
+        const rawCoords = feature?.geometry?.coordinates
+        if (!rawCoords || rawCoords.length < 2) {
           throw new RoutingError('No route found for preferences', 'no_route')
         }
 
@@ -254,14 +266,11 @@ export class OpenRouteServiceProvider implements RoutingProvider {
           )
         }
 
-        const { coordinates: coords, profile: elevationProfile } = decodeGeometry(
-          route.geometry,
-          true,
-        )
-        const distanceMeters = route.summary?.distance ?? 0
-        const durationSeconds = route.summary?.duration
-          ? Math.round(route.summary.duration)
-          : undefined
+        const { coordinates: coords, profile: elevationProfile } =
+          geometryFromOrsCoordinates(rawCoords)
+        const summary = feature?.properties?.summary
+        const distanceMeters = summary?.distance ?? 0
+        const durationSeconds = summary?.duration ? Math.round(summary.duration) : undefined
 
         let stats = buildStatsFromProfile(
           distanceMeters,
@@ -270,15 +279,17 @@ export class OpenRouteServiceProvider implements RoutingProvider {
           durationSeconds,
         )
 
-        if (typeof route.summary?.ascent === 'number') {
-          stats = { ...stats, elevationGainMeters: Math.round(route.summary.ascent) }
+        const ascent = feature?.properties?.ascent ?? summary?.ascent
+        const descent = feature?.properties?.descent ?? summary?.descent
+        if (typeof ascent === 'number') {
+          stats = { ...stats, elevationGainMeters: Math.round(ascent) }
         }
-        if (typeof route.summary?.descent === 'number') {
-          stats = { ...stats, elevationLossMeters: Math.round(route.summary.descent) }
+        if (typeof descent === 'number') {
+          stats = { ...stats, elevationLossMeters: Math.round(descent) }
         }
 
         const rawInstructions =
-          route.segments?.flatMap(
+          feature?.properties?.segments?.flatMap(
             (seg) => seg.steps?.map((s) => s.instruction ?? '').filter(Boolean) ?? [],
           ) ?? []
 

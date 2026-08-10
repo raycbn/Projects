@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  geometryFromOrsCoordinates,
   isOrsMaintenanceResponse,
   mapBikeProfile,
   ORS_BASE,
@@ -29,6 +30,20 @@ describe('OpenRouteServiceProvider', () => {
     expect(profileFallbacks('cycling-road')).toEqual(['cycling-regular'])
     expect(profileFallbacks('cycling-electric')).toEqual(['cycling-regular'])
     expect(isOrsMaintenanceResponse(503, 'Down For Maintenance')).toBe(true)
+  })
+
+  it('keeps Madrid-area coordinates when building geometry from ORS GeoJSON', () => {
+    const { coordinates, profile } = geometryFromOrsCoordinates([
+      [-3.621511, 40.380491, 630],
+      [-3.621292, 40.380335, 630],
+      [-3.571013, 40.20959, 520],
+    ])
+    expect(coordinates[0][0]).toBeCloseTo(-3.621511, 5)
+    expect(coordinates[0][1]).toBeCloseTo(40.380491, 5)
+    expect(coordinates.at(-1)?.[1]).toBeCloseTo(40.20959, 5)
+    expect(profile[0].elevationMeters).toBe(630)
+    expect(profile.at(-1)?.elevationMeters).toBe(520)
+    expect(profile.at(-1)?.distanceMeters).toBeGreaterThan(1000)
   })
 
   it('only claims supported preferences that map to ORS', () => {
