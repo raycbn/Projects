@@ -238,7 +238,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           setStatus('error')
           if (error instanceof RoutingError && error.code === 'not_configured') {
             setErrorMessage(
-              'El motor de rutas no está configurado. Falta la clave de OpenRouteService (VITE_ORS_API_KEY) en el entorno.',
+              'El motor de rutas no está configurado. Despliega el proxy Cloudflare (VITE_PEDALMAP_API_URL) — la API key de ORS no va al navegador.',
             )
           } else if (
             error instanceof RoutingError &&

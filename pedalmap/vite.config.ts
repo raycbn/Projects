@@ -77,6 +77,12 @@ export default defineConfig({
     host: true,
     allowedHosts: true,
   },
+  // Force-blank ORS client keys so they never ship in the browser bundle.
+  // Routing goes through Cloudflare Worker (VITE_PEDALMAP_API_URL).
+  define: {
+    'import.meta.env.VITE_ORS_API_KEY': JSON.stringify(''),
+    'import.meta.env.VITE_ROUTING_API_KEY': JSON.stringify(''),
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

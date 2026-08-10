@@ -39,3 +39,8 @@ playwright/.cache
 .runtimeconfig.json
 functions/lib
 functions/node_modules
+
+# Cloudflare Workers
+workers/**/.dev.vars
+workers/**/.wrangler
+workers/**/node_modules

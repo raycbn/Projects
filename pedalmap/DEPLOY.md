@@ -1,11 +1,6 @@
-# DEPLOY — PedalMap (producción mínima)
+# DEPLOY — PedalMap (0 €)
 
-Ver `docs/DEPLOY.md` (misma guía).
+Ver `docs/DEPLOY.md`.
 
-## Resumen rápido
-
-1. Blaze en Firebase  
-2. Secrets ORS + Stripe + APP_URL  
-3. `firebase deploy --only firestore,functions,hosting,storage`  
-4. Cliente: `VITE_USE_ROUTING_PROXY=true` + `VITE_STRIPE_ENABLED=true`  
-5. Webhook Stripe → `stripeWebhook`
+Resumen: **Firebase Spark + Cloudflare Workers free + Stripe test**.  
+No Blaze. No Cloud Functions. ORS key solo en el Worker.

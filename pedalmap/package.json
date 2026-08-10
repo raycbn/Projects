@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "validate:mvp": "node scripts/validate-mvp.mjs"
+    "validate:mvp": "node scripts/validate-mvp.mjs",
+    "worker:dev": "npm --prefix workers/api run dev",
+    "worker:deploy": "npm --prefix workers/api run deploy"
   },
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",

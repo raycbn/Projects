@@ -1,0 +1,5 @@
+# Local wrangler secrets — copy to .dev.vars (gitignored). NEVER commit.
+ORS_API_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+FIREBASE_SERVICE_ACCOUNT=

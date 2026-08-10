@@ -251,13 +251,20 @@ function featureToPartialResult(
 }
 
 function resolveApiKey(): string | undefined {
+  // Direct browser ORS key is opt-in only (dev emergency). Prefer Cloudflare Worker proxy.
+  const allowDirect =
+    String(import.meta.env.VITE_ALLOW_DIRECT_ORS || '').toLowerCase() === 'true'
+  if (!allowDirect) return undefined
   const key = import.meta.env.VITE_ORS_API_KEY || import.meta.env.VITE_ROUTING_API_KEY
   return typeof key === 'string' && key.trim() ? key.trim() : undefined
 }
 
 function resolveProxyUrl(): string | undefined {
-  const useProxy = String(import.meta.env.VITE_USE_ROUTING_PROXY || '').toLowerCase() === 'true'
-  const proxy = import.meta.env.VITE_ROUTING_PROXY_URL
+  const proxy =
+    import.meta.env.VITE_PEDALMAP_API_URL || import.meta.env.VITE_ROUTING_PROXY_URL
+  const useProxy =
+    String(import.meta.env.VITE_USE_ROUTING_PROXY || '').toLowerCase() === 'true' ||
+    Boolean(proxy && String(import.meta.env.VITE_ALLOW_DIRECT_ORS || '').toLowerCase() !== 'true')
   if (!useProxy || typeof proxy !== 'string' || !proxy.trim()) return undefined
   return proxy.trim().replace(/\/+$/, '')
 }
@@ -285,7 +292,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
   async calculateRoute(request: RoutingRequest): Promise<RoutingResult> {
     if (!this.isConfigured()) {
       throw new RoutingError(
-        'Routing provider is not configured. Set VITE_ORS_API_KEY or VITE_ROUTING_PROXY_URL.',
+        'Routing provider is not configured. Deploy the Cloudflare Worker proxy (VITE_PEDALMAP_API_URL) or set VITE_ALLOW_DIRECT_ORS=true for local emergency only.',
         'not_configured',
       )
     }

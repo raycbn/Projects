@@ -10,7 +10,7 @@ export function PremiumPage() {
   usePageMeta({
     title: 'PedalMap Premium',
     description:
-      'Rutas ilimitadas, GPX, filtros avanzados y rutas circulares. Suscripción vía Stripe (Fase 4).',
+      'Rutas ilimitadas, GPX, filtros avanzados y rutas circulares. 4,99 €/mes o 39,99 €/año (Stripe test).',
     path: '/premium',
   })
 
@@ -18,7 +18,9 @@ export function PremiumPage() {
   const [params] = useSearchParams()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(() => {
-    if (params.get('checkout') === 'success') return 'Pago recibido. Premium se activará en unos segundos.'
+    if (params.get('checkout') === 'success') {
+      return 'Checkout de prueba completado. Premium se activará cuando el webhook escriba en Firestore.'
+    }
     if (params.get('checkout') === 'cancel') return 'Checkout cancelado.'
     return null
   })
@@ -32,7 +34,7 @@ export function PremiumPage() {
     if (!stripeReady) {
       track('premium_clicked', { source: 'premium_page_preview' })
       setMessage(
-        'Stripe está cableado en código (Cloud Functions). Activa VITE_STRIPE_ENABLED=true y despliega Functions en Blaze para cobrar de verdad.',
+        'Falta el Worker API (VITE_PEDALMAP_API_URL) o VITE_STRIPE_ENABLED. Sin Blaze: usa Cloudflare Workers.',
       )
       return
     }
@@ -42,7 +44,11 @@ export function PremiumPage() {
       window.location.assign(url)
     } catch (error) {
       console.error('[stripe]', error)
-      setMessage('No se pudo abrir Stripe Checkout. Revisa Functions y precios.')
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo abrir Stripe Checkout. Revisa el Worker y los precios.',
+      )
     } finally {
       setBusy(false)
     }
@@ -50,7 +56,7 @@ export function PremiumPage() {
 
   async function openPortal() {
     if (!stripeReady) {
-      setMessage('Portal de cliente disponible cuando Stripe esté activo.')
+      setMessage('Portal disponible cuando el Worker Stripe esté activo.')
       return
     }
     setBusy(true)
@@ -59,7 +65,11 @@ export function PremiumPage() {
       window.location.assign(url)
     } catch (error) {
       console.error('[stripe portal]', error)
-      setMessage('No hay suscripción Stripe asociada a esta cuenta.')
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'No hay suscripción Stripe asociada a esta cuenta.',
+      )
     } finally {
       setBusy(false)
     }
@@ -68,14 +78,14 @@ export function PremiumPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-12 pb-24">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-        Fase 4 · Monetización
+        Premium · Stripe test
       </p>
       <h1 className="mt-2 font-display text-4xl font-extrabold text-[var(--color-forest)]">
         PedalMap Premium
       </h1>
       <p className="mt-3 max-w-2xl text-[var(--color-stone)]">
-        El plan gratuito sirve para probar y planificar. Premium quita límites cuando la app se
-        convierte en tu herramienta habitual.
+        Sandbox de Stripe (sin cobros reales). Infra en Cloudflare Workers + Firebase Spark — sin
+        Blaze.
       </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -84,39 +94,45 @@ export function PremiumPage() {
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
             <li>Creación limitada de rutas</li>
             <li>Guardado limitado</li>
+            <li>Hasta 2 filtros a la vez</li>
             <li>Compartir básico</li>
-            <li>Perfil de elevación</li>
           </ul>
         </div>
         <div className="rounded-3xl bg-[var(--color-panel)] p-6 text-white">
           <h2 className="font-display text-2xl font-bold text-[var(--color-signal)]">Premium</h2>
+          <p className="mt-2 text-sm text-white/70">4,99 €/mes · 39,99 €/año</p>
           <ul className="mt-4 space-y-2 text-sm text-white/80">
             <li>Rutas ilimitadas</li>
             <li>Exportación GPX</li>
-            <li>Filtros avanzados</li>
+            <li>Filtros ilimitados</li>
             <li>Rutas circulares avanzadas</li>
             <li>Estadísticas avanzadas</li>
             <li>Base para navegación GPS</li>
           </ul>
           <div className="mt-6 flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => void startCheckout('month')}>
-              Mensual
+              Mensual 4,99 €
             </Button>
             <Button
               variant="secondary"
               disabled={busy}
               onClick={() => void startCheckout('year')}
             >
-              Anual
+              Anual 39,99 €
             </Button>
-            <Button variant="ghost" className="!text-white !border-white/20" disabled={busy} onClick={() => void openPortal()}>
+            <Button
+              variant="ghost"
+              className="!text-white !border-white/20"
+              disabled={busy}
+              onClick={() => void openPortal()}
+            >
               Gestionar
             </Button>
           </div>
           <p className="mt-3 text-xs text-white/50">
             {stripeReady
-              ? 'Checkout real vía Stripe + webhook (Cloud Functions).'
-              : 'Scaffold Fase 4 listo. Sin cobros hasta activar Stripe + Functions.'}
+              ? 'Checkout test vía Cloudflare Worker + webhook → Firestore.'
+              : 'Activa VITE_STRIPE_ENABLED y el Worker API para probar el checkout.'}
           </p>
         </div>
       </div>

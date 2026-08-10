@@ -66,8 +66,7 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           )}
         </div>
         <p className="mt-4 text-xs text-white/50">
-          Fase 4: Stripe Checkout + webhook vía Cloud Functions. Sin cobros hasta activar
-          VITE_STRIPE_ENABLED y secretos en Blaze.
+          Stripe test vía Cloudflare Workers (sin Blaze). Free: hasta 2 filtros a la vez.
         </p>
       </div>
     </div>

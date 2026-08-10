@@ -2,65 +2,32 @@
 
 ## Modelo
 
-**Freemium + suscripción** (mensual/anual vía Stripe — Fase 4).
+**Freemium + suscripción** (Stripe **test/sandbox** mientras no haya ingresos).
 
 ### Free
+- Límites de creación/guardado
+- Hasta **2** filtros activos a la vez
 
-- Crear rutas con límite mensual
-- Guardar número limitado
-- Compartir básico
-- Ver mapa, stats, elevación
-- Probar sin registro
+### Premium — 4,99 €/mes · 39,99 €/año
+- Ilimitado (rutas, filtros, GPX, circulares)
 
-### Premium
+Price ids (test):
+- Mensual `price_1U2i2oDRDu30ohSLy0PIHXtJ` (prod `prod_V2neg03A0x2bBl`)
+- Anual `price_1U2i69DRDu30ohSLo5EoU9ed` (prod `prod_V2nhZxNNGpZOar`)
 
-- Rutas ilimitadas
-- Exportación GPX
-- Filtros avanzados
-- Rutas circulares avanzadas
-- Estadísticas avanzadas
-- Base para navegación / offline futuros
+## Infra 0 €
 
-Límites en código: `FREE_LIMITS` / `PREMIUM_LIMITS` + `EntitlementService` (cliente) +
-`onRouteCreated` (Functions, contadores server-side).
+- Firebase **Spark** (Auth + Firestore + Hosting)
+- **Cloudflare Workers** free: ORS proxy + Stripe checkout/webhook/portal
+- **No** Blaze / **No** Cloud Functions de pago
+
+## Seguridad
+
+- `sk_test_*`, `ORS_API_KEY`, service account → solo Worker secrets
+- `pk_test_*` → Vite (`VITE_STRIPE_PUBLISHABLE_KEY`)
+- Clientes **no** pueden autoasignarse `plan: premium` (Firestore rules)
+- Webhook Worker escribe `subscriptions/{uid}` + `users.plan` con service account
 
 ## Paywall
 
-UI: `PremiumCard` + `/premium`. El cliente no puede autoasignarse `plan: premium`
-(Firestore rules).
-
-## Stripe (Fase 4)
-
-Cliente:
-
-```
-VITE_STRIPE_ENABLED=true
-VITE_STRIPE_PUBLISHABLE_KEY=pk_...
-```
-
-Functions secrets / params:
-
-```
-ORS_API_KEY
-STRIPE_SECRET_KEY
-STRIPE_WEBHOOK_SECRET
-STRIPE_PRICE_MONTHLY
-STRIPE_PRICE_YEARLY
-APP_URL
-```
-
-Flujo:
-
-1. `createCheckoutSession` (callable) → Stripe Checkout
-2. `stripeWebhook` → `subscriptions/{uid}` + `users.plan = premium`
-3. `createCustomerPortalSession` → gestionar / cancelar
-4. `orsProxy` → routing sin exponer la API key en el navegador
-
-## Afiliación (futuro)
-
-Colección prevista `affiliateLinks` — no se añaden enlaces falsos todavía.
-
-## Analytics de conversión
-
-Eventos: `premium_clicked`, `signup_started`, `signup_completed`, `route_saved`,
-`gpx_exported`, `activity_started`, `activity_finished`.
+`PremiumCard` + `/premium` (mensual/anual/portal)
