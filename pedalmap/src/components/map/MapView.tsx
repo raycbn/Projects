@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
@@ -38,6 +38,8 @@ interface MapViewProps {
   showUserLocation?: LatLng | null
   /** Keep the camera on the user (navigation / recording). */
   followUser?: boolean
+  /** When false, hide wind barbs/chevrons/icons (colored segments stay). */
+  showWindArrows?: boolean
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
@@ -531,6 +533,7 @@ export function MapView({
   surfaceOverlay,
   showUserLocation,
   followUser = false,
+  showWindArrows = true,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -547,7 +550,6 @@ export function MapView({
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
   const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
   const onMapClickRef = useRef(onMapClick)
-  const [showWindArrows, setShowWindArrows] = useState(true)
   const showWindArrowsRef = useRef(showWindArrows)
   const hasWindOverlay = Boolean(windOverlay?.features?.length)
   followUserRef.current = followUser
@@ -746,16 +748,6 @@ export function MapView({
         role="application"
         aria-label="Mapa de rutas ciclistas"
       />
-      {hasWindOverlay ? (
-        <button
-          type="button"
-          className="absolute right-3 top-[7.25rem] z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]"
-          aria-pressed={showWindArrows}
-          onClick={() => setShowWindArrows((v) => !v)}
-        >
-          {showWindArrows ? 'Ocultar flechas' : 'Mostrar flechas'}
-        </button>
-      ) : null}
       {surfaceOverlay?.features?.length && !hasWindOverlay ? (
         <div className="pointer-events-none absolute left-3 top-3 z-10 flex gap-2 rounded-xl bg-white/90 px-2 py-1.5 text-[10px] text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]">
           <span className="inline-flex items-center gap-1">

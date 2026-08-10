@@ -87,6 +87,7 @@ export function RoutePlanner() {
   const [shareBusy, setShareBusy] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
+  const [showWindArrows, setShowWindArrows] = useState(true)
 
   const activeDraft = editDraft ?? draft
   const vias = waypoints.filter((w) => w.kind === 'via')
@@ -808,6 +809,7 @@ export function RoutePlanner() {
             hoverPoint={hoverPoint}
             windOverlay={windOverlay}
             windCaption={windCaption}
+            showWindArrows={showWindArrows}
             surfaceOverlay={surfaceOverlay}
             fitKey={fitKey}
             onMapClick={handleMapTap}
@@ -818,13 +820,25 @@ export function RoutePlanner() {
             }
           />
         </Suspense>
-        <button
-          type="button"
-          className="absolute right-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:hidden"
-          onClick={() => setMapExpanded((v) => !v)}
-        >
-          {mapExpanded ? 'Ver formulario' : 'Ampliar mapa'}
-        </button>
+        <div className="absolute right-14 top-3 z-10 flex flex-col items-end gap-2 sm:right-16">
+          <button
+            type="button"
+            className="rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:hidden"
+            onClick={() => setMapExpanded((v) => !v)}
+          >
+            {mapExpanded ? 'Ver formulario' : 'Ampliar mapa'}
+          </button>
+          {windOverlay?.features?.length ? (
+            <button
+              type="button"
+              className="rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]"
+              aria-pressed={showWindArrows}
+              onClick={() => setShowWindArrows((v) => !v)}
+            >
+              {showWindArrows ? 'Ocultar flechas' : 'Mostrar flechas'}
+            </button>
+          ) : null}
+        </div>
         {status === 'calculating' && (
           <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
             Calculando la mejor ruta ciclista…
