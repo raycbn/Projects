@@ -13,6 +13,9 @@ export type AnalyticsEvent =
   | 'signup_completed'
   | 'activity_started'
   | 'activity_finished'
+  | 'strava_connect_started'
+  | 'strava_disconnected'
+  | 'strava_activity_imported'
   | 'community_follow'
   | 'consent_updated'
 

@@ -103,6 +103,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /** Strava OAuth tokens — Worker Admin only. */
+    match /stravaConnections/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
     match /follows/{userId}/following/{followeeId} {
       allow read: if isSignedIn();
       allow write: if isOwner(userId);

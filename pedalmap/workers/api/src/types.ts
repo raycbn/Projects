@@ -14,6 +14,9 @@ export interface Env {
   VALHALLA_URL?: string
   /** Optional comma-separated emails granted Premium without Stripe. */
   PREMIUM_ALLOWLIST?: string
+  /** Strava API application (free OAuth bridge for iGPSPORT / Garmin / etc.). */
+  STRAVA_CLIENT_ID?: string
+  STRAVA_CLIENT_SECRET?: string
 }
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'

@@ -279,14 +279,19 @@ export class GeocodingError extends Error {
   }
 }
 
-/** Live GPS activity (Fase 5). */
+/** Live GPS activity (Fase 5) + Strava imports. */
 export type ActivityStatus = 'recording' | 'paused' | 'finished'
+export type ActivitySource = 'gps' | 'strava'
 
 export interface ActivityTrackPoint {
   position: LatLng
   elevationMeters?: number
   recordedAt: string
   accuracyMeters?: number
+  heartRateBpm?: number
+  cadenceRpm?: number
+  powerWatts?: number
+  speedMetersPerSecond?: number
 }
 
 export interface Activity {
@@ -296,6 +301,9 @@ export interface Activity {
   title: string
   status: ActivityStatus
   bikeType: BikeType
+  source?: ActivitySource
+  /** e.g. strava:123456789 — used to avoid duplicate imports */
+  externalId?: string
   startedAt: string
   finishedAt?: string
   track: ActivityTrackPoint[]
@@ -303,6 +311,10 @@ export interface Activity {
     distanceMeters: number
     durationSeconds: number
     elevationGainMeters: number
+    averageHeartRateBpm?: number
+    averageCadenceRpm?: number
+    averagePowerWatts?: number
+    averageSpeedMetersPerSecond?: number
   }
   createdAt: string
   updatedAt: string

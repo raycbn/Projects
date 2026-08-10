@@ -266,3 +266,95 @@ export async function writeSubscriptionCustomerId(
     throw new Error(`subscriptions customer write failed: ${res.status} ${t.slice(0, 300)}`)
   }
 }
+
+export type StravaConnection = {
+  athleteId: number
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+  scope?: string
+}
+
+export async function readStravaConnection(
+  env: Env,
+  uid: string,
+): Promise<StravaConnection | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/stravaConnections/${uid}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return null
+  const json = (await res.json()) as {
+    fields?: {
+      athleteId?: { integerValue?: string; doubleValue?: number }
+      accessToken?: { stringValue?: string }
+      refreshToken?: { stringValue?: string }
+      expiresAt?: { integerValue?: string; doubleValue?: number }
+      scope?: { stringValue?: string }
+    }
+  }
+  const accessToken = json.fields?.accessToken?.stringValue
+  const refreshToken = json.fields?.refreshToken?.stringValue
+  const expiresAt = Number(
+    json.fields?.expiresAt?.integerValue ?? json.fields?.expiresAt?.doubleValue ?? 0,
+  )
+  const athleteId = Number(
+    json.fields?.athleteId?.integerValue ?? json.fields?.athleteId?.doubleValue ?? 0,
+  )
+  if (!accessToken || !refreshToken || !expiresAt) return null
+  return {
+    athleteId,
+    accessToken,
+    refreshToken,
+    expiresAt,
+    scope: json.fields?.scope?.stringValue,
+  }
+}
+
+export async function writeStravaConnection(
+  env: Env,
+  uid: string,
+  conn: StravaConnection,
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT missing — Strava tokens not persisted')
+    return
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/stravaConnections/${uid}?updateMask.fieldPaths=athleteId&updateMask.fieldPaths=accessToken&updateMask.fieldPaths=refreshToken&updateMask.fieldPaths=expiresAt&updateMask.fieldPaths=scope&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        athleteId: { integerValue: String(conn.athleteId) },
+        accessToken: { stringValue: conn.accessToken },
+        refreshToken: { stringValue: conn.refreshToken },
+        expiresAt: { integerValue: String(Math.floor(conn.expiresAt)) },
+        ...(conn.scope ? { scope: { stringValue: conn.scope } } : {}),
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`stravaConnections write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
+export async function deleteStravaConnection(env: Env, uid: string): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/stravaConnections/${uid}`
+  await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+}
