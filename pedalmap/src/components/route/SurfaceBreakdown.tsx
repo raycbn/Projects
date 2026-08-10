@@ -25,9 +25,17 @@ function Bar({ percent, tone }: { percent: number; tone: 'paved' | 'unpaved' | '
 export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
   const surfaces = surfaceStats.surfaces ?? []
   const waytypes = surfaceStats.waytypes ?? []
+  const suitability = surfaceStats.suitability
   const total =
     surfaces.reduce((sum, s) => sum + s.distanceMeters, 0) ||
     waytypes.reduce((sum, s) => sum + s.distanceMeters, 0)
+
+  const suitTone =
+    suitability?.label === 'excelente' || suitability?.label === 'buena'
+      ? 'paved'
+      : suitability?.label === 'aceptable'
+        ? 'neutral'
+        : 'unpaved'
 
   return (
     <section aria-label="Composición de la ruta" className="space-y-4">
@@ -35,6 +43,25 @@ export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
         <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">Superficie</h3>
         <p className="text-xs text-[var(--color-stone)]">Datos reales de OpenRouteService / OSM</p>
       </div>
+
+      {suitability && (
+        <div className="rounded-2xl bg-white/85 px-3 py-3 ring-1 ring-[var(--color-fog)]">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+              Idoneidad {suitability.bikeType}
+            </p>
+            <p className="font-display text-xl font-bold text-[var(--color-forest)]">
+              {suitability.score}/100 · {suitability.label.replaceAll('_', ' ')}
+            </p>
+          </div>
+          <Bar percent={suitability.score} tone={suitTone} />
+          <ul className="mt-2 space-y-1 text-[11px] text-[var(--color-stone)]">
+            {suitability.notes.map((note) => (
+              <li key={note}>· {note}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-[var(--color-fog)]">

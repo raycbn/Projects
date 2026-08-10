@@ -1,3 +1,5 @@
+import { hasAnalyticsConsent } from '@/lib/consent'
+
 export type AnalyticsEvent =
   | 'route_created'
   | 'route_saved'
@@ -11,16 +13,33 @@ export type AnalyticsEvent =
   | 'activity_started'
   | 'activity_finished'
   | 'community_follow'
+  | 'consent_updated'
 
 type Payload = Record<string, string | number | boolean | undefined>
 
 /**
- * Privacy-first analytics stub.
- * Does not send PII. Wire to Firebase Analytics / Plausible later after consent.
+ * Privacy-first analytics. Only records when the user accepted optional analytics.
+ * DEV always logs to console for debugging.
  */
 export function track(event: AnalyticsEvent, payload: Payload = {}): void {
   if (import.meta.env.DEV) {
     console.info('[analytics]', event, payload)
   }
-  // Future: window.gtag / Firebase Analytics / Plausible — only with consent.
+  if (!hasAnalyticsConsent() && event !== 'consent_updated') return
+
+  // Lightweight beacon — no third-party ads SDK. Swap for Plausible/Firebase later.
+  try {
+    const body = JSON.stringify({
+      e: event,
+      p: payload,
+      t: Date.now(),
+      path: typeof location !== 'undefined' ? location.pathname : undefined,
+    })
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      // No dedicated analytics endpoint yet — keep local-only until wired.
+      void body
+    }
+  } catch {
+    // ignore
+  }
 }

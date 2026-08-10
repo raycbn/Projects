@@ -1,22 +1,8 @@
-import clsx from 'clsx'
 import type { BikeType } from '@/domain/types'
-import { mapBikeProfile } from '@/adapters/routing/OpenRouteServiceProvider'
+import { getBikeModality, primaryOrsProfile } from '@/lib/bikeSurfaceProfile'
+import clsx from 'clsx'
 
-const OPTIONS: Array<{ id: BikeType; label: string; note?: string }> = [
-  {
-    id: 'road',
-    label: 'Carretera',
-    note: 'Perfil cycling-road; si ORS lo tiene caído, se usa cycling-regular',
-  },
-  { id: 'mtb', label: 'MTB' },
-  { id: 'gravel', label: 'Gravel', note: 'Usa perfil cycling-regular (ORS no tiene gravel dedicado)' },
-  { id: 'urban', label: 'Urbana', note: 'Usa perfil cycling-regular' },
-  {
-    id: 'ebike',
-    label: 'E-bike',
-    note: 'Perfil cycling-electric; si ORS lo tiene caído, se usa cycling-regular',
-  },
-]
+const OPTIONS: BikeType[] = ['road', 'mtb', 'gravel', 'urban', 'ebike']
 
 interface BikeSelectorProps {
   value: BikeType
@@ -24,7 +10,7 @@ interface BikeSelectorProps {
 }
 
 export function BikeSelector({ value, onChange }: BikeSelectorProps) {
-  const selected = OPTIONS.find((o) => o.id === value)
+  const modality = getBikeModality(value)
 
   return (
     <fieldset>
@@ -32,29 +18,41 @@ export function BikeSelector({ value, onChange }: BikeSelectorProps) {
         Tipo de bicicleta
       </legend>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Tipo de bicicleta">
-        {OPTIONS.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            role="radio"
-            aria-checked={value === opt.id}
-            title={opt.note}
-            onClick={() => onChange(opt.id)}
-            className={clsx(
-              'rounded-xl px-3 py-2 text-sm font-semibold transition',
-              value === opt.id
-                ? 'bg-[var(--color-forest)] text-white'
-                : 'bg-white text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] hover:bg-[var(--color-mist)]',
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
+        {OPTIONS.map((id) => {
+          const opt = getBikeModality(id)
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={value === id}
+              title={opt.blurb}
+              onClick={() => onChange(id)}
+              className={clsx(
+                'rounded-xl px-3 py-2 text-sm font-semibold transition',
+                value === id
+                  ? 'bg-[var(--color-forest)] text-white'
+                  : 'bg-white text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] hover:bg-[var(--color-mist)]',
+              )}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
       </div>
-      <p className="mt-1.5 text-[11px] text-[var(--color-stone)]">
-        Perfil ORS: <code>{mapBikeProfile(value)}</code>
-        {selected?.note ? ` — ${selected.note}` : ''}
-      </p>
+      <div className="mt-2 space-y-1 rounded-xl bg-white/70 px-3 py-2 text-[11px] text-[var(--color-stone)] ring-1 ring-[var(--color-fog)]">
+        <p>
+          <span className="font-semibold text-[var(--color-forest)]">Suelo ideal:</span>{' '}
+          {modality.idealSurfaces.join(' · ')}
+        </p>
+        <p>
+          <span className="font-semibold text-[var(--color-forest)]">Evitar:</span>{' '}
+          {modality.avoidSurfaces.join(' · ')}
+        </p>
+        <p>
+          Perfil ORS: <code>{primaryOrsProfile(value)}</code> — {modality.blurb}
+        </p>
+      </div>
     </fieldset>
   )
 }

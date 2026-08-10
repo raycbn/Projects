@@ -1,35 +1,32 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { FREE_LIMITS } from '@/domain/types'
 
 const faqs = [
   {
     q: '¿Cómo crear una ruta en bicicleta?',
-    a: 'Abre el planificador, busca dónde empiezas y dónde quieres llegar, elige el tipo de bici y pulsa Crear ruta. PedalMap calcula un recorrido real con distancia, tiempo y desnivel.',
+    a: 'Abre el planificador, busca dónde empiezas y dónde quieres llegar, elige el tipo de bici y pulsa Crear ruta. PedalMap calcula un recorrido real con distancia, tiempo, desnivel y composición de superficie.',
   },
   {
-    q: '¿Cómo planificar una ruta ciclista?',
-    a: 'Define origen y destino, añade waypoints si lo necesitas, revisa el perfil de elevación y guarda la ruta cuando te convenza. Puedes probar sin registrarte.',
+    q: '¿Qué cambia según el tipo de bici?',
+    a: 'Carretera prioriza asfalto; urbana, carril bici; gravel, pistas y grava compacta; MTB, senderos y tierra; e-bike, perfil eléctrico sobre pavimento. Si el suelo no encaja, probamos otra estrategia ORS y te mostramos la idoneidad.',
   },
   {
     q: '¿Cómo crear una ruta GPX?',
-    a: 'La exportación GPX está preparada en la arquitectura y llegará en la siguiente fase. Mientras tanto puedes planificar y guardar rutas en tu cuenta.',
+    a: 'Tras calcular la ruta, en el panel de exportación puedes descargar o compartir el GPX (Premium). En Free puedes planificar y guardar con límites.',
   },
   {
     q: '¿Cómo calcular el desnivel?',
-    a: 'Al calcular la ruta, PedalMap solicita elevación al motor de routing y muestra desnivel positivo, negativo y un gráfico interactivo cuando los datos están disponibles.',
+    a: 'Al calcular la ruta pedimos elevación al motor de routing y mostramos desnivel positivo/negativo y un gráfico interactivo.',
   },
   {
-    q: '¿Cómo encontrar rutas de bicicleta cerca de mí?',
-    a: 'Usa la búsqueda o la geolocalización del mapa para partir desde tu zona. El descubrimiento de rutas públicas cercanas llegará en fases posteriores.',
+    q: '¿Cómo crear una ruta circular u Objetivo?',
+    a: 'Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular real (ORS round_trip) buscando el mejor ajuste.',
   },
   {
-    q: '¿Cómo crear una ruta circular?',
-    a: 'La arquitectura contempla rutas circulares por distancia aproximada, pero el algoritmo avanzado no se simula: se implementará cuando el motor lo soporte de forma fiable.',
-  },
-  {
-    q: '¿Qué diferencia hay entre una ruta MTB y una ruta de carretera?',
-    a: 'El perfil MTB usa el perfil cycling-mountain de OpenRouteService; carretera usa cycling-road. Cambia cómo se priorizan vías según datos de OpenStreetMap.',
+    q: '¿Free o Premium?',
+    a: `Free: hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones/mes y ${FREE_LIMITS.maxActivePreferences} filtros a la vez. Premium: ilimitado, GPX y más.`,
   },
 ]
 
@@ -37,7 +34,7 @@ export function LandingPage() {
   usePageMeta({
     title: 'PedalMap — Crea tu próxima ruta en bici',
     description:
-      'Planifica rutas ciclistas reales con mapa, desnivel y tiempo estimado. Guarda y comparte tus salidas.',
+      'Planifica rutas ciclistas reales con mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
     path: '/',
   })
 
@@ -67,15 +64,16 @@ export function LandingPage() {
             className="mt-4 max-w-xl animate-rise text-lg text-white/85"
             style={{ animationDelay: '140ms' }}
           >
-            Planifica rutas ciclistas, descubre nuevos caminos y prepara tu próxima salida.
+            Planifica con el suelo adecuado a tu modalidad, mira el viento y sal con la ruta lista.
+            Empieza gratis.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 animate-rise" style={{ animationDelay: '200ms' }}>
             <Link to="/route-planner">
               <Button className="!px-6 !py-3 text-base">Crear una ruta</Button>
             </Link>
-            <Link to="/explorar">
+            <Link to="/premium">
               <Button variant="ghost" className="!border-white/30 !text-white !px-6 !py-3">
-                Explorar
+                Ver Premium
               </Button>
             </Link>
           </div>
@@ -89,9 +87,9 @@ export function LandingPage() {
         </p>
         <ol className="mt-8 grid gap-6 md:grid-cols-3">
           {[
-            ['1. Elige puntos', 'Busca origen y destino o marca puntos en el mapa.'],
-            ['2. Calcula', 'Obtén distancia, desnivel, tiempo y elevación reales.'],
-            ['3. Guarda o comparte', 'Inicia sesión para sincronizar y publicar un enlace.'],
+            ['1. Elige puntos y bici', 'Origen, destino u Objetivo. Cada modalidad prioriza su suelo.'],
+            ['2. Calcula', 'Distancia, desnivel, viento, superficie e idoneidad de la ruta.'],
+            ['3. Guarda, GPX o GPS', 'Sincroniza en tu cuenta, exporta GPX o inicia el seguimiento.'],
           ].map(([title, text]) => (
             <li key={title} className="rounded-3xl bg-white/70 p-5 ring-1 ring-[var(--color-fog)]">
               <h3 className="font-display text-xl font-bold text-[var(--color-forest)]">{title}</h3>
@@ -101,46 +99,77 @@ export function LandingPage() {
         </ol>
       </section>
 
+      <section className="bg-[var(--color-mist)] px-4 py-16 md:px-6">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
+            Free para empezar. Premium cuando lo pidas.
+          </h2>
+          <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
+            Sin tarjeta para probar. Los límites Free están pensados para salidas reales; Premium quita
+            el techo.
+          </p>
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            <div className="rounded-3xl bg-white/80 p-6 ring-1 ring-[var(--color-fog)]">
+              <h3 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h3>
+              <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
+                <li>· Hasta {FREE_LIMITS.maxRoutesSaved} rutas guardadas</li>
+                <li>· {FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes</li>
+                <li>· {FREE_LIMITS.maxActivePreferences} filtros a la vez</li>
+                <li>· Objetivo circular, viento y mapa</li>
+              </ul>
+              <Link to="/route-planner" className="mt-6 inline-block">
+                <Button>Probar gratis</Button>
+              </Link>
+            </div>
+            <div className="rounded-3xl bg-[var(--color-forest)] p-6 text-white">
+              <h3 className="font-display text-2xl font-bold">Premium</h3>
+              <ul className="mt-4 space-y-2 text-sm text-white/85">
+                <li>· Rutas y filtros ilimitados</li>
+                <li>· Exportación / compartir GPX</li>
+                <li>· Todo el planificador sin paywall</li>
+                <li>· 4,99 €/mes o 39,99 €/año</li>
+              </ul>
+              <Link to="/premium" className="mt-6 inline-block">
+                <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
+                  Ir a Premium
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-[var(--color-panel)] px-4 py-16 text-white md:px-6">
         <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="font-display text-3xl font-extrabold">Crear rutas</h2>
             <p className="mt-3 text-white/75">
-              Motor real de routing ciclista. Sin mapas falsos ni botones decorativos.
+              Motor real de routing ciclista, afinado por modalidad de bici y tipo de suelo.
             </p>
           </div>
           <div>
-            <h2 className="font-display text-3xl font-extrabold">Perfil de elevación</h2>
+            <h2 className="font-display text-3xl font-extrabold">Viento y elevación</h2>
             <p className="mt-3 text-white/75">
-              Revisa el desnivel con un gráfico interactivo sincronizado con el mapa.
+              Open-Meteo sobre la línea + perfil de desnivel sincronizado con el mapa.
             </p>
           </div>
           <div>
-            <h2 className="font-display text-3xl font-extrabold">Guardar rutas</h2>
+            <h2 className="font-display text-3xl font-extrabold">Guardar y compartir</h2>
             <p className="mt-3 text-white/75">
-              Tus recorridos quedan en Firestore asociados a tu cuenta, listos para reabrir.
+              Tus recorridos en Firestore, con enlace de solo lectura cuando quieras publicarlos.
             </p>
           </div>
           <div>
-            <h2 className="font-display text-3xl font-extrabold">Compartir rutas</h2>
+            <h2 className="font-display text-3xl font-extrabold">GPS y GPX</h2>
             <p className="mt-3 text-white/75">
-              Publica un enlace de solo lectura para que otros vean el track y las estadísticas.
+              Inicia actividad en el móvil o exporta GPX hacia OsmAnd, Organic Maps, Garmin Connect o
+              Wahoo.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-16 md:px-6">
-        <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
-          Próximamente: navegación
-        </h2>
-        <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
-          La arquitectura deja preparada la base para GPS, seguimiento de actividad y navegación
-          durante la salida. No está simulada en el MVP.
-        </p>
-      </section>
-
-      <section className="mx-auto max-w-3xl px-4 pb-10 md:px-6">
+      <section className="mx-auto max-w-3xl px-4 py-16 md:px-6">
         <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
           Preguntas frecuentes
         </h2>

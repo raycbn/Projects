@@ -8,6 +8,7 @@ import { routeRepository } from '@/services/RouteRepository'
 import type { Challenge, PublicProfile, SavedRoute, Segment } from '@/domain/types'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import { seoPages } from '@/content/seoPages'
+import { DEMO_PUBLIC_ROUTES } from '@/content/demoPublicRoutes'
 import { track } from '@/lib/analytics'
 
 type Tab = 'rutas' | 'ciclistas' | 'segmentos' | 'retos' | 'rankings' | 'guias'
@@ -205,7 +206,34 @@ export function ExplorePage() {
           {tab === 'rutas' && (
             <>
               {routes.length === 0 ? (
-                <Empty hint="Aún no hay rutas públicas. Guarda una ruta y compártela." />
+                <div className="space-y-4">
+                  <Empty hint="Aún no hay rutas públicas de la comunidad. Mientras tanto, estas ideas de Madrid/Sierra:" />
+                  {DEMO_PUBLIC_ROUTES.map((route) => (
+                    <article
+                      key={route.id}
+                      className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-trail)]">
+                            Demo · {route.area}
+                          </p>
+                          <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
+                            {route.title}
+                          </h2>
+                          <p className="text-xs text-[var(--color-stone)]">
+                            {route.bikeType} · {formatDistance(route.distanceMeters)} ·{' '}
+                            {formatElevation(route.elevationGainMeters)}
+                          </p>
+                          <p className="mt-1 text-sm text-[var(--color-stone)]">{route.blurb}</p>
+                        </div>
+                        <Link to="/route-planner">
+                          <Button variant="ghost">Crear similar</Button>
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               ) : (
                 routes.map((route) => (
                   <article

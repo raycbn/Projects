@@ -9,68 +9,40 @@ Estado actual (2026-08-10):
 | Worker API | ✅ https://pedalmap-api.broken-dietician.workers.dev |
 | Health | ✅ ORS + Stripe + Firestore admin |
 | Google Auth (`web.app` OAuth redirect) | ✅ login Google OK en producción |
-| Worker `APP_URL` → Hosting | ✅ redeployed (`APP_URL` + Origin Stripe returns) |
+| Worker `APP_URL` → Hosting | ✅ |
+| Legales | ✅ `/privacidad` `/cookies` `/terminos` + footer |
+| Consentimiento analítica | ✅ banner + `pedalmap_consent` |
+| Rate limit Worker | ✅ 40 req/min ORS · 20/min Stripe (Cache API) |
+| Superficie por modalidad | ✅ scoring + multi-strategy ORS |
+| Explorar vacío | ✅ demos Madrid/Sierra |
+| Stripe | ⚠️ **test/sandbox** (no live hasta cobrar) |
+| Dominio propio | ⏳ pendiente (DNS + Auth/CORS/APP_URL) |
+| Rules/indexes deploy owner | ⏳ `firebase login` + deploy rules |
 
-## 1) Ya hecho
+## Soft-launch gate
 
-- Build producción **sin** ORS key en el bundle
-- Cliente apunta al Worker reclamado
-- `firebase deploy --only hosting` → live
-
-## 2) Worker (Stripe redirects) — hecho
-
-`APP_URL=https://pedalmap-79b3a.web.app` y CORS Hosting desplegados.
-Checkout/portal usan Origin allowlisted si viene del navegador.
-
-Para redeploy futuro:
-```bash
-cd pedalmap/workers/api
-npx wrangler login   # o sesión ya activa
-npm run deploy
-```
-
-## 3) Tú: rules / indexes / storage (opcional si ya estaban)
-
-La service account Admin SDK puede subir Hosting, pero **no** Service Usage
-(403 al desplegar rules). Desde tu cuenta owner:
-
+1. QA embudo: Google → ruta → paywall → Stripe test → `users.plan=premium` → portal
+2. Owner deploy rules/indexes/storage si aún no:
 ```bash
 cd pedalmap
 npx firebase login
 npx firebase deploy --only firestore:rules,firestore:indexes,storage --project pedalmap-79b3a
 ```
+3. Hard-refresh Hosting tras cada release
+4. Dominio custom cuando exista: Auth authorized domains + Worker `APP_URL`/`ALLOWED_ORIGINS` + OAuth client
+5. Stripe **live** solo cuando quieras cobrar (`pk_live`/`sk_live`/webhook live)
 
-## 4) QA en producción (test)
-
-1. Abrir https://pedalmap-79b3a.web.app
-2. Login (en **móvil** Google usa redirección, no popup)
-3. Planificar ruta A→B (proxy ORS)
-4. Free: 3 filtros → paywall
-5. `/premium` → Stripe test (`4242…`)
-6. Tras pagar: Firestore `users/{uid}.plan` = `premium`
-7. Portal de cliente desde `/premium`
-
-### Google Auth
-
-- ✅ Login Google OK en producción (`pedalmap-79b3a.web.app`)
-- Dominios Auth OK: `pedalmap-79b3a.web.app`, `firebaseapp.com`, `localhost`
-- `authDomain` = hostname Hosting (`*.web.app`) para redirect first-party
-- OAuth client incluye Origin + Redirect `…web.app/__/auth/handler`
-- Móvil: `signInWithRedirect`; desktop: popup (fallback redirect si bloquea)
-
-## 5) Rebuild + redeploy Hosting
+## Rebuild + redeploy
 
 ```bash
 cd pedalmap
 ./scripts/build-production.sh
 npx firebase deploy --only hosting --project pedalmap-79b3a
-# o con SA:
-# GOOGLE_APPLICATION_CREDENTIALS=workers/api/.secrets/firebase-sa.json \
-#   npx firebase-tools deploy --only hosting --project pedalmap-79b3a
+cd workers/api && npm run deploy
 ```
 
 ## No hacer
 
 - Blaze / Cloud Functions
-- Stripe **live**
+- Stripe **live** sin querer cobrar
 - Meter `ORS_API_KEY` / `sk_*` en Vite

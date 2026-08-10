@@ -96,13 +96,17 @@ export function surfaceStatsFromOrsExtras(extras: OrsExtras | undefined): Surfac
     pavedPercent: Math.round(paved * 10) / 10,
     unpavedPercent: Math.round(unpaved * 10) / 10,
     unknownPercent: Math.round(unknown * 10) / 10,
-    surfaces: surfaces.map(({ type, distanceMeters }) => ({ type, distanceMeters })),
+    surfaces: surfaces.map(({ type, distanceMeters, value }) => ({
+      type,
+      distanceMeters,
+      value,
+    })),
   }
 }
 
 export function waytypeBreakdownFromOrsExtras(
   extras: OrsExtras | undefined,
-): Array<{ type: string; distanceMeters: number; percent: number }> | undefined {
+): Array<{ type: string; distanceMeters: number; percent: number; value: number }> | undefined {
   const block = extras?.waytype ?? extras?.waytypes
   const summary = block?.summary
   if (!summary?.length) return undefined
@@ -111,6 +115,7 @@ export function waytypeBreakdownFromOrsExtras(
       type: waytypeLabel(row.value),
       distanceMeters: row.distance,
       percent: Math.round(row.amount * 10) / 10,
+      value: row.value,
     }))
     .sort((a, b) => b.distanceMeters - a.distanceMeters)
 }

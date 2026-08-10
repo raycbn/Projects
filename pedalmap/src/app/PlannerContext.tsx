@@ -249,16 +249,29 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             setErrorMessage(
               'El motor de rutas no está configurado. Despliega el proxy Cloudflare (VITE_PEDALMAP_API_URL) — la API key de ORS no va al navegador.',
             )
+          } else if (error instanceof RoutingError && error.code === 'rate_limited') {
+            setErrorMessage(
+              'Has hecho demasiadas peticiones de ruta en poco tiempo. Espera un minuto e inténtalo de nuevo.',
+            )
+          } else if (error instanceof RoutingError && error.code === 'network') {
+            setErrorMessage(
+              'No hay conexión con el motor de rutas. Revisa tu red e inténtalo otra vez.',
+            )
           } else if (
             error instanceof RoutingError &&
-            error.message.toLowerCase().includes('temporarily unavailable')
+            (error.code === 'provider_error' ||
+              error.message.toLowerCase().includes('temporarily unavailable'))
           ) {
             setErrorMessage(
-              'Algunos perfiles de OpenRouteService no están disponibles ahora (p. ej. cycling-road). Prueba MTB/Gravel/Urbana o reinténtalo en unos minutos.',
+              'Algunos perfiles de OpenRouteService no están disponibles ahora (p. ej. cycling-road). Prueba otra modalidad de bici o reinténtalo en unos minutos.',
+            )
+          } else if (error instanceof RoutingError && error.code === 'no_route') {
+            setErrorMessage(
+              'No hemos podido encontrar una ruta con esas preferencias. Prueba a reducir los filtros, cambiar el tipo de bicicleta o elegir otro punto.',
             )
           } else {
             setErrorMessage(
-              'No hemos podido encontrar una ruta con esas preferencias. Prueba a reducir los filtros, cambiar el tipo de bicicleta o elegir otro punto.',
+              'No hemos podido calcular la ruta. Prueba a cambiar el tipo de bicicleta, bajar filtros o mover el punto de inicio.',
             )
           }
         }

@@ -18,8 +18,9 @@ describe('orsExtras', () => {
     expect(stats?.pavedPercent).toBe(60)
     expect(stats?.unpavedPercent).toBe(30)
     expect(stats?.unknownPercent).toBe(10)
-    expect(stats?.surfaces?.[0]).toEqual({ type: 'Asfalto', distanceMeters: 12000 })
+    expect(stats?.surfaces?.[0]).toEqual({ type: 'Asfalto', distanceMeters: 12000, value: 3 })
     expect(stats?.surfaces?.[1].type).toBe('Tierra')
+    expect(stats?.surfaces?.[1].value).toBe(11)
   })
 
   it('maps waytypes for Strava-like breakdown', () => {

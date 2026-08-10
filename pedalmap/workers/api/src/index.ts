@@ -2,6 +2,7 @@ import type { Env } from './types'
 import { corsHeaders, json } from './types'
 import { handleOrsProxy } from './ors'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
+import { enforceRateLimit } from './rateLimit'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
@@ -54,19 +55,37 @@ export default {
       }
 
       if (path.startsWith('/v2/directions/') && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 40,
+          windowSec: 60,
+          prefix: 'ors',
+        })
+        if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleOrsProxy(request, env, path))
       }
 
       if (path === '/stripe/checkout' && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'stripe',
+        })
+        if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleCheckout(request, env))
       }
 
       if (path === '/stripe/portal' && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'stripe',
+        })
+        if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handlePortal(request, env))
       }
 
       if (path === '/stripe/webhook' && request.method === 'POST') {
-        // Stripe webhooks don't need CORS
+        // Stripe webhooks don't need CORS / IP rate limit (signed)
         return handleWebhook(request, env)
       }
 

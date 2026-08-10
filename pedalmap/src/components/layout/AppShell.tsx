@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
+import { CookieBanner } from '@/components/legal/CookieBanner'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   clsx(
@@ -65,6 +66,31 @@ export function AppShell() {
         </div>
       </header>
       <Outlet />
+      <footer className="border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_70%,white)] px-4 py-6 pb-24 md:pb-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-[var(--color-stone)] md:flex-row md:items-center md:justify-between">
+          <p className="font-display font-bold text-[var(--color-forest)]">
+            Pedal<span className="text-[var(--color-trail)]">Map</span>
+            <span className="ml-2 font-sans text-xs font-normal text-[var(--color-stone)]">
+              Beta · planifica con cabeza
+            </span>
+          </p>
+          <nav className="flex flex-wrap gap-3" aria-label="Legal">
+            <Link className="hover:text-[var(--color-forest)]" to="/privacidad">
+              Privacidad
+            </Link>
+            <Link className="hover:text-[var(--color-forest)]" to="/cookies">
+              Cookies
+            </Link>
+            <Link className="hover:text-[var(--color-forest)]" to="/terminos">
+              Términos
+            </Link>
+            <Link className="hover:text-[var(--color-forest)]" to="/premium">
+              Premium
+            </Link>
+          </nav>
+        </div>
+      </footer>
+      <CookieBanner />
       <nav
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 gap-1 border-t border-[var(--color-fog)] bg-white/95 px-2 py-2 md:hidden"
         aria-label="Móvil"

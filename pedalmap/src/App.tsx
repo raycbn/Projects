@@ -10,7 +10,7 @@ import { PremiumPage } from '@/pages/PremiumPage'
 import { SharedRoutePage } from '@/pages/SharedRoutePage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { ExplorePage } from '@/pages/ExplorePage'
-import { PrivacyPage, CookiesPage } from '@/pages/LegalPages'
+import { PrivacyPage, CookiesPage, TermsPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
 import { ActivityPage } from '@/pages/ActivityPage'
 import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
@@ -37,6 +37,7 @@ export default function App() {
               <Route path="route/:shareSlug" element={<SharedRoutePage />} />
               <Route path="privacidad" element={<PrivacyPage />} />
               <Route path="cookies" element={<CookiesPage />} />
+              <Route path="terminos" element={<TermsPage />} />
               {seoPages.map((content) => (
                 <Route
                   key={content.path}

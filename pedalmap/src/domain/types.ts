@@ -47,8 +47,15 @@ export interface SurfaceStats {
   pavedPercent?: number
   unpavedPercent?: number
   unknownPercent?: number
-  surfaces?: Array<{ type: string; distanceMeters: number }>
-  waytypes?: Array<{ type: string; distanceMeters: number; percent: number }>
+  surfaces?: Array<{ type: string; distanceMeters: number; value?: number }>
+  waytypes?: Array<{ type: string; distanceMeters: number; percent: number; value?: number }>
+  /** How well the surface/way mix fits the selected bike modality. */
+  suitability?: {
+    score: number
+    label: 'excelente' | 'buena' | 'aceptable' | 'poco_adecuada'
+    notes: string[]
+    bikeType: BikeType
+  }
 }
 
 export interface RouteAlternative {
