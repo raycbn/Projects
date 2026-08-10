@@ -260,7 +260,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               ? targetElevationGainMeters
               : undefined,
           circularSeed: routeType === 'circular' ? seed : undefined,
-          wantAlternatives: wantAlternatives && routeType === 'a_to_b',
+          wantAlternatives:
+            wantAlternatives && (routeType === 'a_to_b' || routeType === 'out_and_back'),
         })
         setDraft(result)
         persistDraft(result, user && !user.isAnonymous ? user.uid : null)

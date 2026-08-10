@@ -383,7 +383,9 @@ async function enrichTrip(
   let elevationProfile = profileFromRouteLegs(legs, coordinates)
 
   // Even samples for surface matching (+ height fallback if route has no elevation).
-  const sampled = sampleEvenly(coordinates, 96)
+  // Cap lower on very long geometries (ida-vuelta) so trace_attributes stays snappy.
+  const sampleBudget = coordinates.length > 1200 ? 72 : 96
+  const sampled = sampleEvenly(coordinates, sampleBudget)
   const needHeightFallback = elevationProfile.length < 8
 
   const [attrs, height] = await Promise.all([
@@ -430,8 +432,13 @@ async function routeLocations(
   locations: Array<{ lat: number; lon: number; type: string }>,
   costing: Record<string, number | string>,
   language: string,
-  options?: { alternates?: number },
+  options?: { alternates?: number; elevationIntervalM?: number },
 ) {
+  const elevationInterval =
+    options?.elevationIntervalM ??
+    // Longer shapes (typical ida-vuelta) use a slightly coarser DEM interval for speed.
+    (locations.length >= 3 ? 40 : ROUTE_ELEVATION_INTERVAL_M)
+
   const routeJson = (await valhallaPost(env, 'route', {
     locations,
     costing: 'bicycle',
@@ -440,8 +447,7 @@ async function routeLocations(
       units: 'kilometers',
       language: language === 'en' ? 'en-US' : 'es-ES',
     },
-    // Stadia/Valhalla: dense elevation along the ride (30 m ≈ DEM source resolution).
-    elevation_interval: ROUTE_ELEVATION_INTERVAL_M,
+    elevation_interval: elevationInterval,
     ...(options?.alternates && options.alternates > 0
       ? { alternates: Math.min(3, Math.floor(options.alternates)) }
       : {}),
@@ -523,13 +529,23 @@ function mergeUniqueRoutes(routes: EnrichedRoute[], max = 3): EnrichedRoute[] {
 /**
  * Primary Valhalla route + native alternates, topped up with costing variants in parallel
  * so A→B usually returns 2–3 distinct options even when `alternates` is empty.
+ * Out-and-back stays on a single Valhalla call (alternates only) to keep create latency low.
  */
 async function routeLocationsWithOptions(
   env: Env,
   locations: Array<{ lat: number; lon: number; type: string }>,
   costing: Record<string, number | string>,
   language: string,
+  mode: 'a_to_b' | 'out_and_back' = 'a_to_b',
 ): Promise<EnrichedRoute & { alternatives: EnrichedRoute[] }> {
+  // Ida-vuelta geometries are ~2× longer — avoid 3 full round-trips; one call with alternates.
+  if (mode === 'out_and_back') {
+    const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
+    const unique = mergeUniqueRoutes([main, ...(main.alternatives ?? [])], 3)
+    const primary = unique[0] ?? main
+    return { ...primary, alternatives: unique.slice(1) }
+  }
+
   const [mainSettled, roadsSettled, hillsSettled] = await Promise.allSettled([
     routeLocations(env, locations, costing, language, { alternates: 2 }),
     routeLocations(env, locations, costingVariant(costing, 'roads'), language),
@@ -659,10 +675,19 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
     const pts =
       routeType === 'out_and_back' ? [...waypoints, waypoints[0]] : waypoints
     const locations = pts.map((w) => ({ lat: w.lat, lon: w.lng, type: 'break' }))
-    const result =
-      wantAlternatives && routeType === 'a_to_b'
-        ? await routeLocationsWithOptions(env, locations, costing, language)
-        : await routeLocations(env, locations, costing, language)
+    const wantsOptions =
+      wantAlternatives && (routeType === 'a_to_b' || routeType === 'out_and_back')
+    const result = wantsOptions
+      ? await routeLocationsWithOptions(
+          env,
+          locations,
+          costing,
+          language,
+          routeType === 'out_and_back' ? 'out_and_back' : 'a_to_b',
+        )
+      : await routeLocations(env, locations, costing, language, {
+          elevationIntervalM: routeType === 'out_and_back' ? 40 : ROUTE_ELEVATION_INTERVAL_M,
+        })
     return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Valhalla bike-route failed'

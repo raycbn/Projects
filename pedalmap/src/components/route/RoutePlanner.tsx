@@ -530,7 +530,7 @@ export function RoutePlanner() {
             onLimitReached={(reason) => showPaywall(reason)}
           />
 
-          {routeType === 'a_to_b' && (
+          {(routeType === 'a_to_b' || routeType === 'out_and_back') && (
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
