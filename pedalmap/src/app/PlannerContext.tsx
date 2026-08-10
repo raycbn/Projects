@@ -22,6 +22,7 @@ import { track } from '@/lib/analytics'
 import { canCreateRoute, canUseAdvancedCircular, clampPreferencesForPlan } from '@/services/EntitlementService'
 import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
+import { loadCloudDraft, saveCloudDraft } from '@/services/DraftRepository'
 
 const GUEST_CREATES_KEY = 'pedalmap_guest_creates'
 const LAST_DRAFT_KEY = 'pedalmap_last_draft'
@@ -95,16 +96,20 @@ function writeGuestCreates(n: number) {
   }
 }
 
-function persistDraft(draft: RouteDraft | null) {
+function persistDraft(draft: RouteDraft | null, uid?: string | null) {
   try {
     if (!draft) {
       localStorage.removeItem(LAST_DRAFT_KEY)
       return
     }
-    // Compact: drop huge coordinate density if needed — keep full for MVP recovery.
     localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(draft))
   } catch {
     /* ignore quota */
+  }
+  if (uid && draft) {
+    void saveCloudDraft(uid, draft).catch((err) => {
+      console.warn('[planner] cloud draft', err)
+    })
   }
 }
 
@@ -187,6 +192,29 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     setHydratedProfile(true)
   }, [profile, hydratedProfile])
 
+  // Pull cloud draft when signing in if we don't already have a local one.
+  useEffect(() => {
+    if (!user || user.isAnonymous || !hydratedStorage) return
+    if (draft) {
+      void saveCloudDraft(user.uid, draft).catch(() => undefined)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const cloud = await loadCloudDraft(user.uid)
+      if (cancelled || !cloud?.geometry?.coordinates?.length) return
+      setDraft(cloud)
+      setWaypoints(cloud.waypoints ?? [])
+      setBikeType(cloud.bikeType || 'road')
+      setRouteTypeState(cloud.type || 'a_to_b')
+      setStatus('success')
+      persistDraft(cloud)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user, hydratedStorage]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const canCalculate = canCalculateRoute(routeType, waypoints)
 
   const value = useMemo<PlannerContextValue>(() => {
@@ -233,7 +261,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           wantAlternatives: wantAlternatives && routeType === 'a_to_b',
         })
         setDraft(result)
-        persistDraft(result)
+        persistDraft(result, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
         setStatus('success')
         const nextGuest = guestCreates + 1
@@ -304,7 +332,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setRouteType(next) {
         setRouteTypeState(next)
         setDraft(null)
-        persistDraft(null)
+        persistDraft(null, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
         setErrorMessage(null)
         setStatus('idle')
@@ -524,7 +552,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             title: editDraft.title,
           })
           setDraft(result)
-          persistDraft(result)
+          persistDraft(result, user && !user.isAnonymous ? user.uid : null)
           setWaypoints(result.waypoints)
           setEditDraft(null)
           setStatus('success')
@@ -546,11 +574,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           title: `${draft.title.replace(/ · alt.*$/i, '')} · ${alt.label}`,
         }
         setDraft(next)
-        persistDraft(next)
+        persistDraft(next, user && !user.isAnonymous ? user.uid : null)
       },
       setDraftFromImport(next) {
         setDraft(next)
-        persistDraft(next)
+        persistDraft(next, user && !user.isAnonymous ? user.uid : null)
         setWaypoints(next.waypoints)
         setBikeType(next.bikeType)
         setRouteTypeState(next.type)
@@ -559,7 +587,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       },
       clearRoute() {
         setDraft(null)
-        persistDraft(null)
+        persistDraft(null, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
         setStatus('idle')
         setErrorMessage(null)

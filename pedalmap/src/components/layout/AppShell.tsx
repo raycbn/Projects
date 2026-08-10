@@ -16,7 +16,9 @@ export function AppShell() {
   const { user, profile, logout, firebaseReady } = useAuth()
   const { pathname } = useLocation()
   const isPlanner = pathname.startsWith('/route-planner')
-  const wash = !isPlanner
+  const isNav = pathname.startsWith('/navegacion')
+  const hideTabbar = isPlanner || isNav
+  const wash = !isPlanner && !isNav
 
   return (
     <div className={clsx('min-h-dvh', wash && 'page-wash')}>
@@ -71,7 +73,7 @@ export function AppShell() {
 
       <Outlet />
 
-      {!isPlanner && (
+      {!isPlanner && !isNav && (
         <footer className="border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_70%,white)] px-4 py-8 pb-24 md:pb-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-[var(--color-stone)] md:flex-row md:items-center md:justify-between">
             <div>
@@ -100,7 +102,7 @@ export function AppShell() {
 
       <CookieBanner />
 
-      {!isPlanner && (
+      {!hideTabbar && (
         <nav
           className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-4 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
           aria-label="Móvil"

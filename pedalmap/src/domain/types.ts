@@ -101,6 +101,14 @@ export interface RouteDraft {
   circularSeed?: number
   /** Turn-by-turn instructions from the routing provider (when available). */
   instructions?: string[]
+  /** Valhalla edges used to paint surface-colored route segments. */
+  surfaceEdges?: Array<{
+    length?: number
+    surface?: string
+    road_class?: string
+    use?: string
+    cycle_lane?: string
+  }>
   /** Extra alternatives (index 0 is usually the active geometry). */
   alternatives?: RouteAlternative[]
 }
@@ -195,6 +203,13 @@ export interface RoutingResult {
   stats: RouteStats
   provider: string
   rawInstructions?: string[]
+  surfaceEdges?: Array<{
+    length?: number
+    surface?: string
+    road_class?: string
+    use?: string
+    cycle_lane?: string
+  }>
   alternatives?: Array<{
     geometry: RouteGeometry
     elevationProfile: ElevationPoint[]

@@ -85,6 +85,7 @@ export class RouteService {
       targetElevationGainMeters: input.targetElevationGainMeters,
       circularSeed: input.circularSeed,
       instructions: result.rawInstructions?.filter(Boolean).slice(0, 40),
+      surfaceEdges: result.surfaceEdges,
       alternatives,
     }
   }

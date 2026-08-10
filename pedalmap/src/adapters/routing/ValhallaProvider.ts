@@ -126,6 +126,13 @@ export class ValhallaProvider implements RoutingProvider {
       stats,
       provider: this.name,
       rawInstructions: data.instructions ?? [],
+      surfaceEdges: (data.edges ?? []).map((e) => ({
+        length: e.length,
+        surface: e.surface,
+        road_class: e.road_class,
+        use: e.use,
+        cycle_lane: e.cycle_lane,
+      })),
     }
   }
 }

@@ -33,12 +33,25 @@ interface MapViewProps {
   /** Wind overlay along the route (segments + arrows) for a selected hour/window. */
   windOverlay?: FeatureCollection | null
   windCaption?: string | null
+  /** Surface-colored segments (paved / unpaved / unknown). */
+  surfaceOverlay?: FeatureCollection | null
+  showUserLocation?: LatLng | null
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
   className?: string
   fitKey?: string
 }
+
+const SURFACE_COLOR_EXPR: maplibregl.ExpressionSpecification = [
+  'match',
+  ['get', 'kind'],
+  'paved',
+  '#0d3b2b',
+  'unpaved',
+  '#8b5a2b',
+  /* unknown */ '#94a3b8',
+]
 
 function ensureRouteLayers(map: Map) {
   if (!map.getSource('route')) {
@@ -75,6 +88,54 @@ function ensureRouteLayers(map: Map) {
       },
     })
   }
+}
+
+function ensureSurfaceLayers(map: Map) {
+  if (!map.getSource('route-surface')) {
+    map.addSource('route-surface', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
+  }
+  if (!map.getLayer('route-surface-line')) {
+    map.addLayer({
+      id: 'route-surface-line',
+      type: 'line',
+      source: 'route-surface',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': SURFACE_COLOR_EXPR,
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8,
+          5,
+          12,
+          8,
+          15,
+          12,
+        ],
+        'line-opacity': 0.95,
+      },
+    })
+  }
+}
+
+function applySurfaceOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
+  if (!map.isStyleLoaded()) return false
+  ensureRouteLayers(map)
+  ensureSurfaceLayers(map)
+  const source = map.getSource('route-surface') as maplibregl.GeoJSONSource | undefined
+  if (!source) return false
+  const hasSurface = Boolean(overlay?.features?.length)
+  source.setData(overlay ?? { type: 'FeatureCollection', features: [] })
+  if (map.getLayer('route-line')) {
+    map.setPaintProperty('route-line', 'line-opacity', hasSurface ? 0.15 : 1)
+    map.setPaintProperty('route-line', 'line-width', hasSurface ? 3 : 6)
+  }
+  if (map.getLayer('route-surface-line')) map.moveLayer('route-surface-line')
+  return true
 }
 
 function createWindArrowImage(
@@ -186,6 +247,7 @@ function ensureWindLayers(map: Map) {
       id: 'route-wind-barbs',
       type: 'line',
       source: 'route-wind-lines',
+      minzoom: 11,
       filter: ['==', ['get', 'kind'], 'barb'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
@@ -201,6 +263,7 @@ function ensureWindLayers(map: Map) {
       id: 'route-wind-arrows',
       type: 'symbol',
       source: 'route-wind-points',
+      minzoom: 10.5,
       filter: ['==', ['get', 'kind'], 'arrow'],
       layout: {
         'icon-image': [
@@ -217,13 +280,12 @@ function ensureWindLayers(map: Map) {
           ['linear'],
           ['zoom'],
           9,
-          0.55,
+          0.45,
           12,
-          0.75,
+          0.7,
           15,
-          0.95,
+          0.9,
         ],
-        // Image tip points north → rotate by wind-toward bearing (from north, CW).
         'icon-rotate': ['get', 'windTowardDeg'],
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
@@ -242,6 +304,7 @@ function ensureWindLayers(map: Map) {
       id: 'route-wind-labels',
       type: 'symbol',
       source: 'route-wind-points',
+      minzoom: 12,
       filter: [
         'all',
         ['==', ['get', 'kind'], 'arrow'],
@@ -252,8 +315,8 @@ function ensureWindLayers(map: Map) {
         'text-size': 11,
         'text-offset': [0, 1.85],
         'text-anchor': 'top',
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
         'text-optional': true,
       },
       paint: {
@@ -296,6 +359,7 @@ function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boo
   if (!map.isStyleLoaded()) return false
 
   ensureRouteLayers(map)
+  ensureSurfaceLayers(map)
   ensureWindLayers(map)
   const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined
   if (!source) return false
@@ -368,6 +432,9 @@ function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefine
   lineSource.setData(lines)
   pointSource.setData(points)
   setBaseRoutePaint(map, hasWind)
+  if (map.getLayer('route-surface-line')) {
+    map.setLayoutProperty('route-surface-line', 'visibility', hasWind ? 'none' : 'visible')
+  }
 
   // Ensure wind stays on top after style/route updates
   for (const id of [
@@ -404,6 +471,8 @@ export function MapView({
   hoverPoint,
   windOverlay,
   windCaption,
+  surfaceOverlay,
+  showUserLocation,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -414,11 +483,14 @@ export function MapView({
   const mapRef = useRef<Map | null>(null)
   const markersRef = useRef<Marker[]>([])
   const hoverMarkerRef = useRef<Marker | null>(null)
+  const userMarkerRef = useRef<Marker | null>(null)
   const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
+  const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
   const onMapClickRef = useRef(onMapClick)
   geometryRef.current = geometry
   windRef.current = windOverlay
+  surfaceRef.current = surfaceOverlay
   onMapClickRef.current = onMapClick
 
   useEffect(() => {
@@ -444,6 +516,7 @@ export function MapView({
 
     const paintFromRef = (fit: boolean) => {
       applyGeometry(map, geometryRef.current, fit)
+      applySurfaceOverlay(map, surfaceRef.current)
       applyWindOverlay(map, windRef.current)
     }
 
@@ -478,6 +551,7 @@ export function MapView({
       ro.disconnect()
       markersRef.current.forEach((m) => m.remove())
       hoverMarkerRef.current?.remove()
+      userMarkerRef.current?.remove()
       map.remove()
       mapRef.current = null
     }
@@ -521,13 +595,19 @@ export function MapView({
     const map = mapRef.current
     if (!map) return
     applyGeometry(map, geometry, Boolean(fitKey))
+    applySurfaceOverlay(map, surfaceRef.current)
     applyWindOverlay(map, windRef.current)
   }, [geometry, fitKey])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    // Rebuild images/layers once when overlay appears (icons can fail after style swaps)
+    applySurfaceOverlay(map, surfaceOverlay)
+  }, [surfaceOverlay])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
     if (windOverlay?.features?.length) {
       rebuildWindLayers(map)
     }
@@ -555,6 +635,26 @@ export function MapView({
     }
   }, [hoverPoint])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!showUserLocation) {
+      userMarkerRef.current?.remove()
+      userMarkerRef.current = null
+      return
+    }
+    if (!userMarkerRef.current) {
+      const el = document.createElement('div')
+      el.className =
+        'h-4 w-4 rounded-full bg-[#2563eb] ring-4 ring-[#2563eb]/35 border-2 border-white shadow'
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat([showUserLocation.lng, showUserLocation.lat])
+        .addTo(map)
+    } else {
+      userMarkerRef.current.setLngLat([showUserLocation.lng, showUserLocation.lat])
+    }
+  }, [showUserLocation])
+
   return (
     <div className={className ? `relative ${className}` : 'relative h-full min-h-[320px] w-full'}>
       <div
@@ -563,6 +663,19 @@ export function MapView({
         role="application"
         aria-label="Mapa de rutas ciclistas"
       />
+      {surfaceOverlay?.features?.length ? (
+        <div className="pointer-events-none absolute left-3 top-3 z-10 flex gap-2 rounded-xl bg-white/90 px-2 py-1.5 text-[10px] text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]">
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2 rounded-full bg-[var(--color-forest)]" /> Asfalto
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2 rounded-full bg-[#8b5a2b]" /> Tierra
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2 rounded-full bg-[#94a3b8]" /> ?
+          </span>
+        </div>
+      ) : null}
       {windCaption && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(88%,16rem)] rounded-xl bg-white/90 px-2.5 py-1.5 text-[10px] text-[var(--color-forest)] shadow-md ring-1 ring-[var(--color-fog)] sm:max-w-[min(92%,22rem)] sm:px-3 sm:py-2 sm:text-[11px]">
           <p className="font-semibold">Viento en ruta</p>

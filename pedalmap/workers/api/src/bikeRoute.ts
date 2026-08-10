@@ -261,8 +261,8 @@ async function enrichTrip(
   const instructions =
     legs.flatMap((l) => l.maneuvers?.map((m) => m.instruction ?? '').filter(Boolean) ?? []) ?? []
 
-  // Parallel enrich — coarse samples keep latency low
-  const sampled = sampleCoords(coordinates, 200, 48)
+  // Parallel enrich — denser samples improve surface coloring
+  const sampled = sampleCoords(coordinates, 120, 72)
   const [attrs, height] = await Promise.all([
     valhallaPost(env, 'trace_attributes', {
       shape: sampled.map(([lng, lat]) => ({ lat, lon: lng })),

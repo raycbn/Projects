@@ -4,6 +4,7 @@ import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
 import { SearchLocation } from '@/components/route/SearchLocation'
 import { BikeSelector } from '@/components/route/BikeSelector'
+import { BikeComparePanel } from '@/components/route/BikeComparePanel'
 import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { RouteSummary } from '@/components/route/RouteSummary'
 import { ElevationChart } from '@/components/route/ElevationChart'
@@ -17,8 +18,11 @@ import { canSaveRoute } from '@/services/EntitlementService'
 import { authService } from '@/services/AuthService'
 import { track } from '@/lib/analytics'
 import { routeService } from '@/services/RouteService'
-import { formatDistance } from '@/lib/stats'
+import { formatDistance, formatElevation } from '@/lib/stats'
 import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
+import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
+import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
+import { shareRouteCard } from '@/lib/shareCard'
 import { stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import {
   formatWeatherHourCaption,
@@ -77,6 +81,9 @@ export function RoutePlanner() {
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
   const [locating, setLocating] = useState(false)
   const [mapExpanded, setMapExpanded] = useState(false)
+  const [compareBusy, setCompareBusy] = useState(false)
+  const [compareRows, setCompareRows] = useState<BikeCompareRow[] | null>(null)
+  const [shareBusy, setShareBusy] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
 
@@ -97,8 +104,46 @@ export function RoutePlanner() {
       routeType: activeDraft.type,
       hour: selectedWindHour,
       window: selectedWindHour ? null : selectedWindWindow,
+      sampleCount: 22,
     })
   }, [activeDraft, selectedWindHour, selectedWindWindow])
+
+  const surfaceOverlay = useMemo(() => {
+    if (!activeDraft?.geometry) return null
+    return buildSurfaceRouteOverlay(activeDraft.geometry, activeDraft.surfaceEdges)
+  }, [activeDraft])
+
+  const surfaceAlert = useMemo(() => {
+    if (!activeDraft?.stats.surfaceStats) return null
+    const unpavedM =
+      ((activeDraft.stats.surfaceStats.unpavedPercent ?? 0) / 100) *
+      activeDraft.stats.distanceMeters
+    return summarizeUnpavedAlert(
+      activeDraft.bikeType,
+      activeDraft.stats.surfaceStats.unpavedPercent,
+      unpavedM,
+    )
+  }, [activeDraft])
+
+  const objetivoFeedback = useMemo(() => {
+    if (!activeDraft || activeDraft.type !== 'circular') return null
+    const targetD = activeDraft.circularDistanceMeters
+    const targetE = activeDraft.targetElevationGainMeters
+    const parts: string[] = []
+    if (targetD && targetD > 0) {
+      const err = ((activeDraft.stats.distanceMeters - targetD) / targetD) * 100
+      parts.push(
+        `Distancia ${formatDistance(activeDraft.stats.distanceMeters)} (objetivo ${formatDistance(targetD)}, ${err >= 0 ? '+' : ''}${err.toFixed(0)}%)`,
+      )
+    }
+    if (targetE && targetE > 0) {
+      const err = ((activeDraft.stats.elevationGainMeters - targetE) / targetE) * 100
+      parts.push(
+        `Desnivel ${formatElevation(activeDraft.stats.elevationGainMeters)} (objetivo ${targetE} m, ${err >= 0 ? '+' : ''}${err.toFixed(0)}%)`,
+      )
+    }
+    return parts.length ? parts.join(' · ') : null
+  }, [activeDraft])
 
   const windCaption = useMemo(() => {
     if (selectedWindHour) {
@@ -145,6 +190,72 @@ export function RoutePlanner() {
     } finally {
       setLocating(false)
     }
+  }
+
+  async function handleCompare() {
+    if (!canCalculate) return
+    setCompareBusy(true)
+    setCompareRows(null)
+    try {
+      const rows = await compareBikesForWaypoints({
+        waypoints,
+        preferences,
+        routeType,
+        circularDistanceMeters:
+          routeType === 'circular' ? circularDistanceMeters : undefined,
+        targetElevationGainMeters:
+          routeType === 'circular' && targetElevationGainMeters > 0
+            ? targetElevationGainMeters
+            : undefined,
+      })
+      setCompareRows(rows)
+      track('route_created', { bike_type: 'compare', route_type: routeType })
+    } catch (error) {
+      console.error('[compare]', error)
+      setSaveMessage('No se pudo comparar bicis. Revisa puntos o red.')
+    } finally {
+      setCompareBusy(false)
+    }
+  }
+
+  function handlePickCompare(row: BikeCompareRow) {
+    setDraftFromImport({
+      ...row.draft,
+      title: row.draft.title.replace(/ · comparación$/i, ''),
+    })
+    setBikeType(row.bikeType)
+    setCompareRows(null)
+  }
+
+  async function handleShareCard() {
+    if (!activeDraft) return
+    setShareBusy(true)
+    try {
+      const result = await shareRouteCard(activeDraft)
+      setSaveMessage(
+        result === 'shared'
+          ? 'Tarjeta compartida.'
+          : result === 'copied'
+            ? 'Imagen descargada y enlace copiado.'
+            : 'Tarjeta descargada.',
+      )
+      track('route_shared', { via: 'share_card' })
+    } catch (error) {
+      console.error('[share-card]', error)
+      setSaveMessage('No se pudo generar la tarjeta.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  function stashForRide() {
+    if (!activeDraft) return
+    stashGpsRoute({
+      title: activeDraft.title || 'Salida PedalMap',
+      bikeType,
+      geometry: activeDraft.geometry,
+      instructions: activeDraft.instructions,
+    })
   }
 
   const ctaDisabled = status === 'calculating' || !canCalculate
@@ -391,6 +502,24 @@ export function RoutePlanner() {
           )}
 
           <BikeSelector value={bikeType} onChange={setBikeType} />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!canCalculate || compareBusy || status === 'calculating'}
+              onClick={() => void handleCompare()}
+            >
+              {compareBusy ? 'Comparando…' : 'Comparar Carretera / Gravel / MTB'}
+            </Button>
+          </div>
+          {(compareBusy || (compareRows && compareRows.length > 0)) && (
+            <BikeComparePanel
+              rows={compareRows ?? []}
+              busy={compareBusy}
+              onPick={handlePickCompare}
+              onClose={() => setCompareRows(null)}
+            />
+          )}
           <RoutePreferencesPanel
             value={preferences}
             onChange={setPreferences}
@@ -422,6 +551,19 @@ export function RoutePlanner() {
           {activeDraft && (
             <div className="space-y-4 border-t border-[var(--color-fog)] pt-4">
               <RouteSummary stats={activeDraft.stats} />
+              {surfaceAlert && (
+                <p
+                  className="rounded-2xl bg-[#fff8f0] px-3 py-3 text-sm text-[#9a4b00] ring-1 ring-[#efd2b0]"
+                  role="status"
+                >
+                  {surfaceAlert}
+                </p>
+              )}
+              {objetivoFeedback && (
+                <p className="rounded-xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-forest)]">
+                  Objetivo · {objetivoFeedback}
+                </p>
+              )}
               <div>
                 <h2 className="mb-2 font-display text-lg font-bold text-[var(--color-forest)]">
                   Elevación
@@ -485,21 +627,28 @@ export function RoutePlanner() {
                 <Button className="w-full" onClick={() => void handleSave()}>
                   Guardar ruta
                 </Button>
-                <Link
-                  className="w-full"
-                  to={`/actividad?title=${encodeURIComponent(activeDraft.title || 'Salida PedalMap')}&bike=${bikeType}`}
-                  onClick={() =>
-                    stashGpsRoute({
-                      title: activeDraft.title || 'Salida PedalMap',
-                      bikeType,
-                      geometry: activeDraft.geometry,
-                    })
-                  }
-                >
+                <Link className="w-full" to="/navegacion" onClick={stashForRide}>
                   <Button variant="secondary" className="w-full">
-                    Iniciar GPS
+                    Navegar
                   </Button>
                 </Link>
+                <Link
+                  className="w-full sm:col-span-2"
+                  to={`/actividad?title=${encodeURIComponent(activeDraft.title || 'Salida PedalMap')}&bike=${bikeType}`}
+                  onClick={stashForRide}
+                >
+                  <Button variant="ghost" className="w-full">
+                    Iniciar GPS / grabar
+                  </Button>
+                </Link>
+                <Button
+                  className="w-full sm:col-span-2"
+                  variant="secondary"
+                  disabled={shareBusy}
+                  onClick={() => void handleShareCard()}
+                >
+                  {shareBusy ? 'Generando tarjeta…' : 'Compartir tarjeta (WhatsApp)'}
+                </Button>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -614,6 +763,7 @@ export function RoutePlanner() {
             hoverPoint={hoverPoint}
             windOverlay={windOverlay}
             windCaption={windCaption}
+            surfaceOverlay={surfaceOverlay}
             fitKey={fitKey}
             onMapClick={handleMapTap}
             onWaypointDrag={

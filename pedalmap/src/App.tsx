@@ -14,6 +14,7 @@ import { PrivacyPage, CookiesPage, TermsPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
 import { ActivityPage } from '@/pages/ActivityPage'
 import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
+import { NavigationPage } from '@/pages/NavigationPage'
 import { seoPages } from '@/content/seoPages'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
               <Route path="my-routes" element={<MyRoutesPage />} />
               <Route path="actividades" element={<MyActivitiesPage />} />
               <Route path="actividad" element={<ActivityPage />} />
+              <Route path="navegacion" element={<NavigationPage />} />
               <Route path="explorar" element={<ExplorePage />} />
               <Route path="premium" element={<PremiumPage />} />
               <Route path="perfil" element={<ProfilePage />} />
