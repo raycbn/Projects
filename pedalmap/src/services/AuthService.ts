@@ -105,6 +105,18 @@ export class AuthService {
   async logout(): Promise<void> {
     await signOut(getFirebaseAuth())
   }
+
+  async updateBikePreferences(uid: string, bikePreferences: UserProfile['bikePreferences']): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    await setDoc(
+      ref,
+      {
+        bikePreferences,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
 }
 
 export const authService = new AuthService()

@@ -6,9 +6,9 @@ const OPTIONS: Array<{ id: RoutePreference; label: string; supported: boolean }>
   { id: 'prefer_shorter', label: 'Menor distancia', supported: true },
   { id: 'prefer_faster', label: 'Más rápida', supported: true },
   { id: 'prefer_less_elevation', label: 'Menor desnivel', supported: true },
+  { id: 'avoid_primary_roads', label: 'Evitar principales', supported: true },
   { id: 'prefer_bike_lanes', label: 'Priorizar carril bici', supported: false },
   { id: 'prefer_secondary_roads', label: 'Carreteras secundarias', supported: false },
-  { id: 'avoid_primary_roads', label: 'Evitar principales', supported: false },
   { id: 'avoid_traffic', label: 'Evitar tráfico', supported: false },
   { id: 'avoid_unpaved', label: 'Evitar sin asfaltar', supported: false },
   { id: 'prefer_unpaved', label: 'Priorizar caminos', supported: false },
@@ -24,7 +24,6 @@ export function RoutePreferencesPanel({ value, onChange }: RoutePreferencesProps
     if (!supported) return
     if (value.includes(id)) onChange(value.filter((v) => v !== id))
     else {
-      // shorter/faster are mutually exclusive at the provider level
       let next = [...value, id]
       if (id === 'prefer_shorter') next = next.filter((v) => v !== 'prefer_faster')
       if (id === 'prefer_faster') next = next.filter((v) => v !== 'prefer_shorter')
@@ -51,7 +50,7 @@ export function RoutePreferencesPanel({ value, onChange }: RoutePreferencesProps
               title={
                 opt.supported
                   ? undefined
-                  : 'OpenRouteService no aplica este filtro directamente. Preparado para fases futuras.'
+                  : 'OpenRouteService no aplica este filtro directamente todavía.'
               }
             >
               <input
@@ -72,8 +71,8 @@ export function RoutePreferencesPanel({ value, onChange }: RoutePreferencesProps
         })}
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-stone)]">
-        Solo se aplican filtros que OpenRouteService soporta de verdad. El resto queda documentado
-        para GraphHopper/Valhalla o self-host.
+        Solo se aplican filtros con mapeo real en OpenRouteService (preferencia, desnivel, evitar
+        highways).
       </p>
     </fieldset>
   )

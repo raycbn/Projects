@@ -2,6 +2,7 @@ import { createRoutingProvider } from '@/adapters/routing/createRoutingProvider'
 import { routingRequestSchema } from '@/domain/schemas'
 import type {
   BikeType,
+  RouteAlternative,
   RouteDraft,
   RoutePreference,
   RouteType,
@@ -16,6 +17,8 @@ export interface CalculateRouteInput {
   preferences: RoutePreference[]
   routeType: RouteType
   title?: string
+  circularDistanceMeters?: number
+  wantAlternatives?: boolean
 }
 
 export class RouteService {
@@ -32,19 +35,14 @@ export class RouteService {
   async calculate(input: CalculateRouteInput): Promise<RouteDraft> {
     const sorted = [...input.waypoints].sort((a, b) => a.order - b.order)
 
-    if (input.routeType === 'circular') {
-      throw new RoutingError(
-        'Las rutas circulares avanzadas llegarán en una fase posterior.',
-        'invalid_request',
-      )
-    }
-
     const parsed = routingRequestSchema.safeParse({
       waypoints: sorted.map((w) => w.position),
       bikeType: input.bikeType,
       preferences: input.preferences,
       routeType: input.routeType,
       language: 'es',
+      circularDistanceMeters: input.circularDistanceMeters,
+      wantAlternatives: input.wantAlternatives,
     })
 
     if (!parsed.success) {
@@ -56,7 +54,19 @@ export class RouteService {
     const endName = sorted[sorted.length - 1]?.name
     const title =
       input.title ||
-      (startName && endName ? `${startName} → ${endName}` : 'Nueva ruta')
+      (input.routeType === 'circular'
+        ? `Circular desde ${startName ?? 'inicio'}`
+        : startName && endName
+          ? `${startName} → ${endName}`
+          : 'Nueva ruta')
+
+    const alternatives: RouteAlternative[] | undefined = result.alternatives?.map((alt, index) => ({
+      id: `alt-${index + 1}`,
+      label: `Alternativa ${index + 1}`,
+      geometry: alt.geometry,
+      elevationProfile: alt.elevationProfile,
+      stats: alt.stats,
+    }))
 
     return {
       title,
@@ -67,6 +77,8 @@ export class RouteService {
       geometry: result.geometry,
       elevationProfile: result.elevationProfile,
       stats: result.stats,
+      circularDistanceMeters: input.circularDistanceMeters,
+      alternatives,
     }
   }
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
@@ -9,10 +9,13 @@ import { RouteSummary } from '@/components/route/RouteSummary'
 import { ElevationChart } from '@/components/route/ElevationChart'
 import { PremiumCard } from '@/components/premium/PremiumCard'
 import { Button } from '@/components/ui/Button'
+import { GPXImporter } from '@/components/gpx/GPXImporter'
+import { GPXExporter } from '@/components/gpx/GPXExporter'
 import { routeRepository } from '@/services/RouteRepository'
 import { canSaveRoute } from '@/services/EntitlementService'
 import { track } from '@/lib/analytics'
 import { routeService } from '@/services/RouteService'
+import { formatDistance } from '@/lib/stats'
 import clsx from 'clsx'
 
 const MapView = lazy(() =>
@@ -34,6 +37,7 @@ export function RoutePlanner() {
     setEnd,
     addVia,
     removeWaypoint,
+    moveWaypoint,
     draft,
     editDraft,
     hoverPoint,
@@ -42,10 +46,16 @@ export function RoutePlanner() {
     startEditing,
     cancelEditing,
     saveEdits,
+    selectAlternative,
     paywallReason,
     clearPaywall,
     showPaywall,
     updateWaypointPosition,
+    circularDistanceMeters,
+    setCircularDistanceMeters,
+    wantAlternatives,
+    setWantAlternatives,
+    setDraftFromImport,
   } = usePlanner()
   const { user, profile, firebaseReady } = useAuth()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -57,10 +67,14 @@ export function RoutePlanner() {
   const fitKey = useMemo(
     () =>
       activeDraft
-        ? `${activeDraft.stats.distanceMeters}-${activeDraft.geometry.coordinates.length}`
+        ? `${activeDraft.stats.distanceMeters}-${activeDraft.geometry.coordinates.length}-${activeDraft.title}`
         : '',
     [activeDraft],
   )
+
+  useEffect(() => {
+    if (status === 'success' && draft) setPanelOpen(true)
+  }, [status, draft])
 
   async function handleSave() {
     if (!draft) return
@@ -88,13 +102,13 @@ export function RoutePlanner() {
   }
 
   return (
-    <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1600px] grid-cols-1 lg:grid-cols-[360px_1fr]">
+    <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1600px] grid-cols-1 lg:grid-cols-[380px_1fr]">
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
 
       <aside
         className={clsx(
           'z-20 flex flex-col gap-4 border-[var(--color-fog)] bg-[color-mix(in_oklab,white_82%,var(--color-mist))] p-4 lg:border-r',
-          'fixed inset-x-0 bottom-14 max-h-[55vh] overflow-auto rounded-t-3xl shadow-2xl lg:static lg:max-h-none lg:rounded-none lg:shadow-none',
+          'fixed inset-x-0 bottom-14 max-h-[62vh] overflow-auto rounded-t-3xl shadow-2xl lg:static lg:max-h-none lg:rounded-none lg:shadow-none',
           panelOpen ? 'translate-y-0' : 'translate-y-[calc(100%-3.5rem)]',
           'transition-transform lg:translate-y-0',
         )}
@@ -122,6 +136,12 @@ export function RoutePlanner() {
             {panelOpen ? 'Ocultar' : 'Mostrar'}
           </button>
         </div>
+
+        {activeDraft && (
+          <div className="space-y-3 rounded-2xl bg-white/85 p-3 ring-1 ring-[var(--color-fog)] lg:hidden">
+            <RouteSummary stats={activeDraft.stats} />
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de ruta">
           {(
@@ -168,13 +188,33 @@ export function RoutePlanner() {
                   <br />
                   <span className="text-[var(--color-stone)]">{via.name}</span>
                 </span>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-[var(--color-danger)]"
-                  onClick={() => removeWaypoint(via.id)}
-                >
-                  Eliminar
-                </button>
+                <span className="flex flex-col items-end gap-1">
+                  <span className="flex gap-1">
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[var(--color-trail)]"
+                      onClick={() => moveWaypoint(via.id, -1)}
+                      disabled={index === 0}
+                    >
+                      Subir
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[var(--color-trail)]"
+                      onClick={() => moveWaypoint(via.id, 1)}
+                      disabled={index === vias.length - 1}
+                    >
+                      Bajar
+                    </button>
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-[var(--color-danger)]"
+                    onClick={() => removeWaypoint(via.id)}
+                  >
+                    Eliminar
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -210,14 +250,44 @@ export function RoutePlanner() {
         )}
 
         {routeType === 'circular' && (
-          <p className="rounded-xl bg-[var(--color-mist)] px-3 py-2 text-sm text-[var(--color-stone)]">
-            Ruta circular: arquitectura preparada. El algoritmo real llegará en una fase posterior —
-            no se simula. Usa A → B o Ida y vuelta.
-          </p>
+          <label className="block rounded-xl bg-white/80 px-3 py-3 text-sm ring-1 ring-[var(--color-fog)]">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+              Distancia objetivo
+            </span>
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="range"
+                min={5000}
+                max={80000}
+                step={1000}
+                value={circularDistanceMeters}
+                onChange={(e) => setCircularDistanceMeters(Number(e.target.value))}
+                className="w-full accent-[var(--color-trail)]"
+              />
+              <strong className="min-w-16 text-right text-[var(--color-forest)]">
+                {formatDistance(circularDistanceMeters)}
+              </strong>
+            </div>
+            <p className="mt-2 text-[11px] text-[var(--color-stone)]">
+              Circular real vía OpenRouteService <code>round_trip</code> desde el punto de inicio.
+            </p>
+          </label>
         )}
 
         <BikeSelector value={bikeType} onChange={setBikeType} />
         <RoutePreferencesPanel value={preferences} onChange={setPreferences} />
+
+        {routeType === 'a_to_b' && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-trail)]"
+              checked={wantAlternatives}
+              onChange={(e) => setWantAlternatives(e.target.checked)}
+            />
+            Pedir alternativas ORS
+          </label>
+        )}
 
         <Button
           className="w-full !py-3 text-base"
@@ -237,11 +307,37 @@ export function RoutePlanner() {
         )}
 
         {activeDraft && (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="hidden lg:block">
+              <RouteSummary stats={activeDraft.stats} />
+              <div className="mt-3">
+                <h2 className="mb-2 font-display text-lg font-bold text-[var(--color-forest)]">
+                  Perfil de elevación
+                </h2>
+                <ElevationChart
+                  profile={activeDraft.elevationProfile}
+                  onHover={(point) => setHoverPoint(point)}
+                />
+              </div>
+            </div>
+
+            {draft?.alternatives && draft.alternatives.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => void calculate()}>
+                  Ruta principal
+                </Button>
+                {draft.alternatives.map((alt, index) => (
+                  <Button key={alt.id} variant="ghost" onClick={() => selectAlternative(index)}>
+                    {alt.label} · {formatDistance(alt.stats.distanceMeters)}
+                  </Button>
+                ))}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
               {status === 'editing' ? (
                 <>
-                  <Button onClick={saveEdits}>Guardar cambios</Button>
+                  <Button onClick={() => void saveEdits()}>Recalcular cambios</Button>
                   <Button variant="ghost" onClick={cancelEditing}>
                     Cancelar
                   </Button>
@@ -254,6 +350,8 @@ export function RoutePlanner() {
               <Button variant="ghost" onClick={() => void handleSave()}>
                 Guardar ruta
               </Button>
+              <GPXExporter route={activeDraft} onPremiumRequired={() => showPaywall('gpx_export')} />
+              <GPXImporter onImported={setDraftFromImport} />
             </div>
             {saveMessage && (
               <p className="text-sm text-[var(--color-trail)]">
@@ -265,9 +363,12 @@ export function RoutePlanner() {
                 )}
               </p>
             )}
-            <p className="text-[11px] text-[var(--color-stone)]">
-              GPX import/export: arquitectura lista (Fase 2). No bloquea el MVP de planificación.
-            </p>
+          </div>
+        )}
+
+        {!activeDraft && (
+          <div className="flex flex-wrap gap-2">
+            <GPXImporter onImported={setDraftFromImport} />
           </div>
         )}
       </aside>
@@ -296,32 +397,28 @@ export function RoutePlanner() {
           </Suspense>
         </div>
 
-        <div className="space-y-4 border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_90%,white)] p-4">
+        <div className="hidden space-y-4 border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_90%,white)] p-4 lg:block">
           {status === 'calculating' && (
             <p className="animate-pulse-soft text-sm font-medium text-[var(--color-forest)]">
               Calculando la mejor ruta ciclista…
             </p>
           )}
-          {activeDraft ? (
-            <>
-              <RouteSummary stats={activeDraft.stats} />
-              <div>
-                <h2 className="mb-2 font-display text-lg font-bold text-[var(--color-forest)]">
-                  Perfil de elevación
-                </h2>
-                <ElevationChart
-                  profile={activeDraft.elevationProfile}
-                  onHover={(point) => setHoverPoint(point)}
-                />
-              </div>
-            </>
-          ) : (
+          {!activeDraft && (
             <p className="text-sm text-[var(--color-stone)]">
               Elige inicio y destino, pulsa <strong>Crear ruta</strong> y verás distancia, desnivel,
-              tiempo y el perfil de elevación.
+              superficie y el perfil de elevación.
             </p>
           )}
         </div>
+
+        {activeDraft && (
+          <div className="space-y-4 border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_90%,white)] p-4 lg:hidden">
+            <ElevationChart
+              profile={activeDraft.elevationProfile}
+              onHover={(point) => setHoverPoint(point)}
+            />
+          </div>
+        )}
       </section>
     </div>
   )

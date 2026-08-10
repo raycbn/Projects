@@ -5,6 +5,7 @@ import {
   formatDuration,
   formatElevation,
 } from '@/lib/stats'
+import { SurfaceBreakdown } from '@/components/route/SurfaceBreakdown'
 
 interface RouteSummaryProps {
   stats: RouteStats
@@ -30,32 +31,32 @@ export function RouteSummary({ stats, compact }: RouteSummaryProps) {
     if (stats.significantClimbs !== undefined) {
       items.push({ label: 'Ascensos', value: String(stats.significantClimbs) })
     }
-    if (stats.surfaceStats?.pavedPercent !== undefined) {
-      items.push({
-        label: 'Asfaltado',
-        value: `${Math.round(stats.surfaceStats.pavedPercent)}%`,
-      })
-    }
   }
 
   return (
-    <dl
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-      aria-label="Resumen de la ruta"
-    >
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-[var(--color-fog)]"
-        >
-          <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-            {item.label}
-          </dt>
-          <dd className="mt-1 font-display text-xl font-bold text-[var(--color-forest)]">
-            {item.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className="space-y-4">
+      <dl
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+        aria-label="Resumen de la ruta"
+      >
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-[var(--color-fog)]"
+          >
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+              {item.label}
+            </dt>
+            <dd className="mt-1 font-display text-xl font-bold text-[var(--color-forest)]">
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {!compact && stats.surfaceStats && (
+        <SurfaceBreakdown surfaceStats={stats.surfaceStats} />
+      )}
+    </div>
   )
 }

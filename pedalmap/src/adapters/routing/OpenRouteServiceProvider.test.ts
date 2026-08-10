@@ -51,6 +51,7 @@ describe('OpenRouteServiceProvider', () => {
       'prefer_shorter',
       'prefer_faster',
       'prefer_less_elevation',
+      'avoid_primary_roads',
     ])
   })
 

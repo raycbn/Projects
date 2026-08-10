@@ -21,6 +21,7 @@ interface AuthContextValue {
   signInGuest: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   logout: () => Promise<void>
+  updateBikePreferences: (bikePreferences: UserProfile['bikePreferences']) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -75,6 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async logout() {
       await authService.logout()
+    },
+    async updateBikePreferences(bikePreferences) {
+      if (!user) throw new Error('Debes iniciar sesión')
+      await authService.updateBikePreferences(user.uid, bikePreferences)
+      setProfile((prev) => (prev ? { ...prev, bikePreferences } : prev))
     },
   }
 

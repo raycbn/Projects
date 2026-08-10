@@ -31,17 +31,34 @@ export const waypointSchema = z.object({
 
 export const routingRequestSchema = z
   .object({
-    waypoints: z.array(latLngSchema).min(2).max(20),
+    waypoints: z.array(latLngSchema).min(1).max(20),
     bikeType: bikeTypeSchema,
     preferences: z.array(routePreferenceSchema),
     routeType: routeTypeSchema,
     language: z.string().optional(),
+    circularDistanceMeters: z.number().positive().max(200_000).optional(),
+    wantAlternatives: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.routeType === 'circular' && value.waypoints.length < 1) {
+    if (value.routeType === 'circular') {
+      if (value.waypoints.length < 1) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Circular routes require at least a start point',
+          path: ['waypoints'],
+        })
+      }
+      if (!value.circularDistanceMeters) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Circular routes require a target distance',
+          path: ['circularDistanceMeters'],
+        })
+      }
+    } else if (value.waypoints.length < 2) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Circular routes require at least a start point',
+        message: 'At least two waypoints are required',
         path: ['waypoints'],
       })
     }

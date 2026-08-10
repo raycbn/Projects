@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -32,18 +33,24 @@ interface PlannerContextValue {
   editDraft: RouteDraft | null
   hoverPoint: LatLng | null
   guestCreates: number
+  circularDistanceMeters: number
+  wantAlternatives: boolean
   setRouteType: (t: RouteType) => void
   setBikeType: (t: BikeType) => void
   setPreferences: (p: RoutePreference[]) => void
+  setCircularDistanceMeters: (meters: number) => void
+  setWantAlternatives: (value: boolean) => void
   setStart: (position: LatLng, name?: string) => void
   setEnd: (position: LatLng, name?: string) => void
   addVia: (position: LatLng, name?: string) => void
   removeWaypoint: (id: string) => void
   updateWaypointPosition: (id: string, position: LatLng) => void
+  moveWaypoint: (id: string, direction: -1 | 1) => void
   calculate: () => Promise<void>
   startEditing: () => void
   cancelEditing: () => void
-  saveEdits: () => void
+  saveEdits: () => Promise<void>
+  selectAlternative: (index: number) => void
   setHoverPoint: (p: LatLng | null) => void
   setDraftFromImport: (draft: RouteDraft) => void
   clearRoute: () => void
@@ -56,6 +63,23 @@ const PlannerContext = createContext<PlannerContextValue | null>(null)
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10)
+}
+
+function reorderVias(waypoints: Waypoint[], id: string, direction: -1 | 1): Waypoint[] {
+  const start = waypoints.find((w) => w.kind === 'start')
+  const end = waypoints.find((w) => w.kind === 'end')
+  const vias = waypoints.filter((w) => w.kind === 'via')
+  const index = vias.findIndex((w) => w.id === id)
+  if (index < 0) return waypoints
+  const target = index + direction
+  if (target < 0 || target >= vias.length) return waypoints
+  const next = [...vias]
+  const [item] = next.splice(index, 1)
+  next.splice(target, 0, item)
+  return [...(start ? [start] : []), ...next, ...(end ? [end] : [])].map((w, i) => ({
+    ...w,
+    order: i,
+  }))
 }
 
 export function PlannerProvider({ children }: { children: ReactNode }) {
@@ -71,6 +95,16 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [hoverPoint, setHoverPoint] = useState<LatLng | null>(null)
   const [guestCreates, setGuestCreates] = useState(0)
   const [paywallReason, setPaywallReason] = useState<string | null>(null)
+  const [circularDistanceMeters, setCircularDistanceMeters] = useState(25000)
+  const [wantAlternatives, setWantAlternatives] = useState(false)
+  const [hydratedProfile, setHydratedProfile] = useState(false)
+
+  useEffect(() => {
+    if (!profile || hydratedProfile) return
+    setBikeType(profile.bikePreferences.bikeType || 'road')
+    setPreferences(profile.bikePreferences.preferences || [])
+    setHydratedProfile(true)
+  }, [profile, hydratedProfile])
 
   const value = useMemo<PlannerContextValue>(() => {
     return {
@@ -84,10 +118,14 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       editDraft,
       hoverPoint,
       guestCreates,
+      circularDistanceMeters,
+      wantAlternatives,
       paywallReason,
       setRouteType,
       setBikeType,
       setPreferences,
+      setCircularDistanceMeters,
+      setWantAlternatives,
       setHoverPoint,
       clearPaywall: () => setPaywallReason(null),
       showPaywall: (reason) => setPaywallReason(reason),
@@ -155,6 +193,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           })
         }
       },
+      moveWaypoint(id, direction) {
+        setWaypoints((prev) => reorderVias(prev, id, direction))
+      },
       async calculate() {
         const entitlement = canCreateRoute(profile, guestCreates)
         if (!entitlement.ok) {
@@ -170,6 +211,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             bikeType,
             preferences,
             routeType,
+            circularDistanceMeters:
+              routeType === 'circular' ? circularDistanceMeters : undefined,
+            wantAlternatives: wantAlternatives && routeType === 'a_to_b',
           })
           setDraft(result)
           setEditDraft(null)
@@ -186,10 +230,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           if (error instanceof RoutingError && error.code === 'not_configured') {
             setErrorMessage(
               'El motor de rutas no está configurado. Falta la clave de OpenRouteService (VITE_ORS_API_KEY) en el entorno.',
-            )
-          } else if (error instanceof RoutingError && error.code === 'invalid_request' && routeType === 'circular') {
-            setErrorMessage(
-              'Las rutas circulares avanzadas están en preparación. Mientras tanto, usa A → B o Ida y vuelta.',
             )
           } else if (
             error instanceof RoutingError &&
@@ -214,16 +254,47 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setEditDraft(null)
         setStatus(draft ? 'success' : 'idle')
       },
-      saveEdits() {
+      async saveEdits() {
         if (!editDraft) return
-        setDraft(editDraft)
-        setWaypoints(editDraft.waypoints)
-        setEditDraft(null)
-        setStatus('success')
+        // Recalculate with edited waypoints so geometry stays real.
+        setStatus('calculating')
+        try {
+          const result = await routeService.calculate({
+            waypoints: editDraft.waypoints,
+            bikeType: editDraft.bikeType,
+            preferences: editDraft.preferences,
+            routeType: editDraft.type,
+            circularDistanceMeters: editDraft.circularDistanceMeters,
+            wantAlternatives: false,
+            title: editDraft.title,
+          })
+          setDraft(result)
+          setWaypoints(result.waypoints)
+          setEditDraft(null)
+          setStatus('success')
+        } catch (error) {
+          console.error('[planner] saveEdits', error)
+          setStatus('editing')
+          setErrorMessage('No se pudo recalcular la ruta editada. Revisa los puntos.')
+        }
+      },
+      selectAlternative(index) {
+        if (!draft?.alternatives?.length) return
+        const alt = draft.alternatives[index]
+        if (!alt) return
+        setDraft({
+          ...draft,
+          geometry: alt.geometry,
+          elevationProfile: alt.elevationProfile,
+          stats: alt.stats,
+          title: `${draft.title.replace(/ · alt.*$/i, '')} · ${alt.label}`,
+        })
       },
       setDraftFromImport(next) {
         setDraft(next)
         setWaypoints(next.waypoints)
+        setBikeType(next.bikeType)
+        setRouteType(next.type)
         setStatus('success')
         track('gpx_imported', { points: next.geometry.coordinates.length })
       },
@@ -247,6 +318,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     guestCreates,
     paywallReason,
     profile,
+    circularDistanceMeters,
+    wantAlternatives,
   ])
 
   return <PlannerContext.Provider value={value}>{children}</PlannerContext.Provider>

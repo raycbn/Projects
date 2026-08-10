@@ -48,6 +48,15 @@ export interface SurfaceStats {
   unpavedPercent?: number
   unknownPercent?: number
   surfaces?: Array<{ type: string; distanceMeters: number }>
+  waytypes?: Array<{ type: string; distanceMeters: number; percent: number }>
+}
+
+export interface RouteAlternative {
+  id: string
+  label: string
+  geometry: RouteGeometry
+  elevationProfile: ElevationPoint[]
+  stats: RouteStats
 }
 
 export interface RouteGeometry {
@@ -77,8 +86,10 @@ export interface RouteDraft {
   geometry: RouteGeometry
   elevationProfile: ElevationPoint[]
   stats: RouteStats
-  /** Approximate distance target for circular routes (future algorithm). */
+  /** Target length for ORS round_trip circular routes. */
   circularDistanceMeters?: number
+  /** Extra ORS alternatives (index 0 is usually the active geometry). */
+  alternatives?: RouteAlternative[]
 }
 
 export interface SavedRoute extends RouteDraft {
@@ -150,6 +161,10 @@ export interface RoutingRequest {
   preferences: RoutePreference[]
   routeType: RouteType
   language?: string
+  /** Required for circular / ORS round_trip (meters). */
+  circularDistanceMeters?: number
+  /** Ask ORS for alternative_routes when true. */
+  wantAlternatives?: boolean
 }
 
 export interface RoutingResult {
@@ -158,6 +173,11 @@ export interface RoutingResult {
   stats: RouteStats
   provider: string
   rawInstructions?: string[]
+  alternatives?: Array<{
+    geometry: RouteGeometry
+    elevationProfile: ElevationPoint[]
+    stats: RouteStats
+  }>
 }
 
 export class RoutingError extends Error {
