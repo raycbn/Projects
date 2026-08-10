@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
@@ -64,7 +64,6 @@ export function RoutePlanner() {
   } = usePlanner()
   const { user, profile, firebaseReady } = useAuth()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [panelOpen, setPanelOpen] = useState(true)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
@@ -99,10 +98,6 @@ export function RoutePlanner() {
     return null
   }, [selectedWindHour, selectedWindWindow])
 
-  useEffect(() => {
-    if (status === 'success' && draft) setPanelOpen(true)
-  }, [status, draft])
-
   // Wind selection is owned by RouteWeatherPanel after each forecast load.
   // Do not clear it on fitKey — that raced the forecast callback and left the map without overlay.
 
@@ -132,46 +127,24 @@ export function RoutePlanner() {
   }
 
   return (
-    <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1600px] grid-cols-1 lg:grid-cols-[380px_1fr]">
+    <div className="flex h-[calc(100dvh-4rem-3.5rem)] flex-col overflow-hidden md:h-[calc(100dvh-4rem)] lg:grid lg:grid-cols-2">
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
 
-      <aside
-        className={clsx(
-          'z-20 flex flex-col gap-4 border-[var(--color-fog)] bg-[color-mix(in_oklab,white_82%,var(--color-mist))] p-4 lg:border-r',
-          'fixed inset-x-0 bottom-14 max-h-[62vh] overflow-auto rounded-t-3xl shadow-2xl lg:static lg:max-h-none lg:rounded-none lg:shadow-none',
-          panelOpen ? 'translate-y-0' : 'translate-y-[calc(100%-3.5rem)]',
-          'transition-transform lg:translate-y-0',
-        )}
-      >
-        <div className="flex items-center justify-between lg:block">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-trail)]">
-              PedalMap
+      {/* Datos — mitad inferior (móvil) / mitad izquierda (desktop) */}
+      <aside className="order-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,white_82%,var(--color-mist))] p-4 lg:order-1 lg:border-r lg:border-t-0">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-trail)]">
+            PedalMap
+          </p>
+          <h1 className="font-display text-2xl font-extrabold text-[var(--color-forest)]">
+            Crear ruta
+          </h1>
+          {!routeService.isRoutingConfigured() && (
+            <p className="mt-1 text-xs text-amber-800">
+              Routing no configurado: falta VITE_ORS_API_KEY en el entorno.
             </p>
-            <h1 className="font-display text-2xl font-extrabold text-[var(--color-forest)]">
-              Crear ruta
-            </h1>
-            {!routeService.isRoutingConfigured() && (
-              <p className="mt-1 text-xs text-amber-800">
-                Routing no configurado: falta VITE_ORS_API_KEY en el entorno.
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="rounded-lg px-2 py-1 text-sm font-semibold text-[var(--color-forest)] lg:hidden"
-            onClick={() => setPanelOpen((v) => !v)}
-            aria-expanded={panelOpen}
-          >
-            {panelOpen ? 'Ocultar' : 'Mostrar'}
-          </button>
+          )}
         </div>
-
-        {activeDraft && (
-          <div className="space-y-3 rounded-2xl bg-white/85 p-3 ring-1 ring-[var(--color-fog)] lg:hidden">
-            <RouteSummary stats={activeDraft.stats} />
-          </div>
-        )}
 
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de ruta">
           {(
@@ -369,17 +342,15 @@ export function RoutePlanner() {
 
         {activeDraft && (
           <div className="space-y-3">
-            <div className="hidden lg:block">
-              <RouteSummary stats={activeDraft.stats} />
-              <div className="mt-3">
-                <h2 className="mb-2 font-display text-lg font-bold text-[var(--color-forest)]">
-                  Perfil de elevación
-                </h2>
-                <ElevationChart
-                  profile={activeDraft.elevationProfile}
-                  onHover={(point) => setHoverPoint(point)}
-                />
-              </div>
+            <RouteSummary stats={activeDraft.stats} />
+            <div>
+              <h2 className="mb-2 font-display text-lg font-bold text-[var(--color-forest)]">
+                Perfil de elevación
+              </h2>
+              <ElevationChart
+                profile={activeDraft.elevationProfile}
+                onHover={(point) => setHoverPoint(point)}
+              />
             </div>
 
             {draft?.alternatives && draft.alternatives.length > 0 && (
@@ -455,59 +426,46 @@ export function RoutePlanner() {
         )}
 
         {!activeDraft && (
-          <div className="flex flex-wrap gap-2">
-            <GPXImporter onImported={setDraftFromImport} />
-          </div>
-        )}
-      </aside>
-
-      <section className="flex min-h-[70vh] flex-col pb-40 lg:pb-0">
-        <div className="relative min-h-[50vh] flex-1 lg:min-h-0">
-          <Suspense
-            fallback={
-              <div className="flex h-full min-h-[50vh] items-center justify-center bg-[var(--color-fog)] text-sm text-[var(--color-stone)]">
-                Cargando mapa…
-              </div>
-            }
-          >
-            <MapView
-              className="absolute inset-0 h-full w-full"
-              waypoints={waypoints}
-              geometry={activeDraft?.geometry}
-              hoverPoint={hoverPoint}
-              windOverlay={windOverlay}
-              windCaption={windCaption}
-              fitKey={fitKey}
-              onWaypointDrag={
-                status === 'editing'
-                  ? (id, position) => updateWaypointPosition(id, position)
-                  : undefined
-              }
-            />
-          </Suspense>
-        </div>
-
-        <div className="hidden space-y-4 border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_90%,white)] p-4 lg:block">
-          {status === 'calculating' && (
-            <p className="animate-pulse-soft text-sm font-medium text-[var(--color-forest)]">
-              Calculando la mejor ruta ciclista…
-            </p>
-          )}
-          {!activeDraft && (
+          <div className="space-y-3">
             <p className="text-sm text-[var(--color-stone)]">
               Elige inicio y destino, pulsa <strong>Crear ruta</strong> y verás distancia, desnivel,
               superficie y el perfil de elevación.
             </p>
-          )}
-        </div>
-
-        {activeDraft && (
-          <div className="space-y-4 border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_90%,white)] p-4 lg:hidden">
-            <ElevationChart
-              profile={activeDraft.elevationProfile}
-              onHover={(point) => setHoverPoint(point)}
-            />
+            <div className="flex flex-wrap gap-2">
+              <GPXImporter onImported={setDraftFromImport} />
+            </div>
           </div>
+        )}
+      </aside>
+
+      {/* Mapa — mitad superior (móvil) / mitad derecha (desktop) */}
+      <section className="relative order-1 min-h-0 flex-1 bg-[var(--color-fog)] lg:order-2">
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center text-sm text-[var(--color-stone)]">
+              Cargando mapa…
+            </div>
+          }
+        >
+          <MapView
+            className="absolute inset-0 h-full w-full"
+            waypoints={waypoints}
+            geometry={activeDraft?.geometry}
+            hoverPoint={hoverPoint}
+            windOverlay={windOverlay}
+            windCaption={windCaption}
+            fitKey={fitKey}
+            onWaypointDrag={
+              status === 'editing'
+                ? (id, position) => updateWaypointPosition(id, position)
+                : undefined
+            }
+          />
+        </Suspense>
+        {status === 'calculating' && (
+          <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
+            Calculando la mejor ruta ciclista…
+          </p>
         )}
       </section>
     </div>
