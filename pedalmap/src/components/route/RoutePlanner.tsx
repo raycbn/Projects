@@ -275,7 +275,12 @@ export function RoutePlanner() {
         )}
 
         <BikeSelector value={bikeType} onChange={setBikeType} />
-        <RoutePreferencesPanel value={preferences} onChange={setPreferences} />
+        <RoutePreferencesPanel
+          value={preferences}
+          onChange={setPreferences}
+          profile={profile}
+          onLimitReached={(reason) => showPaywall(reason)}
+        />
 
         {routeType === 'a_to_b' && (
           <label className="flex items-center gap-2 text-sm">

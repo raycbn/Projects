@@ -130,6 +130,8 @@ export interface FreemiumLimits {
   gpxExport: boolean
   advancedCircular: boolean
   advancedFilters: boolean
+  /** Max simultaneous route preferences on free; premium is unlimited. */
+  maxActivePreferences: number
 }
 
 export const FREE_LIMITS: FreemiumLimits = {
@@ -138,6 +140,7 @@ export const FREE_LIMITS: FreemiumLimits = {
   gpxExport: false,
   advancedCircular: false,
   advancedFilters: false,
+  maxActivePreferences: 2,
 }
 
 export const PREMIUM_LIMITS: FreemiumLimits = {
@@ -146,6 +149,7 @@ export const PREMIUM_LIMITS: FreemiumLimits = {
   gpxExport: true,
   advancedCircular: true,
   advancedFilters: true,
+  maxActivePreferences: Number.POSITIVE_INFINITY,
 }
 
 export interface PlaceSuggestion {
@@ -262,3 +266,78 @@ export interface SubscriptionRecord {
   currentPeriodEnd?: string
   updatedAt: string
 }
+
+/** Fase 6 — community */
+export interface PublicProfile {
+  uid: string
+  displayName: string | null
+  photoURL: string | null
+  bio?: string
+  isPublic: boolean
+  followersCount: number
+  followingCount: number
+  routesPublicCount: number
+  updatedAt: string
+}
+
+export interface FollowEdge {
+  followerId: string
+  followeeId: string
+  createdAt: string
+}
+
+export interface Segment {
+  id: string
+  name: string
+  description?: string
+  createdBy: string
+  isPublic: boolean
+  start: LatLng
+  end: LatLng
+  distanceMeters: number
+  elevationGainMeters: number
+  geometry?: RouteGeometry
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SegmentEffort {
+  id: string
+  segmentId: string
+  userId: string
+  displayName?: string
+  activityId?: string
+  durationSeconds: number
+  recordedAt: string
+}
+
+export interface Challenge {
+  id: string
+  title: string
+  description?: string
+  createdBy: string
+  isPublic: boolean
+  metric: 'distance' | 'elevation' | 'segment_time'
+  segmentId?: string
+  startAt: string
+  endAt: string
+  createdAt: string
+}
+
+export interface ChallengeEntry {
+  id: string
+  challengeId: string
+  userId: string
+  displayName?: string
+  value: number
+  updatedAt: string
+}
+
+export interface RankingEntry {
+  userId: string
+  displayName?: string
+  score: number
+  rank: number
+  updatedAt: string
+}
+

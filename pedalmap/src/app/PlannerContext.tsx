@@ -19,7 +19,7 @@ import type {
 import { RoutingError } from '@/domain/types'
 import { routeService } from '@/services/RouteService'
 import { track } from '@/lib/analytics'
-import { canCreateRoute, canUseAdvancedCircular } from '@/services/EntitlementService'
+import { canCreateRoute, canUseAdvancedCircular, clampPreferencesForPlan } from '@/services/EntitlementService'
 import { useAuth } from '@/app/AuthContext'
 
 interface PlannerContextValue {
@@ -210,10 +210,15 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setStatus('calculating')
         setErrorMessage(null)
         try {
+          const prefs = clampPreferencesForPlan(preferences, profile)
+          if (prefs.length !== preferences.length) {
+            setPreferences(prefs)
+            setPaywallReason('filter_limit')
+          }
           const result = await routeService.calculate({
             waypoints,
             bikeType,
-            preferences,
+            preferences: prefs,
             routeType,
             circularDistanceMeters:
               routeType === 'circular' ? circularDistanceMeters : undefined,

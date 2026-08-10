@@ -9,6 +9,7 @@ export type AnalyticsEvent =
   | 'signup_completed'
   | 'activity_started'
   | 'activity_finished'
+  | 'community_follow'
 
 type Payload = Record<string, string | number | boolean | undefined>
 

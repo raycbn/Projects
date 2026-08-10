@@ -37,12 +37,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
-    return authService.watch(async (next) => {
+    let unsubProfile: (() => void) | undefined
+    const unsubAuth = authService.watch(async (next) => {
+      unsubProfile?.()
+      unsubProfile = undefined
       setUser(next)
       if (next) {
         try {
           const p = await authService.ensureProfile(next)
           setProfile(p)
+          unsubProfile = authService.watchProfile(next.uid, (live) => {
+            if (live) setProfile(live)
+          })
         } catch (error) {
           console.error('[auth] profile', error)
           setProfile(null)
@@ -52,6 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false)
     })
+    return () => {
+      unsubProfile?.()
+      unsubAuth()
+    }
   }, [firebaseReady])
 
   const value: AuthContextValue = {

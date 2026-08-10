@@ -18,7 +18,6 @@ export function canCreateRoute(profile: UserProfile | null, guestCreates: number
   ok: boolean
   reason?: string
 } {
-  // Guests can try a few routes without signup
   if (!profile) {
     if (guestCreates >= 3) return { ok: false, reason: 'guest_limit' }
     return { ok: true }
@@ -36,8 +35,9 @@ export function canExportGpx(profile: UserProfile | null): boolean {
 }
 
 export function canUseAdvancedFilters(profile: UserProfile | null): boolean {
-  if (!profile) return true // guests can try filters in MVP; paywall on save/create limits
-  return getLimits(profile.plan).advancedFilters
+  // Guests can try filters (capped by maxActivePreferences via null→free limits).
+  if (!profile) return true
+  return getLimits(profile.plan).advancedFilters || getLimits(profile.plan).maxActivePreferences > 0
 }
 
 export function canUseAdvancedCircular(profile: UserProfile | null): boolean {
@@ -45,7 +45,47 @@ export function canUseAdvancedCircular(profile: UserProfile | null): boolean {
   return getLimits(profile.plan).advancedCircular
 }
 
-/** Preferences that require Premium when the user is on free + already signed in. */
+export function maxActivePreferences(profile: UserProfile | null): number {
+  if (!profile) return FREE_LIMITS.maxActivePreferences
+  return getLimits(profile.plan).maxActivePreferences
+}
+
+/**
+ * Multi-select is always allowed. Free is capped by maxActivePreferences (2).
+ * Premium is unlimited. Conflicting pairs are resolved by keeping the newest id.
+ */
+export function applyPreferenceToggle(
+  current: RoutePreference[],
+  id: RoutePreference,
+  profile: UserProfile | null,
+): { ok: true; next: RoutePreference[] } | { ok: false; reason: string; next: RoutePreference[] } {
+  if (current.includes(id)) {
+    return { ok: true, next: current.filter((v) => v !== id) }
+  }
+
+  let next = [...current, id]
+  if (id === 'prefer_shorter') next = next.filter((v) => v !== 'prefer_faster')
+  if (id === 'prefer_faster') next = next.filter((v) => v !== 'prefer_shorter')
+  if (id === 'avoid_unpaved') next = next.filter((v) => v !== 'prefer_unpaved')
+  if (id === 'prefer_unpaved') next = next.filter((v) => v !== 'avoid_unpaved')
+
+  const limit = maxActivePreferences(profile)
+  if (next.length > limit) {
+    return { ok: false, reason: 'filter_limit', next: current }
+  }
+  return { ok: true, next }
+}
+
+export function clampPreferencesForPlan(
+  preferences: RoutePreference[],
+  profile: UserProfile | null,
+): RoutePreference[] {
+  const limit = maxActivePreferences(profile)
+  if (preferences.length <= limit) return preferences
+  return preferences.slice(0, limit)
+}
+
+/** @deprecated use clampPreferencesForPlan — kept for older tests */
 export const PREMIUM_FILTER_PREFERENCES: RoutePreference[] = [
   'prefer_secondary_roads',
   'avoid_primary_roads',
@@ -57,6 +97,5 @@ export function filterPreferencesForPlan(
   preferences: RoutePreference[],
   profile: UserProfile | null,
 ): RoutePreference[] {
-  if (canUseAdvancedFilters(profile)) return preferences
-  return preferences.filter((p) => !PREMIUM_FILTER_PREFERENCES.includes(p))
+  return clampPreferencesForPlan(preferences, profile)
 }

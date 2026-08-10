@@ -39,6 +39,18 @@ export class RouteRepository {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
+  async listPublic(max = 40): Promise<SavedRoute[]> {
+    const q = query(
+      collection(getDb(), 'routes'),
+      where('isPublic', '==', true),
+    )
+    const snap = await getDocs(q)
+    return snap.docs
+      .map((d) => this.mapDoc(d.id, d.data()))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, max)
+  }
+
   async getById(routeId: string): Promise<SavedRoute | null> {
     const snap = await getDoc(doc(getDb(), 'routes', routeId))
     if (!snap.exists()) return null

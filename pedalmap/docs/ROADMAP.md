@@ -1,45 +1,26 @@
 # ROADMAP — PedalMap
 
 ## FASE 1 — MVP ✅
-
-- Landing PedalMap
-- Mapa MapLibre real
-- Geocoding Nominatim (+ Photon fallback)
-- Routing ORS A→B / ida y vuelta
-- Distancia, tiempo, desnivel positivo ciclista, elevación
-- Superficie / tipo de vía (extra_info ORS) estilo Strava
-- Waypoints básicos
-- Auth email/Google/reset + guest planner
-- Guardar rutas Firestore
-- Compartir `/route/:shareSlug`
-- SEO páginas útiles
-- Tests + docs
-
 ## FASE 2 ✅
-
-- GPX import/export en UI del planificador
-- Edición avanzada / reordenar waypoints + recalcular
-- Rutas circulares reales (`ORS round_trip`)
-
 ## FASE 3 ✅
+## FASE 4 ✅ (código + deploy guide; secrets/Blaze pendientes en entorno)
 
-- Preferencias con soporte real ORS (green / steepness / perfiles)
-- Alternativas de ruta ORS (`alternative_routes`)
-- Perfil ciclista persistente (bici + prefs en Firestore)
+- Premium UI + Stripe Checkout / Portal / webhook
+- Contadores server-side con borrado si Free supera límites
+- Proxy `orsProxy` + flag cliente
 
-## FASE 4 ✅ (scaffold desplegable)
+## FASE 5 ✅
 
-- Premium UI + Stripe Checkout / Customer Portal (Cloud Functions)
-- Webhook Stripe → `subscriptions/{uid}` + `users.plan`
-- Límites freemium client + contadores server-side (`onRouteCreated`)
-- Proxy Functions `orsProxy` para ocultar ORS_API_KEY
+- GPS `/actividad` + historial `/actividades`
 
-## FASE 5 ✅ (base)
+## FASE 6 ✅ (base comunitaria)
 
-- Actividades GPS (`/actividad`, `/actividades`)
-- Geolocalización + track + desnivel positivo
-- Persistencia Firestore `activities`
+- Explorar: rutas públicas, ciclistas, seguidores, segmentos, retos, rankings
+- `publicProfiles`, `follows`, `segments`, `challenges`, `rankings`
+- Reglas + índices Firestore
 
-## FASE 6
+## Freemium filtros
 
-- Comunidad, seguidores, segmentos, retos, rankings
+- Multi-select de preferencias
+- Free: máx **2** filtros activos
+- Premium: ilimitado

@@ -10,10 +10,11 @@ import {
   updateProfile,
   type User,
 } from 'firebase/auth'
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import type { UserProfile } from '@/domain/types'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { track } from '@/lib/analytics'
+import { communityService } from '@/services/CommunityService'
 
 const googleProvider = new GoogleAuthProvider()
 
@@ -56,6 +57,15 @@ export class AuthService {
     const ref = doc(getDb(), 'users', user.uid)
     const snap = await getDoc(ref)
     if (snap.exists()) {
+      try {
+        await communityService.upsertPublicProfile({
+          uid: user.uid,
+          displayName: user.displayName ?? (snap.data() as UserProfile).displayName,
+          photoURL: user.photoURL ?? (snap.data() as UserProfile).photoURL,
+        })
+      } catch (error) {
+        console.warn('[auth] public profile', error)
+      }
       return snap.data() as UserProfile
     }
     const profile = emptyProfile(user)
@@ -64,7 +74,22 @@ export class AuthService {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
+    try {
+      await communityService.upsertPublicProfile({
+        uid: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+      })
+    } catch (error) {
+      console.warn('[auth] public profile', error)
+    }
     return profile
+  }
+
+  watchProfile(uid: string, callback: (profile: UserProfile | null) => void): () => void {
+    return onSnapshot(doc(getDb(), 'users', uid), (snap) => {
+      callback(snap.exists() ? (snap.data() as UserProfile) : null)
+    })
   }
 
   async signInGoogle(): Promise<User> {

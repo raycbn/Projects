@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyPreferenceToggle,
   canCreateRoute,
   canExportGpx,
   canSaveRoute,
   canUseAdvancedCircular,
-  filterPreferencesForPlan,
+  clampPreferencesForPlan,
+  maxActivePreferences,
 } from '@/services/EntitlementService'
 import type { UserProfile } from '@/domain/types'
 import { computeActivityStats } from '@/services/ActivityRepository'
+import { FREE_LIMITS } from '@/domain/types'
 
 function profile(partial: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -48,12 +51,31 @@ describe('entitlements', () => {
     expect(canUseAdvancedCircular(profile({ plan: 'premium' }))).toBe(true)
   })
 
-  it('filters premium preferences for free plan', () => {
-    const filtered = filterPreferencesForPlan(
+  it('allows multi-select preferences with free cap of 2', () => {
+    expect(FREE_LIMITS.maxActivePreferences).toBe(2)
+    expect(maxActivePreferences(profile({ plan: 'free' }))).toBe(2)
+    expect(maxActivePreferences(profile({ plan: 'premium' }))).toBe(Number.POSITIVE_INFINITY)
+
+    const first = applyPreferenceToggle([], 'prefer_shorter', profile({ plan: 'free' }))
+    expect(first.ok).toBe(true)
+    const second = applyPreferenceToggle(first.next, 'prefer_bike_lanes', profile({ plan: 'free' }))
+    expect(second.ok).toBe(true)
+    expect(second.next).toHaveLength(2)
+    const third = applyPreferenceToggle(second.next, 'avoid_traffic', profile({ plan: 'free' }))
+    expect(third.ok).toBe(false)
+    if (!third.ok) expect(third.reason).toBe('filter_limit')
+
+    const premium = applyPreferenceToggle(second.next, 'avoid_traffic', profile({ plan: 'premium' }))
+    expect(premium.ok).toBe(true)
+    if (premium.ok) expect(premium.next).toHaveLength(3)
+  })
+
+  it('clamps preferences for free plan', () => {
+    const filtered = clampPreferencesForPlan(
       ['prefer_shorter', 'avoid_primary_roads', 'prefer_unpaved'],
       profile({ plan: 'free' }),
     )
-    expect(filtered).toEqual(['prefer_shorter'])
+    expect(filtered).toHaveLength(2)
   })
 })
 

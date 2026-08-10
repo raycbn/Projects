@@ -260,15 +260,18 @@ export const stripeWebhook = onRequest(
   },
 )
 
-/** Server-side usage counters + soft free-tier enforcement when routes are saved. */
+/** Server-side usage counters + hard free-tier enforcement when routes are saved. */
 export const onRouteCreated = onDocumentCreated(
   { region: 'europe-west1', document: 'routes/{routeId}' },
   async (event) => {
     const data = event.data?.data()
-    if (!data?.userId) return
+    if (!data?.userId || !event.data) return
     const uid = data.userId as string
+    const routeRef = event.data.ref
     const db = getFirestore()
     const userRef = db.collection('users').doc(uid)
+
+    let shouldDelete = false
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(userRef)
       if (!snap.exists) return
@@ -285,7 +288,14 @@ export const onRouteCreated = onDocumentCreated(
       const plan = user.plan === 'premium' ? 'premium' : 'free'
 
       if (plan === 'free' && (saved > FREE_MAX_SAVED || created > FREE_MAX_CREATED_MONTH)) {
-        console.warn('[onRouteCreated] free limit exceeded', { uid, saved, created })
+        shouldDelete = true
+        console.warn('[onRouteCreated] free limit exceeded — deleting route', {
+          uid,
+          saved,
+          created,
+          routeId: routeRef.id,
+        })
+        return
       }
 
       tx.update(userRef, {
@@ -296,7 +306,23 @@ export const onRouteCreated = onDocumentCreated(
         },
         updatedAt: FieldValue.serverTimestamp(),
       })
+
+      if (data.isPublic === true) {
+        const pub = db.collection('publicProfiles').doc(uid)
+        tx.set(
+          pub,
+          {
+            routesPublicCount: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+      }
     })
+
+    if (shouldDelete) {
+      await routeRef.delete()
+    }
   },
 )
 

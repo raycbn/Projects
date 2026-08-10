@@ -76,7 +76,16 @@ export function ProfilePage() {
               Perfil ciclista
             </h2>
             <BikeSelector value={bikeType} onChange={setBikeType} />
-            <RoutePreferencesPanel value={preferences} onChange={setPreferences} />
+            <RoutePreferencesPanel
+              value={preferences}
+              onChange={setPreferences}
+              profile={profile}
+              onLimitReached={() =>
+                setMessage(
+                  `Free permite hasta 2 filtros a la vez. Quita uno o pasa a Premium.`,
+                )
+              }
+            />
             <Button disabled={saving} onClick={() => void handleSavePrefs()}>
               {saving ? 'Guardando…' : 'Guardar preferencias'}
             </Button>

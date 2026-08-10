@@ -15,7 +15,9 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
         ? 'Las rutas circulares avanzadas son Premium'
         : reason === 'gpx_export'
           ? 'La exportación GPX es Premium'
-          : 'Has llegado al límite de rutas gratuitas'
+          : reason === 'filter_limit'
+            ? 'Free permite hasta 2 filtros a la vez'
+            : 'Has llegado al límite de rutas gratuitas'
 
   return (
     <div
