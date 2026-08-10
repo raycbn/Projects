@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +8,7 @@ import {
   activityRepository,
   computeActivityStats,
 } from '@/services/ActivityRepository'
-import type { Activity, ActivityTrackPoint, BikeType } from '@/domain/types'
+import type { Activity, ActivityTrackPoint, BikeType, RouteGeometry, Waypoint } from '@/domain/types'
 import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
 import { track } from '@/lib/analytics'
 import { takeGpsRoute, type GpsRoutePacket } from '@/lib/gpsRouteHandoff'
@@ -17,6 +17,11 @@ import {
   loadLatestActivityCheckpoint,
   saveActivityCheckpoint,
 } from '@/lib/activityCheckpoint'
+import { requestScreenWakeLock, type WakeLockHandle } from '@/lib/wakeLock'
+
+const MapView = lazy(() =>
+  import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
+)
 
 export function ActivityPage() {
   usePageMeta({
@@ -38,10 +43,20 @@ export function ActivityPage() {
   const routeId = params.get('routeId') || undefined
   const lastFlushAt = useRef(0)
   const lastFlushLen = useRef(0)
+  const wakeLockRef = useRef<WakeLockHandle | null>(null)
+  const trackRef = useRef<ActivityTrackPoint[]>([])
+  const activityRef = useRef<Activity | null>(null)
 
   useEffect(() => {
     setPlannedRoute(takeGpsRoute())
   }, [])
+
+  useEffect(() => {
+    trackRef.current = localTrack
+  }, [localTrack])
+  useEffect(() => {
+    activityRef.current = activity
+  }, [activity])
 
   // Restore unfinished ride from local checkpoint (survives tab close).
   useEffect(() => {
@@ -69,6 +84,71 @@ export function ActivityPage() {
 
   const recording = status === 'recording'
   const { sample, error: geoError, supported } = useGeolocation(recording)
+
+  // Screen wake lock while recording
+  useEffect(() => {
+    let cancelled = false
+    async function syncLock() {
+      if (recording) {
+        if (!wakeLockRef.current) {
+          const handle = await requestScreenWakeLock()
+          if (!cancelled) wakeLockRef.current = handle
+        }
+      } else if (wakeLockRef.current) {
+        await wakeLockRef.current.release()
+        wakeLockRef.current = null
+      }
+    }
+    void syncLock()
+    const onVis = () => {
+      if (document.visibilityState === 'visible' && recording) {
+        void requestScreenWakeLock().then((h) => {
+          wakeLockRef.current = h
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVis)
+      void wakeLockRef.current?.release()
+      wakeLockRef.current = null
+    }
+  }, [recording])
+
+  // Flush track when leaving the page / backgrounding.
+  useEffect(() => {
+    const flush = () => {
+      const act = activityRef.current
+      const trackPts = trackRef.current
+      if (!act || !user || user.isAnonymous) return
+      if (status !== 'recording' && status !== 'paused') return
+      const stats = computeActivityStats(trackPts, act.startedAt)
+      void activityRepository
+        .updateTrack(act.id, trackPts, stats, status === 'paused' ? 'paused' : 'recording')
+        .catch((err) => console.warn('[activity] pagehide flush', err))
+      saveActivityCheckpoint({
+        activityId: act.id,
+        userId: user.uid,
+        title: act.title,
+        bikeType: act.bikeType,
+        routeId: act.routeId,
+        startedAt: act.startedAt,
+        status: status === 'paused' ? 'paused' : 'recording',
+        track: trackPts,
+        updatedAt: new Date().toISOString(),
+      })
+    }
+    window.addEventListener('pagehide', flush)
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onHidden)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onHidden)
+    }
+  }, [user, status])
 
   useEffect(() => {
     if (!sample || !recording || !activity || !user) return
@@ -120,6 +200,42 @@ export function ActivityPage() {
     }
     return computeActivityStats(localTrack, activity.startedAt)
   }, [localTrack, activity])
+
+  const liveGeometry: RouteGeometry | null = useMemo(() => {
+    if (localTrack.length >= 2) {
+      return {
+        type: 'LineString',
+        coordinates: localTrack.map((p) => [p.position.lng, p.position.lat]),
+      }
+    }
+    if (plannedRoute?.geometry?.coordinates?.length) {
+      return plannedRoute.geometry
+    }
+    return null
+  }, [localTrack, plannedRoute])
+
+  const mapWaypoints: Waypoint[] = useMemo(() => {
+    const coords = liveGeometry?.coordinates
+    if (!coords || coords.length < 2) return []
+    const start = coords[0]
+    const end = coords[coords.length - 1]
+    return [
+      {
+        id: 'start',
+        name: 'Inicio',
+        kind: 'start',
+        order: 0,
+        position: { lng: start[0], lat: start[1] },
+      },
+      {
+        id: 'end',
+        name: localTrack.length >= 2 ? 'Ahora' : 'Fin plan',
+        kind: 'end',
+        order: 1,
+        position: { lng: end[0], lat: end[1] },
+      },
+    ]
+  }, [liveGeometry, localTrack.length])
 
   async function start() {
     if (!user || user.isAnonymous) {
@@ -203,80 +319,101 @@ export function ActivityPage() {
   }
 
   return (
-    <main className="mx-auto max-w-xl px-4 py-8 pb-28">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-        Fase 5 · GPS
-      </p>
-      <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
-        Grabar actividad
-      </h1>
-      <p className="mt-2 text-sm text-[var(--color-stone)]">
-        Usa el GPS del dispositivo para registrar distancia y desnivel positivo de tu salida. Si
-        cierras la pestaña, intentamos recuperar la salida al volver.
-      </p>
-      {plannedRoute?.geometry?.coordinates?.length ? (
-        <p className="mt-2 rounded-xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-forest)]">
-          Ruta planificada lista: <strong>{plannedRoute.title}</strong> ·{' '}
-          {plannedRoute.geometry.coordinates.length} puntos de referencia en el track.
+    <div className="planner-shell flex flex-col overflow-hidden">
+      <section className="relative min-h-[42vh] flex-1 bg-[var(--color-fog)]">
+        <Suspense
+          fallback={
+            <p className="flex h-full items-center justify-center p-4 text-sm text-[var(--color-stone)]">
+              Cargando mapa…
+            </p>
+          }
+        >
+          <MapView
+            className="h-full w-full"
+            waypoints={mapWaypoints}
+            geometry={liveGeometry}
+            showUserLocation={sample?.position}
+            followUser={recording && Boolean(sample)}
+            fitKey={
+              recording
+                ? undefined
+                : `${liveGeometry?.coordinates.length ?? 0}-${plannedRoute?.title ?? 'act'}`
+            }
+          />
+        </Suspense>
+        {recording && (
+          <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-1.5 text-xs font-semibold text-[var(--color-forest)] shadow">
+            Grabando · pantalla activa
+          </p>
+        )}
+      </section>
+
+      <aside className="shrink-0 space-y-3 border-t border-[var(--color-fog)] bg-white p-4 safe-pb">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
+            Actividad GPS
+          </p>
+          <h1 className="mt-1 font-display text-2xl font-extrabold text-[var(--color-forest)]">
+            {title}
+          </h1>
+          {plannedRoute?.geometry?.coordinates?.length ? (
+            <p className="mt-1 text-xs text-[var(--color-stone)]">
+              Referencia: {plannedRoute.title} · {plannedRoute.geometry.coordinates.length} pts
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Stat label="Distancia" value={formatDistance(liveStats.distanceMeters)} />
+          <Stat label="Tiempo" value={formatDuration(liveStats.durationSeconds)} />
+          <Stat label="Desnivel +" value={formatElevation(liveStats.elevationGainMeters)} />
+        </div>
+
+        <p className="text-sm text-[var(--color-stone)]">
+          Puntos GPS: <strong className="text-[var(--color-forest)]">{localTrack.length}</strong>
         </p>
-      ) : null}
 
-      <div className="mt-6 grid grid-cols-3 gap-3">
-        <Stat label="Distancia" value={formatDistance(liveStats.distanceMeters)} />
-        <Stat label="Tiempo" value={formatDuration(liveStats.durationSeconds)} />
-        <Stat label="Desnivel +" value={formatElevation(liveStats.elevationGainMeters)} />
-      </div>
+        {(geoError || message) && (
+          <p className="rounded-xl bg-[var(--color-mist)] px-3 py-2 text-sm text-[var(--color-forest)]">
+            {geoError || message}
+          </p>
+        )}
 
-      <p className="mt-4 text-sm text-[var(--color-stone)]">
-        Puntos GPS: <strong className="text-[var(--color-forest)]">{localTrack.length}</strong>
-        {sample && (
-          <>
-            {' '}
-            · Última posición {sample.position.lat.toFixed(5)}, {sample.position.lng.toFixed(5)}
-          </>
-        )}
-      </p>
-
-      {(geoError || message) && (
-        <p className="mt-3 rounded-xl bg-[var(--color-mist)] px-3 py-2 text-sm text-[var(--color-forest)]">
-          {geoError || message}
-        </p>
-      )}
-
-      <div className="mt-6 flex flex-wrap gap-2">
-        {status === 'idle' && <Button onClick={() => void start()}>Iniciar GPS</Button>}
-        {status === 'recording' && (
-          <>
-            <Button variant="secondary" onClick={pause}>
-              Pausar
-            </Button>
-            <Button onClick={() => void finish()}>Finalizar</Button>
-          </>
-        )}
-        {status === 'paused' && (
-          <>
-            <Button onClick={resume}>Reanudar</Button>
-            <Button onClick={() => void finish()}>Finalizar</Button>
-          </>
-        )}
-        {status === 'finished' && (
-          <Button onClick={() => navigate('/actividades')}>Ver mis actividades</Button>
-        )}
-        <Link to="/route-planner">
-          <Button variant="ghost">Volver al planificador</Button>
-        </Link>
-      </div>
-    </main>
+        <div className="flex flex-wrap gap-2">
+          {status === 'idle' && <Button onClick={() => void start()}>Iniciar GPS</Button>}
+          {status === 'recording' && (
+            <>
+              <Button variant="secondary" onClick={pause}>
+                Pausar
+              </Button>
+              <Button onClick={() => void finish()}>Finalizar</Button>
+            </>
+          )}
+          {status === 'paused' && (
+            <>
+              <Button onClick={resume}>Reanudar</Button>
+              <Button onClick={() => void finish()}>Finalizar</Button>
+            </>
+          )}
+          {status === 'finished' && (
+            <Button onClick={() => navigate('/actividades')}>Ver mis actividades</Button>
+          )}
+          <Link to="/route-planner">
+            <Button variant="ghost">Planificador</Button>
+          </Link>
+        </div>
+      </aside>
+    </div>
   )
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-[var(--color-fog)]">
+    <div className="rounded-2xl bg-[var(--color-mist)]/60 px-3 py-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
         {label}
       </p>
-      <p className="mt-1 font-display text-lg font-bold text-[var(--color-forest)]">{value}</p>
+      <p className="mt-0.5 font-display text-lg font-bold text-[var(--color-forest)]">{value}</p>
     </div>
   )
 }

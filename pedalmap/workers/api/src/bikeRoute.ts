@@ -614,14 +614,30 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
         return json({ error: 'circularDistanceMeters required (>=1000)' }, 400)
       }
       const start = waypoints[0]
-      // Routed loops are longer than crow-flies; scale vias ~target/5 per leg.
-      const attempts = [
-        { bearing: (circularSeed * 47) % 360, legFactor: 5.0 },
-        { bearing: (circularSeed * 47 + 90) % 360, legFactor: 4.2 },
+      const wantElev = Boolean(targetElevationGainMeters && targetElevationGainMeters > 0)
+      const seed = circularSeed || 0
+      // More bearings + leg scales → better distance/elev match; "Otra variante" rotates seed.
+      const attempts: Array<{
+        bearing: number
+        legFactor: number
+        costing: Record<string, number | string>
+      }> = [
+        { bearing: (seed * 47) % 360, legFactor: 5.0, costing },
+        { bearing: (seed * 47 + 90) % 360, legFactor: 4.2, costing },
+        { bearing: (seed * 47 + 180) % 360, legFactor: 4.6, costing },
+        { bearing: (seed * 47 + 270) % 360, legFactor: 3.8, costing },
       ]
+      if (wantElev) {
+        const hills = costingVariant(costing, 'hills')
+        attempts.push(
+          { bearing: (seed * 47 + 35) % 360, legFactor: 4.5, costing: hills },
+          { bearing: (seed * 47 + 215) % 360, legFactor: 4.0, costing: hills },
+        )
+      }
 
       const settled = await Promise.all(
-        attempts.map(async ({ bearing, legFactor }, i) => {
+        (env.STADIA_API_KEY ? attempts : attempts.slice(0, 4)).map(
+          async ({ bearing, legFactor, costing: attemptCosting }, i) => {
           const leg = circularDistanceMeters / legFactor
           const via1 = offsetLatLng(start, bearing, leg)
           const via2 = offsetLatLng(start, bearing + 120, leg)
@@ -634,26 +650,28 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
                 { lat: via2.lat, lon: via2.lng, type: 'break' },
                 { lat: start.lat, lon: start.lng, type: 'break' },
               ],
-              costing,
+              attemptCosting,
               language,
             )
             const distErr =
               Math.abs(candidate.distanceMeters - circularDistanceMeters) /
               Math.max(1, circularDistanceMeters)
             let elevErr = 0
-            if (targetElevationGainMeters && targetElevationGainMeters > 0) {
+            if (wantElev && targetElevationGainMeters) {
               let gain = 0
               for (let p = 1; p < candidate.elevationProfile.length; p += 1) {
                 const d =
                   candidate.elevationProfile[p].elevationMeters -
                   candidate.elevationProfile[p - 1].elevationMeters
-                if (d > 3) gain += d
+                if (d > 2.5) gain += d
               }
               elevErr =
                 Math.abs(gain - targetElevationGainMeters) /
                 Math.max(40, targetElevationGainMeters)
             }
-            return { candidate, score: distErr * 100 + elevErr * 40, i }
+            // Prefer closer distance; elev weighs more when user set a target.
+            const score = distErr * 100 + elevErr * (wantElev ? 55 : 0)
+            return { candidate, score, i }
           } catch (err) {
             console.warn('[bike-route] circular attempt failed', i, err)
             return null
@@ -661,19 +679,26 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
         }),
       )
 
-      let best: Awaited<ReturnType<typeof routeLocations>> | null = null
-      let bestScore = Number.POSITIVE_INFINITY
-      for (const row of settled) {
-        if (!row) continue
-        if (row.score < bestScore) {
-          bestScore = row.score
-          best = row.candidate
-        }
-      }
+      const ranked = settled
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+        .sort((a, b) => a.score - b.score)
 
-      if (!best) return json({ error: 'No circular route found' }, 404)
+      if (!ranked.length) return json({ error: 'No circular route found' }, 404)
+      const best = ranked[0].candidate
       const { alternatives: _alts, ...primary } = best
-      return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...primary })
+      // Expose up to 2 runners-up so the client can offer "Otra variante" without re-hit.
+      const alternatives = ranked.slice(1, 3).map((row, idx) => {
+        const { alternatives: _a, ...rest } = row.candidate
+        return { ...rest, label: `Variante ${idx + 2}` }
+      })
+      return json({
+        ok: true,
+        provider: 'valhalla',
+        bikeType,
+        routeType,
+        ...primary,
+        alternatives,
+      })
     }
 
     // A→B and out-and-back

@@ -261,7 +261,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               : undefined,
           circularSeed: routeType === 'circular' ? seed : undefined,
           wantAlternatives:
-            wantAlternatives && (routeType === 'a_to_b' || routeType === 'out_and_back'),
+            wantAlternatives && (routeType === 'a_to_b' || routeType === 'out_and_back')
+              ? true
+              : routeType === 'circular',
         })
         setDraft(result)
         persistDraft(result, user && !user.isAnonymous ? user.uid : null)

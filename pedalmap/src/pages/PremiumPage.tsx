@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { track } from '@/lib/analytics'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useAuth } from '@/app/AuthContext'
 import { stripeService } from '@/services/StripeService'
+import { fetchServerEntitlements, syncServerPlan } from '@/lib/planSync'
 
 export function PremiumPage() {
   usePageMeta({
@@ -14,17 +15,54 @@ export function PremiumPage() {
     path: '/premium',
   })
 
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [params] = useSearchParams()
   const [busy, setBusy] = useState(false)
+  const [syncingPlan, setSyncingPlan] = useState(false)
   const [message, setMessage] = useState<string | null>(() => {
     if (params.get('checkout') === 'success') {
-      return 'Checkout de prueba completado. Premium se activará cuando el webhook escriba en Firestore.'
+      return 'Checkout completado. Activando Premium…'
     }
     if (params.get('checkout') === 'cancel') return 'Checkout cancelado.'
     return null
   })
   const stripeReady = stripeService.isConfigured()
+  const isPremium = profile?.plan === 'premium'
+
+  // After Stripe success, poll Worker entitlements until plan flips (webhook lag).
+  useEffect(() => {
+    if (params.get('checkout') !== 'success') return
+    if (!user || user.isAnonymous) return
+    let cancelled = false
+    let tries = 0
+    setSyncingPlan(true)
+    const tick = async () => {
+      tries += 1
+      await syncServerPlan().catch(() => null)
+      const ent = await fetchServerEntitlements()
+      if (cancelled) return
+      if (ent?.plan === 'premium') {
+        setMessage('¡Premium activado! Ya puedes usar Objetivo, GPX y guardados ilimitados.')
+        setSyncingPlan(false)
+        track('premium_activated', { source: 'checkout_poll' })
+        return
+      }
+      if (tries >= 12) {
+        setMessage(
+          'Checkout OK. Si Premium no aparece en unos minutos, revisa el webhook Stripe o recarga el perfil.',
+        )
+        setSyncingPlan(false)
+        return
+      }
+      window.setTimeout(() => {
+        void tick()
+      }, 2500)
+    }
+    void tick()
+    return () => {
+      cancelled = true
+    }
+  }, [params, user])
 
   async function startCheckout(interval: 'month' | 'year') {
     if (!user || user.isAnonymous) {
@@ -86,12 +124,18 @@ export function PremiumPage() {
         necesites.
       </p>
 
+      {isPremium && (
+        <p className="mt-4 rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_28%,white)] px-4 py-3 text-sm font-semibold text-[var(--color-forest)]">
+          Tu cuenta es Premium{profile?.email ? ` (${profile.email})` : ''}.
+        </p>
+      )}
+
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <div className="rounded-3xl bg-white/90 p-6 ring-1 ring-[var(--color-fog)]">
           <h2 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h2>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
             <li>Creación limitada de rutas</li>
-            <li>Guardado limitado</li>
+            <li>Hasta 5 rutas guardadas</li>
             <li>Hasta 2 filtros a la vez</li>
             <li>Compartir básico</li>
           </ul>
@@ -110,10 +154,15 @@ export function PremiumPage() {
             <li>Sin paywall en el planificador</li>
           </ul>
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button disabled={busy} onClick={() => void startCheckout('year')}>
+            <Button disabled={busy || isPremium} onClick={() => void startCheckout('year')}>
               Anual 39,99 €
             </Button>
-            <Button variant="ghost" className="!border-white/40 !text-white" disabled={busy} onClick={() => void startCheckout('month')}>
+            <Button
+              variant="ghost"
+              className="!border-white/40 !text-white"
+              disabled={busy || isPremium}
+              onClick={() => void startCheckout('month')}
+            >
               Mensual 4,99 €
             </Button>
             <Button
@@ -133,9 +182,11 @@ export function PremiumPage() {
         </div>
       </div>
 
-      {message && (
+      {(message || syncingPlan) && (
         <p className="mt-6 rounded-2xl bg-[var(--color-mist)] px-4 py-3 text-sm text-[var(--color-forest)]">
-          {message}
+          {syncingPlan && !message?.includes('activado')
+            ? 'Esperando confirmación del webhook Stripe…'
+            : message}
         </p>
       )}
 

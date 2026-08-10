@@ -4,7 +4,7 @@ import { formatDistance, formatElevation } from '@/lib/stats'
 /**
  * Render a square share card (PNG) for WhatsApp / native share.
  */
-export async function renderRouteShareCard(draft: RouteDraft): Promise<Blob> {
+export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string): Promise<Blob> {
   const size = 1080
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -58,9 +58,12 @@ export async function renderRouteShareCard(draft: RouteDraft): Promise<Blob> {
     y += 130
   }
 
-  ctx.fillStyle = 'rgba(255,255,255,0.45)'
-  ctx.font = '500 26px DM Sans, sans-serif'
-  ctx.fillText(typeof window !== 'undefined' ? window.location.host : 'pedalmap.app', 72, size - 72)
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.font = '500 24px DM Sans, sans-serif'
+  const footer =
+    shareUrl?.replace(/^https?:\/\//, '') ||
+    (typeof window !== 'undefined' ? window.location.host : 'pedalmap.app')
+  ctx.fillText(truncate(footer, 48), 72, size - 72)
 
   return await new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo generar la imagen'))), 'image/png')
@@ -68,9 +71,9 @@ export async function renderRouteShareCard(draft: RouteDraft): Promise<Blob> {
 }
 
 export async function shareRouteCard(draft: RouteDraft, url?: string): Promise<'shared' | 'copied' | 'downloaded'> {
-  const blob = await renderRouteShareCard(draft)
+  const blob = await renderRouteShareCard(draft, url)
   const file = new File([blob], 'pedalmap-ruta.png', { type: 'image/png' })
-  const text = `${draft.title} · ${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)}`
+  const text = `${draft.title} · ${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)}${url ? `\n${url}` : ''}`
 
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({

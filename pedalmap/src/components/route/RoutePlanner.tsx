@@ -85,6 +85,7 @@ export function RoutePlanner() {
   const [compareBusy, setCompareBusy] = useState(false)
   const [compareRows, setCompareRows] = useState<BikeCompareRow[] | null>(null)
   const [shareBusy, setShareBusy] = useState(false)
+  const [lastSavedRouteId, setLastSavedRouteId] = useState<string | null>(null)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
   const [showWindArrows, setShowWindArrows] = useState(true)
@@ -179,7 +180,8 @@ export function RoutePlanner() {
         showPaywall('save_limit')
         return
       }
-      await routeRepository.save(user.uid, draft, { isPublic: false })
+      const saved = await routeRepository.save(user.uid, draft, { isPublic: false })
+      setLastSavedRouteId(saved.id)
       track('route_saved', { distance_m: draft.stats.distanceMeters })
       setSaveMessage('Ruta guardada en Mis rutas.')
     } catch (error) {
@@ -241,17 +243,43 @@ export function RoutePlanner() {
     if (!activeDraft) return
     setShareBusy(true)
     try {
-      // Deep link to the app (avoid burning Free save quota on every share).
-      const url = `${window.location.origin}/route-planner`
+      let url = `${window.location.origin}/route-planner`
+      if (user && !user.isAnonymous && firebaseReady && routeRepository.isConfigured()) {
+        try {
+          let routeId = lastSavedRouteId
+          let slug: string | undefined
+          if (routeId) {
+            slug = await routeRepository.makePublic(routeId, user.uid)
+          } else {
+            const entitlement = canSaveRoute(profile)
+            if (!entitlement.ok) {
+              showPaywall(entitlement.reason ?? 'save_limit')
+              setSaveMessage('Guarda una ruta (o libera hueco Free) para obtener enlace público.')
+              return
+            }
+            const saved = await routeRepository.save(user.uid, activeDraft, { isPublic: true })
+            setLastSavedRouteId(saved.id)
+            routeId = saved.id
+            slug = saved.shareSlug
+          }
+          if (slug) url = `${window.location.origin}/route/${slug}`
+        } catch (error) {
+          console.warn('[share-card] public link', error)
+          setSaveMessage('No se pudo crear el enlace público; se comparte la tarjeta igual.')
+        }
+      } else {
+        setSaveMessage('Inicia sesión para compartir con enlace público /route/…')
+      }
+
       const result = await shareRouteCard(activeDraft, url)
       setSaveMessage(
         result === 'shared'
-          ? 'Tarjeta compartida.'
+          ? `Tarjeta compartida${url.includes('/route/') ? ' con enlace público.' : '.'}`
           : result === 'copied'
-            ? 'Imagen descargada y enlace copiado.'
+            ? `Imagen lista · enlace copiado: ${url}`
             : 'Tarjeta descargada.',
       )
-      track('route_shared', { via: 'share_card' })
+      track('route_shared', { via: 'share_card', public: url.includes('/route/') })
     } catch (error) {
       console.error('[share-card]', error)
       setSaveMessage('No se pudo generar la tarjeta.')
