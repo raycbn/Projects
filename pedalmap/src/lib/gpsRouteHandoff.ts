@@ -2,6 +2,8 @@
  * Pass a planned route into the GPS recorder / navigation without stuffing
  * geometry in the URL.
  */
+import type { ValhallaEdgeAttr } from '@/lib/valhallaSurfaces'
+
 const GPS_ROUTE_KEY = 'pedalmap_gps_route'
 const NAV_INSTRUCTIONS_KEY = 'pedalmap_nav_instructions'
 
@@ -15,13 +17,7 @@ export type GpsRoutePacket = {
   instructions?: string[]
   /** Cumulative meters along the route where each instruction becomes active. */
   instructionAtMeters?: number[]
-  surfaceEdges?: Array<{
-    length?: number
-    surface?: number | string | null
-    road_class?: number | string | null
-    use?: number | string | null
-    cycle_lane?: number | string | null
-  }>
+  surfaceEdges?: ValhallaEdgeAttr[]
 }
 
 export function stashGpsRoute(packet: GpsRoutePacket): void {
