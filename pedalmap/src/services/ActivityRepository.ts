@@ -105,16 +105,22 @@ export class ActivityRepository {
   }
 
   async findByExternalId(userId: string, externalId: string): Promise<Activity | null> {
-    const q = query(
-      collection(getDb(), 'activities'),
-      where('userId', '==', userId),
-      where('externalId', '==', externalId),
-      limit(1),
-    )
-    const snap = await getDocs(q)
-    const first = snap.docs[0]
-    if (!first) return null
-    return mapActivity(first.id, first.data())
+    try {
+      const q = query(
+        collection(getDb(), 'activities'),
+        where('userId', '==', userId),
+        where('externalId', '==', externalId),
+        limit(1),
+      )
+      const snap = await getDocs(q)
+      const first = snap.docs[0]
+      if (!first) return null
+      return mapActivity(first.id, first.data())
+    } catch (err) {
+      // Missing composite index until owner deploys firestore.indexes.json
+      console.warn('[activities] findByExternalId', err)
+      return null
+    }
   }
 
   async create(input: {
