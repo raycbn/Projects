@@ -111,8 +111,18 @@ export function smoothElevationProfile(
   profile: ElevationPoint[],
   windowSize = CYCLING_ELEVATION_SMOOTH_WINDOW,
 ): ElevationPoint[] {
-  // Sparse profiles (tests / short GPS) must not be averaged — it flattens real climbs.
+  // Sparse profiles must not be averaged — it flattens real climbs between samples.
   if (profile.length < 20 || windowSize <= 1) return profile
+
+  const spacings: number[] = []
+  for (let i = 1; i < profile.length; i += 1) {
+    spacings.push(Math.abs(profile[i].distanceMeters - profile[i - 1].distanceMeters))
+  }
+  spacings.sort((a, b) => a - b)
+  const median = spacings[Math.floor(spacings.length / 2)] ?? 0
+  // Only smooth dense DEM (≤60 m between samples). Coarse profiles keep raw deltas.
+  if (median > 60) return profile
+
   const half = Math.floor(windowSize / 2)
   const values = profile.map((p) => p.elevationMeters)
   const smoothed = values.map((_, i) => {
@@ -138,6 +148,10 @@ export function normalizeCyclingElevationProfile(profile: ElevationPoint[]): Ele
  * Cycling elevation gain/loss: cumulative positive/negative change after DEM
  * sanitize + smooth + noise threshold (Strava-like “desnivel positivo”).
  * Profile-agnostic: road / mtb / gravel / urban / ebike share this logic.
+ *
+ * Algorithm: move an anchor only when |Δ| from the last committed point
+ * exceeds the threshold. Small DEM wiggles do not reset a climb in progress
+ * (unlike a naïve pending accumulator that zeroes on every micro-descent).
  */
 export function computeElevationStats(
   profile: ElevationPoint[],
@@ -155,8 +169,6 @@ export function computeElevationStats(
     return { gain: 0, loss: 0, significantClimbs: 0 }
   }
 
-  let gain = 0
-  let loss = 0
   let highest = sanitized[0].elevationMeters
   let lowest = sanitized[0].elevationMeters
   for (const p of sanitized) {
@@ -164,38 +176,30 @@ export function computeElevationStats(
     lowest = Math.min(lowest, p.elevationMeters)
   }
 
-  let climbAccum = 0
+  let gain = 0
+  let loss = 0
   let significantClimbs = 0
-  let pending = 0
+  let climbAccum = 0
+  let anchor = cleaned[0].elevationMeters
 
   for (let i = 1; i < cleaned.length; i += 1) {
-    const delta = cleaned[i].elevationMeters - cleaned[i - 1].elevationMeters
+    const elev = cleaned[i].elevationMeters
+    const delta = elev - anchor
 
-    if (delta > 0) {
-      if (pending < 0) pending = 0
-      pending += delta
-      if (pending >= thresholdMeters) {
-        gain += pending
-        climbAccum += pending
-        pending = 0
-        if (climbAccum >= 50) {
-          significantClimbs += 1
-          climbAccum = 0
-        }
-      }
-    } else if (delta < 0) {
-      if (pending > 0) pending = 0
-      pending += delta
-      if (Math.abs(pending) >= thresholdMeters) {
-        loss += Math.abs(pending)
-        pending = 0
+    if (delta >= thresholdMeters) {
+      gain += delta
+      climbAccum += delta
+      anchor = elev
+      if (climbAccum >= 50) {
+        significantClimbs += 1
         climbAccum = 0
       }
+    } else if (delta <= -thresholdMeters) {
+      loss += -delta
+      anchor = elev
+      climbAccum = 0
     }
   }
-
-  if (pending >= thresholdMeters) gain += pending
-  if (pending <= -thresholdMeters) loss += Math.abs(pending)
 
   return { gain, loss, highest, lowest, significantClimbs }
 }

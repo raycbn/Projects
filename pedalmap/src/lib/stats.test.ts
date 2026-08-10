@@ -53,13 +53,23 @@ describe('stats', () => {
   })
 
   it('smooths DEM stair-steps without inventing altitude', () => {
-    const dense = Array.from({ length: 25 }, (_, i) => ({
-      distanceMeters: i * 100,
-      elevationMeters: i === 12 ? 130 : 100,
+    const dense = Array.from({ length: 40 }, (_, i) => ({
+      distanceMeters: i * 30, // dense 30 m samples (route elevation_interval)
+      elevationMeters: i === 20 ? 130 : 100,
     }))
     const smoothed = smoothElevationProfile(dense, 5)
-    expect(smoothed[12].elevationMeters).toBeGreaterThan(100)
-    expect(smoothed[12].elevationMeters).toBeLessThan(130)
+    expect(smoothed[20].elevationMeters).toBeGreaterThan(100)
+    expect(smoothed[20].elevationMeters).toBeLessThan(130)
+  })
+
+  it('does not smooth sparse elevation profiles (would erase real climbs)', () => {
+    const sparse = Array.from({ length: 30 }, (_, i) => ({
+      distanceMeters: i * 250,
+      elevationMeters: 100 + (i % 2 === 0 ? 0 : 40),
+    }))
+    const smoothed = smoothElevationProfile(sparse, 5)
+    expect(smoothed[1].elevationMeters).toBe(140)
+    expect(smoothed[2].elevationMeters).toBe(100)
   })
 
   it('computes cycling elevation gain with DEM threshold (desnivel positivo)', () => {

@@ -201,22 +201,54 @@ function haversine(a: [number, number], b: [number, number]): number {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-function sampleCoords(coords: [number, number][], stepMeters: number, maxPoints: number) {
+/** Evenly spaced samples along the full polyline (never jumps to the end). */
+function sampleEvenly(coords: [number, number][], maxPoints: number): [number, number][] {
   if (coords.length <= 2) return coords
-  const out: [number, number][] = [coords[0]]
+  const cum = [0]
+  for (let i = 1; i < coords.length; i += 1) {
+    cum.push(cum[i - 1] + haversine(coords[i - 1], coords[i]))
+  }
+  const total = cum[cum.length - 1]
+  if (total <= 0) return [coords[0], coords[coords.length - 1]]
+
+  const n = Math.max(2, Math.min(maxPoints, coords.length))
+  const out: [number, number][] = []
+  for (let i = 0; i < n; i += 1) {
+    const target = (i / (n - 1)) * total
+    let j = 1
+    while (j < cum.length && cum[j] < target) j += 1
+    const i1 = Math.max(1, j)
+    const i0 = i1 - 1
+    const seg = cum[i1] - cum[i0] || 1
+    const t = (target - cum[i0]) / seg
+    const a = coords[i0]
+    const b = coords[i1]
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+  }
+  return out
+}
+
+function pointAtDistance(
+  coords: [number, number][],
+  targetMeters: number,
+): { lng: number; lat: number } {
+  if (!coords.length) return { lng: 0, lat: 0 }
+  if (coords.length === 1 || targetMeters <= 0) {
+    return { lng: coords[0][0], lat: coords[0][1] }
+  }
   let acc = 0
   for (let i = 1; i < coords.length; i += 1) {
-    acc += haversine(coords[i - 1], coords[i])
-    if (acc >= stepMeters) {
-      out.push(coords[i])
-      acc = 0
-      if (out.length >= maxPoints - 1) break
+    const a = coords[i - 1]
+    const b = coords[i]
+    const seg = haversine(a, b)
+    if (acc + seg >= targetMeters) {
+      const t = seg > 0 ? (targetMeters - acc) / seg : 0
+      return { lng: a[0] + (b[0] - a[0]) * t, lat: a[1] + (b[1] - a[1]) * t }
     }
+    acc += seg
   }
   const last = coords[coords.length - 1]
-  const prev = out[out.length - 1]
-  if (prev[0] !== last[0] || prev[1] !== last[1]) out.push(last)
-  return out
+  return { lng: last[0], lat: last[1] }
 }
 
 function mergeLegShapes(legs: Array<{ shape?: string }>): [number, number][] {
@@ -229,10 +261,15 @@ function mergeLegShapes(legs: Array<{ shape?: string }>): [number, number][] {
       all.push(...part)
       continue
     }
-    // skip duplicate joint
     all.push(...part.slice(1))
   }
   return all
+}
+
+type ElevPoint = {
+  distanceMeters: number
+  elevationMeters: number
+  position: { lng: number; lat: number }
 }
 
 type TripJson = {
@@ -240,11 +277,87 @@ type TripJson = {
     legs?: Array<{
       shape?: string
       summary?: { length?: number; time?: number }
+      elevation?: Array<number | null>
+      elevation_interval?: number
       maneuvers?: Array<{ instruction?: string }>
     }>
     summary?: { length?: number; time?: number }
   }
   error?: string
+}
+
+const ROUTE_ELEVATION_INTERVAL_M = 30
+
+/** Build a continuous elevation profile from Valhalla leg.elevation arrays. */
+function profileFromRouteLegs(
+  legs: NonNullable<NonNullable<TripJson['trip']>['legs']>,
+  coordinates: [number, number][],
+): ElevPoint[] {
+  const out: ElevPoint[] = []
+  let offsetM = 0
+  for (const leg of legs) {
+    const elevs = leg.elevation
+    if (!elevs?.length) {
+      offsetM += Math.round((leg.summary?.length ?? 0) * 1000)
+      continue
+    }
+    const interval = Math.max(1, leg.elevation_interval ?? ROUTE_ELEVATION_INTERVAL_M)
+    for (let i = 0; i < elevs.length; i += 1) {
+      const elev = elevs[i]
+      if (elev === null || elev === undefined || !Number.isFinite(elev)) continue
+      const distanceMeters = offsetM + i * interval
+      out.push({
+        distanceMeters,
+        elevationMeters: elev,
+        position: pointAtDistance(coordinates, distanceMeters),
+      })
+    }
+    // Prefer interval * (n-1) so multi-leg profiles stay continuous.
+    offsetM += (elevs.length - 1) * interval
+  }
+  return out
+}
+
+function profileFromHeightResponse(
+  height: unknown,
+  sampled: [number, number][],
+): ElevPoint[] {
+  const heightBody = height as {
+    range_height?: Array<[number, number | null]>
+    height?: Array<number | null>
+  }
+
+  if (heightBody.range_height?.length) {
+    return heightBody.range_height
+      .map(([rangeM, elev], i) => {
+        if (elev === null || elev === undefined || !Number.isFinite(elev)) return null
+        const c = sampled[Math.min(i, sampled.length - 1)]
+        return {
+          distanceMeters: rangeM,
+          elevationMeters: elev,
+          position: { lng: c[0], lat: c[1] },
+        }
+      })
+      .filter((p): p is ElevPoint => Boolean(p))
+  }
+
+  if (heightBody.height?.length) {
+    let acc = 0
+    return heightBody.height
+      .map((elev, i) => {
+        const c = sampled[Math.min(i, sampled.length - 1)]
+        if (i > 0) acc += haversine(sampled[i - 1], c)
+        if (elev === null || elev === undefined || !Number.isFinite(elev)) return null
+        return {
+          distanceMeters: acc,
+          elevationMeters: elev,
+          position: { lng: c[0], lat: c[1] },
+        }
+      })
+      .filter((p): p is ElevPoint => Boolean(p))
+  }
+
+  return []
 }
 
 async function enrichTrip(
@@ -261,8 +374,13 @@ async function enrichTrip(
   const instructions =
     legs.flatMap((l) => l.maneuvers?.map((m) => m.instruction ?? '').filter(Boolean) ?? []) ?? []
 
-  // Parallel enrich — denser samples improve surface coloring
-  const sampled = sampleCoords(coordinates, 120, 72)
+  // Prefer elevation baked into the route (uniform interval, bridge/tunnel aware).
+  let elevationProfile = profileFromRouteLegs(legs, coordinates)
+
+  // Even samples for surface matching (+ height fallback if route has no elevation).
+  const sampled = sampleEvenly(coordinates, 96)
+  const needHeightFallback = elevationProfile.length < 8
+
   const [attrs, height] = await Promise.all([
     valhallaPost(env, 'trace_attributes', {
       shape: sampled.map(([lng, lat]) => ({ lat, lon: lng })),
@@ -280,50 +398,16 @@ async function enrichTrip(
         ],
       },
     }).catch(() => ({ edges: [] })),
-    valhallaPost(env, 'height', {
-      range: true,
-      shape: sampled.map(([lng, lat]) => ({ lat, lon: lng })),
-    }).catch(() => ({ range_height: [] })),
+    needHeightFallback
+      ? valhallaPost(env, 'height', {
+          range: true,
+          shape: sampled.map(([lng, lat]) => ({ lat, lon: lng })),
+        }).catch(() => ({ range_height: [] }))
+      : Promise.resolve(null),
   ])
 
-  const heightBody = height as {
-    range_height?: Array<[number, number | null]>
-    height?: Array<number | null>
-  }
-
-  // Prefer range_height; rebuild ranges from sample spacing if only height[].
-  let elevationProfile: Array<{
-    distanceMeters: number
-    elevationMeters: number
-    position: { lng: number; lat: number }
-  }> = []
-
-  if (heightBody.range_height?.length) {
-    elevationProfile = heightBody.range_height
-      .map(([rangeM, elev], i) => {
-        if (elev === null || elev === undefined || !Number.isFinite(elev)) return null
-        const c = sampled[Math.min(i, sampled.length - 1)]
-        return {
-          distanceMeters: rangeM,
-          elevationMeters: elev,
-          position: { lng: c[0], lat: c[1] },
-        }
-      })
-      .filter((p): p is NonNullable<typeof p> => Boolean(p))
-  } else if (heightBody.height?.length) {
-    let acc = 0
-    elevationProfile = heightBody.height
-      .map((elev, i) => {
-        const c = sampled[Math.min(i, sampled.length - 1)]
-        if (i > 0) acc += haversine(sampled[i - 1], c)
-        if (elev === null || elev === undefined || !Number.isFinite(elev)) return null
-        return {
-          distanceMeters: acc,
-          elevationMeters: elev,
-          position: { lng: c[0], lat: c[1] },
-        }
-      })
-      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+  if (needHeightFallback && height) {
+    elevationProfile = profileFromHeightResponse(height, sampled)
   }
 
   return {
@@ -350,6 +434,8 @@ async function routeLocations(
       units: 'kilometers',
       language: language === 'en' ? 'en-US' : 'es-ES',
     },
+    // Stadia/Valhalla: dense elevation along the ride (30 m ≈ DEM source resolution).
+    elevation_interval: ROUTE_ELEVATION_INTERVAL_M,
   })) as TripJson
 
   if (routeJson.error || !routeJson.trip?.legs?.length) {
