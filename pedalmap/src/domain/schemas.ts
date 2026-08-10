@@ -37,6 +37,8 @@ export const routingRequestSchema = z
     routeType: routeTypeSchema,
     language: z.string().optional(),
     circularDistanceMeters: z.number().positive().max(200_000).optional(),
+    targetElevationGainMeters: z.number().nonnegative().max(10_000).optional(),
+    circularSeed: z.number().int().nonnegative().max(10_000).optional(),
     wantAlternatives: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {

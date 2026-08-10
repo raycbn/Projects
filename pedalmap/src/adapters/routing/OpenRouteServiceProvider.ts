@@ -88,6 +88,7 @@ function buildOptions(
   preferences: RoutePreference[],
   routeType: RoutingRequest['routeType'],
   circularDistanceMeters?: number,
+  circularSeed?: number,
 ) {
   const avoid_features: string[] = ['steps']
   // Real cycling avoid_features: steps, ferries, fords (NOT highways).
@@ -125,6 +126,7 @@ function buildOptions(
     options.round_trip = {
       length: Math.round(circularDistanceMeters),
       points: 5,
+      ...(circularSeed !== undefined ? { seed: circularSeed } : {}),
     }
   }
 
@@ -320,104 +322,142 @@ export class OpenRouteServiceProvider implements RoutingProvider {
         ? [[waypoints[0].lng, waypoints[0].lat]]
         : waypoints.map((w) => [w.lng, w.lat])
 
-    const body: Record<string, unknown> = {
-      coordinates,
-      elevation: true,
-      instructions: true,
-      language: request.language ?? 'es',
-      preference: preferenceMode(request.preferences),
-      extra_info: ['surface', 'waytype'],
-      options: buildOptions(
-        request.preferences,
-        request.routeType,
-        request.circularDistanceMeters,
-      ),
-    }
-
-    if (request.wantAlternatives && request.routeType === 'a_to_b') {
-      body.alternative_routes = {
-        target_count: 2,
-        share_factor: 0.6,
-        weight_factor: 1.4,
-      }
-    }
+    const targetElev = request.targetElevationGainMeters
+    const seeds =
+      request.routeType === 'circular' && targetElev && targetElev > 0
+        ? Array.from({ length: 5 }, (_, i) => i)
+        : [request.circularSeed ?? 0]
 
     let lastMaintenance: string | undefined
+    let best: RoutingResult | undefined
+    let bestScore = Number.POSITIVE_INFINITY
 
     try {
-      for (let i = 0; i < profiles.length; i += 1) {
-        const profile = profiles[i]
-        const url = `${this.baseUrl}/v2/directions/${profile}/geojson`
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json, application/geo+json',
-            ...(this.apiKey ? { Authorization: this.apiKey } : {}),
-          },
-          body: JSON.stringify(body),
-        })
-
-        if (response.status === 429) {
-          throw new RoutingError('Rate limit exceeded', 'rate_limited')
+      for (const seed of seeds) {
+        const body: Record<string, unknown> = {
+          coordinates,
+          elevation: true,
+          instructions: true,
+          language: request.language ?? 'es',
+          preference: preferenceMode(request.preferences),
+          extra_info: ['surface', 'waytype'],
+          options: buildOptions(
+            request.preferences,
+            request.routeType,
+            request.circularDistanceMeters,
+            request.routeType === 'circular' ? seed : undefined,
+          ),
         }
 
-        if (!response.ok) {
-          const text = await response.text()
-          console.error('[ORS]', profile, response.status, text.slice(0, 500))
-          if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
+        if (request.wantAlternatives && request.routeType === 'a_to_b') {
+          body.alternative_routes = {
+            target_count: 2,
+            share_factor: 0.6,
+            weight_factor: 1.4,
+          }
+        }
+
+        let gotResult = false
+        for (let i = 0; i < profiles.length; i += 1) {
+          const profile = profiles[i]
+          const url = `${this.baseUrl}/v2/directions/${profile}/geojson`
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json, application/geo+json',
+              ...(this.apiKey ? { Authorization: this.apiKey } : {}),
+            },
+            body: JSON.stringify(body),
+          })
+
+          if (response.status === 429) {
+            throw new RoutingError('Rate limit exceeded', 'rate_limited')
+          }
+
+          if (!response.ok) {
+            const text = await response.text()
+            console.error('[ORS]', profile, response.status, text.slice(0, 500))
+            if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
+              throw new RoutingError('No route found for preferences', 'no_route')
+            }
+            if (isOrsMaintenanceResponse(response.status, text)) {
+              lastMaintenance = profile
+              const next = profiles[i + 1]
+              if (next) {
+                console.warn(`[ORS] profile ${profile} unavailable; retrying with ${next}`)
+                continue
+              }
+              break
+            }
+            throw new RoutingError('Provider error', 'provider_error', text)
+          }
+
+          const data = (await response.json()) as OrsGeoJsonResponse
+          const features = data.features ?? []
+          if (!features.length) {
             throw new RoutingError('No route found for preferences', 'no_route')
           }
-          if (isOrsMaintenanceResponse(response.status, text)) {
-            lastMaintenance = profile
-            const next = profiles[i + 1]
-            if (next) {
-              console.warn(`[ORS] profile ${profile} unavailable; retrying with ${next}`)
-              continue
-            }
-            throw new RoutingError(
-              `OpenRouteService profile ${profile} is temporarily unavailable (maintenance)`,
-              'provider_error',
-              text,
+
+          if (lastMaintenance && profile !== primaryProfile) {
+            console.info(
+              `[ORS] used fallback profile ${profile} because ${primaryProfile} was in maintenance`,
             )
           }
-          throw new RoutingError('Provider error', 'provider_error', text)
+
+          const primary = featureToPartialResult(features[0], request.bikeType)
+          const alternatives =
+            features.length > 1
+              ? features.slice(1).map((feature) => {
+                  const partial = featureToPartialResult(feature, request.bikeType)
+                  return {
+                    geometry: partial.geometry,
+                    elevationProfile: partial.elevationProfile,
+                    stats: partial.stats,
+                  }
+                })
+              : undefined
+
+          const candidate: RoutingResult = {
+            geometry: primary.geometry,
+            elevationProfile: primary.elevationProfile,
+            stats: primary.stats,
+            provider: this.name,
+            rawInstructions: primary.rawInstructions,
+            alternatives,
+          }
+
+          if (!targetElev || targetElev <= 0) {
+            return candidate
+          }
+
+          const elevDiff = Math.abs(candidate.stats.elevationGainMeters - targetElev)
+          const distTarget = request.circularDistanceMeters ?? candidate.stats.distanceMeters
+          const distDiff =
+            Math.abs(candidate.stats.distanceMeters - distTarget) / Math.max(1, distTarget)
+          const score = elevDiff + distDiff * targetElev * 0.25
+          if (score < bestScore) {
+            bestScore = score
+            best = candidate
+          }
+          gotResult = true
+          // Close enough: within 12% of target elevation
+          if (elevDiff <= Math.max(40, targetElev * 0.12)) {
+            return candidate
+          }
+          break
         }
 
-        const data = (await response.json()) as OrsGeoJsonResponse
-        const features = data.features ?? []
-        if (!features.length) {
-          throw new RoutingError('No route found for preferences', 'no_route')
-        }
-
-        if (lastMaintenance && profile !== primaryProfile) {
-          console.info(
-            `[ORS] used fallback profile ${profile} because ${primaryProfile} was in maintenance`,
+        if (!gotResult && seeds.length === 1 && lastMaintenance) {
+          throw new RoutingError(
+            `OpenRouteService profile ${lastMaintenance} is temporarily unavailable (maintenance)`,
+            'provider_error',
+            lastMaintenance,
           )
         }
-
-        const primary = featureToPartialResult(features[0], request.bikeType)
-        const alternatives =
-          features.length > 1
-            ? features.slice(1).map((feature) => {
-                const partial = featureToPartialResult(feature, request.bikeType)
-                return {
-                  geometry: partial.geometry,
-                  elevationProfile: partial.elevationProfile,
-                  stats: partial.stats,
-                }
-              })
-            : undefined
-
-        return {
-          geometry: primary.geometry,
-          elevationProfile: primary.elevationProfile,
-          stats: primary.stats,
-          provider: this.name,
-          rawInstructions: primary.rawInstructions,
-          alternatives,
-        }
       }
+
+      if (best) return best
 
       throw new RoutingError(
         'OpenRouteService is temporarily unavailable (maintenance)',

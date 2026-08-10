@@ -34,11 +34,13 @@ interface PlannerContextValue {
   hoverPoint: LatLng | null
   guestCreates: number
   circularDistanceMeters: number
+  targetElevationGainMeters: number
   wantAlternatives: boolean
   setRouteType: (t: RouteType) => void
   setBikeType: (t: BikeType) => void
   setPreferences: (p: RoutePreference[]) => void
   setCircularDistanceMeters: (meters: number) => void
+  setTargetElevationGainMeters: (meters: number) => void
   setWantAlternatives: (value: boolean) => void
   setStart: (position: LatLng, name?: string) => void
   setEnd: (position: LatLng, name?: string) => void
@@ -96,6 +98,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [guestCreates, setGuestCreates] = useState(0)
   const [paywallReason, setPaywallReason] = useState<string | null>(null)
   const [circularDistanceMeters, setCircularDistanceMeters] = useState(25000)
+  const [targetElevationGainMeters, setTargetElevationGainMeters] = useState(0)
   const [wantAlternatives, setWantAlternatives] = useState(false)
   const [hydratedProfile, setHydratedProfile] = useState(false)
 
@@ -119,12 +122,14 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       hoverPoint,
       guestCreates,
       circularDistanceMeters,
+      targetElevationGainMeters,
       wantAlternatives,
       paywallReason,
       setRouteType,
       setBikeType,
       setPreferences,
       setCircularDistanceMeters,
+      setTargetElevationGainMeters,
       setWantAlternatives,
       setHoverPoint,
       clearPaywall: () => setPaywallReason(null),
@@ -222,6 +227,10 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             routeType,
             circularDistanceMeters:
               routeType === 'circular' ? circularDistanceMeters : undefined,
+            targetElevationGainMeters:
+              routeType === 'circular' && targetElevationGainMeters > 0
+                ? targetElevationGainMeters
+                : undefined,
             wantAlternatives: wantAlternatives && routeType === 'a_to_b',
           })
           setDraft(result)
@@ -274,6 +283,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             preferences: editDraft.preferences,
             routeType: editDraft.type,
             circularDistanceMeters: editDraft.circularDistanceMeters,
+            targetElevationGainMeters: editDraft.targetElevationGainMeters,
             wantAlternatives: false,
             title: editDraft.title,
           })
@@ -328,6 +338,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     paywallReason,
     profile,
     circularDistanceMeters,
+    targetElevationGainMeters,
     wantAlternatives,
   ])
 

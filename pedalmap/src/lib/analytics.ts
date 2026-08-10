@@ -4,6 +4,7 @@ export type AnalyticsEvent =
   | 'route_shared'
   | 'gpx_exported'
   | 'gpx_imported'
+  | 'weather_forecast_loaded'
   | 'premium_clicked'
   | 'signup_started'
   | 'signup_completed'

@@ -18,6 +18,7 @@ export interface CalculateRouteInput {
   routeType: RouteType
   title?: string
   circularDistanceMeters?: number
+  targetElevationGainMeters?: number
   wantAlternatives?: boolean
 }
 
@@ -42,6 +43,7 @@ export class RouteService {
       routeType: input.routeType,
       language: 'es',
       circularDistanceMeters: input.circularDistanceMeters,
+      targetElevationGainMeters: input.targetElevationGainMeters,
       wantAlternatives: input.wantAlternatives,
     })
 
@@ -78,6 +80,7 @@ export class RouteService {
       elevationProfile: result.elevationProfile,
       stats: result.stats,
       circularDistanceMeters: input.circularDistanceMeters,
+      targetElevationGainMeters: input.targetElevationGainMeters,
       alternatives,
     }
   }

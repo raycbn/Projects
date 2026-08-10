@@ -10,7 +10,8 @@ import { ElevationChart } from '@/components/route/ElevationChart'
 import { PremiumCard } from '@/components/premium/PremiumCard'
 import { Button } from '@/components/ui/Button'
 import { GPXImporter } from '@/components/gpx/GPXImporter'
-import { GPXExporter } from '@/components/gpx/GPXExporter'
+import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
+import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
 import { routeRepository } from '@/services/RouteRepository'
 import { canSaveRoute } from '@/services/EntitlementService'
 import { track } from '@/lib/analytics'
@@ -53,6 +54,8 @@ export function RoutePlanner() {
     updateWaypointPosition,
     circularDistanceMeters,
     setCircularDistanceMeters,
+    targetElevationGainMeters,
+    setTargetElevationGainMeters,
     wantAlternatives,
     setWantAlternatives,
     setDraftFromImport,
@@ -148,7 +151,7 @@ export function RoutePlanner() {
             [
               ['a_to_b', 'A → B'],
               ['out_and_back', 'Ida y vuelta'],
-              ['circular', 'Circular'],
+              ['circular', 'Objetivo'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -250,28 +253,54 @@ export function RoutePlanner() {
         )}
 
         {routeType === 'circular' && (
-          <label className="block rounded-xl bg-white/80 px-3 py-3 text-sm ring-1 ring-[var(--color-fog)]">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-              Distancia objetivo
-            </span>
-            <div className="mt-2 flex items-center gap-3">
-              <input
-                type="range"
-                min={5000}
-                max={80000}
-                step={1000}
-                value={circularDistanceMeters}
-                onChange={(e) => setCircularDistanceMeters(Number(e.target.value))}
-                className="w-full accent-[var(--color-trail)]"
-              />
-              <strong className="min-w-16 text-right text-[var(--color-forest)]">
-                {formatDistance(circularDistanceMeters)}
-              </strong>
-            </div>
-            <p className="mt-2 text-[11px] text-[var(--color-stone)]">
-              Circular real vía OpenRouteService <code>round_trip</code> desde el punto de inicio.
+          <div className="space-y-3 rounded-xl bg-white/80 px-3 py-3 text-sm ring-1 ring-[var(--color-fog)]">
+            <p className="text-xs text-[var(--color-stone)]">
+              Indica el punto de partida, los km y el desnivel que quieres. Generamos una circular
+              real (ORS <code>round_trip</code>) y buscamos el mejor ajuste al desnivel.
             </p>
-          </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                Distancia objetivo
+              </span>
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={5000}
+                  max={80000}
+                  step={1000}
+                  value={circularDistanceMeters}
+                  onChange={(e) => setCircularDistanceMeters(Number(e.target.value))}
+                  className="w-full accent-[var(--color-trail)]"
+                />
+                <strong className="min-w-16 text-right text-[var(--color-forest)]">
+                  {formatDistance(circularDistanceMeters)}
+                </strong>
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                Desnivel positivo objetivo
+              </span>
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={0}
+                  max={2500}
+                  step={50}
+                  value={targetElevationGainMeters}
+                  onChange={(e) => setTargetElevationGainMeters(Number(e.target.value))}
+                  className="w-full accent-[var(--color-trail)]"
+                />
+                <strong className="min-w-16 text-right text-[var(--color-forest)]">
+                  {targetElevationGainMeters === 0 ? 'Libre' : `${targetElevationGainMeters} m`}
+                </strong>
+              </div>
+              <p className="mt-1 text-[11px] text-[var(--color-stone)]">
+                0 = sin objetivo de desnivel. Si pones metros, probamos varias direcciones y
+                elegimos la más cercana.
+              </p>
+            </label>
+          </div>
         )}
 
         <BikeSelector value={bikeType} onChange={setBikeType} />
@@ -355,7 +384,6 @@ export function RoutePlanner() {
               <Button variant="ghost" onClick={() => void handleSave()}>
                 Guardar ruta
               </Button>
-              <GPXExporter route={activeDraft} onPremiumRequired={() => showPaywall('gpx_export')} />
               <GPXImporter onImported={setDraftFromImport} />
               <Link
                 to={`/actividad?title=${encodeURIComponent(activeDraft.title || 'Salida PedalMap')}&bike=${bikeType}`}
@@ -363,6 +391,23 @@ export function RoutePlanner() {
                 <Button variant="secondary">Iniciar GPS</Button>
               </Link>
             </div>
+
+            <RouteWeatherPanel route={activeDraft} />
+            <GpsExportPanel
+              route={activeDraft}
+              onPremiumRequired={() => showPaywall('gpx_export')}
+            />
+
+            {activeDraft.type === 'circular' &&
+              activeDraft.targetElevationGainMeters &&
+              activeDraft.targetElevationGainMeters > 0 && (
+                <p className="text-xs text-[var(--color-stone)]">
+                  Objetivo desnivel {activeDraft.targetElevationGainMeters} m · conseguido{' '}
+                  {Math.round(activeDraft.stats.elevationGainMeters)} m · distancia{' '}
+                  {formatDistance(activeDraft.stats.distanceMeters)}
+                </p>
+              )}
+
             {saveMessage && (
               <p className="text-sm text-[var(--color-trail)]">
                 {saveMessage}{' '}

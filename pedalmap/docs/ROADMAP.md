@@ -24,3 +24,9 @@
 - Multi-select de preferencias
 - Free: máx **2** filtros activos
 - Premium: ilimitado
+
+## Post-MVP (en curso en prod)
+
+- Modo **Objetivo**: punto de partida + km + desnivel (ORS `round_trip` + seeds)
+- Viento/meteo por ruta y día (**Open-Meteo**, gratis)
+- Export GPX → compartir a apps GPS gratuitas (OsmAnd, Organic Maps, Garmin Connect, Wahoo)

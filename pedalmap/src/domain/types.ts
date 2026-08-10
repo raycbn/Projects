@@ -88,6 +88,8 @@ export interface RouteDraft {
   stats: RouteStats
   /** Target length for ORS round_trip circular routes. */
   circularDistanceMeters?: number
+  /** Optional target elevation gain (meters) for circular / objetivo mode. */
+  targetElevationGainMeters?: number
   /** Extra ORS alternatives (index 0 is usually the active geometry). */
   alternatives?: RouteAlternative[]
 }
@@ -138,7 +140,7 @@ export const FREE_LIMITS: FreemiumLimits = {
   maxRoutesSaved: 5,
   maxRoutesCreatedPerMonth: 15,
   gpxExport: false,
-  advancedCircular: false,
+  advancedCircular: true,
   advancedFilters: false,
   maxActivePreferences: 2,
 }
@@ -167,6 +169,10 @@ export interface RoutingRequest {
   language?: string
   /** Required for circular / ORS round_trip (meters). */
   circularDistanceMeters?: number
+  /** Optional target elevation gain (meters) — provider tries several seeds. */
+  targetElevationGainMeters?: number
+  /** ORS round_trip seed (direction variety). */
+  circularSeed?: number
   /** Ask ORS for alternative_routes when true. */
   wantAlternatives?: boolean
 }
