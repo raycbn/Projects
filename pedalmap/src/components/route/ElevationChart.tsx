@@ -17,8 +17,8 @@ interface ElevationChartProps {
 export function ElevationChart({ profile, onHover }: ElevationChartProps) {
   if (!profile.length) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-[var(--color-fog)] bg-white/50 text-sm text-[var(--color-stone)]">
-        El perfil de elevación aparecerá cuando calcules una ruta.
+      <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-[var(--color-fog)] bg-[var(--color-mist)]/40 text-sm font-medium text-[var(--color-stone)]">
+        El perfil de elevación aparecerá al calcular la ruta.
       </div>
     )
   }
@@ -32,7 +32,7 @@ export function ElevationChart({ profile, onHover }: ElevationChartProps) {
   }))
 
   return (
-    <div className="h-48 w-full rounded-2xl bg-white/70 p-3 shadow-sm ring-1 ring-[var(--color-fog)]">
+    <div className="h-48 w-full rounded-2xl bg-white p-2 ring-1 ring-[var(--color-fog)] md:h-56 md:p-3">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}

@@ -13,55 +13,66 @@ interface RouteSummaryProps {
 }
 
 export function RouteSummary({ stats, compact }: RouteSummaryProps) {
-  const items = [
-    { label: 'Distancia', value: formatDistance(stats.distanceMeters) },
-    {
-      label: 'Desnivel +',
-      value: formatElevation(stats.elevationGainMeters),
-      hint: 'Desnivel positivo ciclista (suma de subidas, umbral DEM)',
-    },
-    { label: 'Desnivel −', value: formatElevation(-stats.elevationLossMeters) },
-    { label: 'Tiempo', value: formatDuration(stats.estimatedDurationSeconds) },
-    { label: 'Dificultad', value: difficultyLabel(stats.difficulty) },
-  ]
-
+  const meta: Array<{ label: string; value: string }> = []
   if (!compact) {
     if (stats.highestPointMeters !== undefined) {
-      items.push({ label: 'Máx.', value: `${stats.highestPointMeters} m` })
+      meta.push({ label: 'Máx.', value: `${stats.highestPointMeters} m` })
     }
     if (stats.lowestPointMeters !== undefined) {
-      items.push({ label: 'Mín.', value: `${stats.lowestPointMeters} m` })
+      meta.push({ label: 'Mín.', value: `${stats.lowestPointMeters} m` })
     }
     if (stats.significantClimbs !== undefined) {
-      items.push({ label: 'Ascensos', value: String(stats.significantClimbs) })
+      meta.push({ label: 'Ascensos', value: String(stats.significantClimbs) })
     }
   }
 
   return (
     <div className="space-y-4">
-      <dl
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+      <div
+        className="rounded-2xl bg-white/90 px-4 py-4 ring-1 ring-[var(--color-fog)]"
         aria-label="Resumen de la ruta"
       >
-        {items.map((item) => (
-          <div
-            key={item.label}
-            className="rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-[var(--color-fog)]"
-            title={'hint' in item ? item.hint : undefined}
-          >
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-              {item.label}
+        <p className="label-caps">Distancia</p>
+        <p className="mt-1 font-display text-3xl font-extrabold tracking-tight text-[var(--color-forest)] md:text-4xl">
+          {formatDistance(stats.distanceMeters)}
+        </p>
+
+        <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-[var(--color-fog)] pt-3">
+          <div>
+            <dt className="label-caps" title="Desnivel positivo ciclista (suma de subidas)">
+              Desnivel +
             </dt>
-            <dd className="mt-1 font-display text-xl font-bold text-[var(--color-forest)]">
-              {item.value}
+            <dd className="mt-1 font-display text-lg font-bold text-[var(--color-forest)]">
+              {formatElevation(stats.elevationGainMeters)}
             </dd>
           </div>
-        ))}
-      </dl>
+          <div>
+            <dt className="label-caps">Tiempo</dt>
+            <dd className="mt-1 font-display text-lg font-bold text-[var(--color-forest)]">
+              {formatDuration(stats.estimatedDurationSeconds)}
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caps">Dificultad</dt>
+            <dd className="mt-1 font-display text-lg font-bold text-[var(--color-forest)]">
+              {difficultyLabel(stats.difficulty)}
+            </dd>
+          </div>
+        </dl>
 
-      {!compact && stats.surfaceStats && (
-        <SurfaceBreakdown surfaceStats={stats.surfaceStats} />
-      )}
+        {(meta.length > 0 || stats.elevationLossMeters > 0) && (
+          <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-stone)]">
+            <span>Descenso {formatElevation(-stats.elevationLossMeters)}</span>
+            {meta.map((item) => (
+              <span key={item.label}>
+                {item.label} {item.value}
+              </span>
+            ))}
+          </p>
+        )}
+      </div>
+
+      {!compact && stats.surfaceStats && <SurfaceBreakdown surfaceStats={stats.surfaceStats} />}
     </div>
   )
 }

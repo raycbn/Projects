@@ -77,26 +77,27 @@ export function PremiumPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12 pb-24">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-        Premium · Stripe test
-      </p>
+      <p className="label-caps text-[var(--color-trail)]">Premium</p>
       <h1 className="mt-2 font-display text-4xl font-extrabold text-[var(--color-forest)]">
         PedalMap Premium
       </h1>
       <p className="mt-3 max-w-2xl text-[var(--color-stone)]">
-        Sandbox de Stripe (sin cobros reales). Infra en Cloudflare Workers + Firebase Spark — sin
-        Blaze.
+        Quita los límites Free: rutas, filtros y GPX sin techo. Empieza gratis y sube cuando lo
+        necesites.
       </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <div className="rounded-3xl bg-white/80 p-6 ring-1 ring-[var(--color-fog)]">
-          <h2 className="font-display text-2xl font-bold">Free</h2>
+        <div className="rounded-3xl bg-white/90 p-6 ring-1 ring-[var(--color-fog)]">
+          <h2 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h2>
           <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
             <li>Creación limitada de rutas</li>
             <li>Guardado limitado</li>
             <li>Hasta 2 filtros a la vez</li>
             <li>Compartir básico</li>
           </ul>
+          <Link to="/route-planner" className="mt-6 inline-block">
+            <Button variant="ghost">Probar gratis</Button>
+          </Link>
         </div>
         <div className="rounded-3xl bg-[var(--color-panel)] p-6 text-white">
           <h2 className="font-display text-2xl font-bold text-[var(--color-signal)]">Premium</h2>
@@ -110,19 +111,15 @@ export function PremiumPage() {
             <li>Base para navegación GPS</li>
           </ul>
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button disabled={busy} onClick={() => void startCheckout('month')}>
+            <Button disabled={busy} onClick={() => void startCheckout('year')}>
+              Anual 39,99 €
+            </Button>
+            <Button variant="ghost" className="!border-white/40 !text-white" disabled={busy} onClick={() => void startCheckout('month')}>
               Mensual 4,99 €
             </Button>
             <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void startCheckout('year')}
-            >
-              Anual 39,99 €
-            </Button>
-            <Button
               variant="ghost"
-              className="!text-white !border-white/20"
+              className="!border-white/40 !text-white"
               disabled={busy}
               onClick={() => void openPortal()}
             >
@@ -131,7 +128,7 @@ export function PremiumPage() {
           </div>
           <p className="mt-3 text-xs text-white/50">
             {stripeReady
-              ? 'Checkout test vía Cloudflare Worker + webhook → Firestore.'
+              ? 'Checkout en modo test (sin cobro real) hasta activar Stripe live.'
               : 'Activa VITE_STRIPE_ENABLED y el Worker API para probar el checkout.'}
           </p>
         </div>

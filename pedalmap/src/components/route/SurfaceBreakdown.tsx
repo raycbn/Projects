@@ -7,143 +7,157 @@ interface SurfaceBreakdownProps {
   surfaceStats: SurfaceStats
 }
 
-function Bar({
-  percent,
-  tone,
-}: {
-  percent: number
-  tone: 'paved' | 'unpaved' | 'unknown' | 'neutral' | 'warn'
-}) {
-  const colors = {
-    paved: 'bg-[var(--color-forest)]',
-    unpaved: 'bg-[#8b5a2b]',
-    unknown: 'bg-[var(--color-fog)]',
-    neutral: 'bg-[var(--color-trail)]',
-    warn: 'bg-[var(--color-danger)]',
-  }
-  return (
-    <div className="h-2.5 overflow-hidden rounded-full bg-[var(--color-mist)]">
-      <div
-        className={`h-full rounded-full ${colors[tone]}`}
-        style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
-      />
-    </div>
-  )
-}
-
 export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
   const surfaces = surfaceStats.surfaces ?? []
   const waytypes = surfaceStats.waytypes ?? []
   const suitability = surfaceStats.suitability
-  const total =
-    surfaces.reduce((sum, s) => sum + s.distanceMeters, 0) ||
-    waytypes.reduce((sum, s) => sum + s.distanceMeters, 0)
+  const paved = Math.max(0, Math.min(100, surfaceStats.pavedPercent ?? 0))
+  const unpaved = Math.max(0, Math.min(100, surfaceStats.unpavedPercent ?? 0))
+  const unknown = Math.max(0, Math.min(100, surfaceStats.unknownPercent ?? 0))
   const recommended = (suitability?.score ?? 0) >= PROFILE_MIN_SCORE
-  const suitTone = recommended ? 'paved' : suitability && suitability.score >= 75 ? 'neutral' : 'warn'
+  const topSurfaces = surfaces.slice(0, 4)
+  const restSurfaces = surfaces.slice(4)
+  const topWays = waytypes.slice(0, 4)
+  const restWays = waytypes.slice(4)
 
   return (
     <section aria-label="Composición de la ruta" className="space-y-4">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">Superficie</h3>
+          <p className="text-xs text-[var(--color-stone)]">
+            OpenStreetMap via ORS · recomendada ≥{PROFILE_MIN_SCORE}%
+          </p>
+        </div>
+        {suitability && (
+          <div className="text-right">
+            <p
+              className={clsx(
+                'font-display text-3xl font-extrabold leading-none',
+                recommended ? 'text-[var(--color-forest)]' : 'text-[var(--color-danger)]',
+              )}
+            >
+              {suitability.score}
+              <span className="text-base font-semibold text-[var(--color-stone)]">%</span>
+            </p>
+            <p
+              className={clsx(
+                'mt-0.5 text-xs font-semibold',
+                recommended ? 'text-[var(--color-trail)]' : 'text-[var(--color-danger)]',
+              )}
+            >
+              {recommended ? 'Recomendada' : 'No recomendada'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Strava-like stacked composition bar */}
       <div>
-        <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">Superficie</h3>
-        <p className="text-xs text-[var(--color-stone)]">
-          Datos reales de OpenRouteService / OSM · objetivo ≥{PROFILE_MIN_SCORE}% para el perfil
-        </p>
+        <div
+          className="flex h-3 overflow-hidden rounded-full bg-[var(--color-mist)] ring-1 ring-[var(--color-fog)]"
+          role="img"
+          aria-label={`Pavimentado ${Math.round(paved)}%, sin pavimentar ${Math.round(unpaved)}%, sin clasificar ${Math.round(unknown)}%`}
+        >
+          {paved > 0 && (
+            <span className="bg-[var(--color-forest)]" style={{ width: `${paved}%` }} />
+          )}
+          {unpaved > 0 && <span className="bg-[#8b5a2b]" style={{ width: `${unpaved}%` }} />}
+          {unknown > 0 && (
+            <span className="bg-[var(--color-fog)]" style={{ width: `${unknown}%` }} />
+          )}
+        </div>
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-stone)]">
+          <li className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-[var(--color-forest)]" />
+            Pavimento {Math.round(paved)}%
+          </li>
+          <li className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-[#8b5a2b]" />
+            Tierra/grava {Math.round(unpaved)}%
+          </li>
+          <li className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-[var(--color-fog)]" />
+            Sin clasificar {Math.round(unknown)}%
+          </li>
+        </ul>
       </div>
 
       {suitability && (
         <div
           className={clsx(
-            'rounded-2xl px-3 py-3 ring-1',
+            'rounded-xl px-3 py-2 text-xs',
             recommended
-              ? 'bg-white/85 ring-[var(--color-fog)]'
-              : 'bg-[#fff4f4] ring-[color-mix(in_oklab,var(--color-danger)_35%,white)]',
+              ? 'bg-[color-mix(in_oklab,var(--color-signal)_18%,white)] text-[var(--color-forest)]'
+              : 'bg-[#fff4f4] text-[var(--color-danger)]',
           )}
         >
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-              Idoneidad {suitability.bikeType}
-            </p>
-            <p
-              className={clsx(
-                'font-display text-xl font-bold',
-                recommended ? 'text-[var(--color-forest)]' : 'text-[var(--color-danger)]',
-              )}
-            >
-              {suitability.score}/100 ·{' '}
-              {recommended ? 'recomendada' : suitability.label.replaceAll('_', ' ')}
-            </p>
-          </div>
-          <Bar percent={suitability.score} tone={suitTone} />
           {!recommended && (
-            <p className="mt-2 text-xs font-semibold text-[var(--color-danger)]">
-              Por debajo del {PROFILE_MIN_SCORE}%: no encaja bien con este perfil. Cambia el tipo de
-              bici o los puntos.
+            <p className="font-semibold">
+              Por debajo del {PROFILE_MIN_SCORE}% para {suitability.bikeType}. Cambia el tipo de bici
+              o los puntos.
             </p>
           )}
-          <ul className="mt-2 space-y-1 text-[11px] text-[var(--color-stone)]">
-            {suitability.notes.map((note) => (
-              <li key={note}>· {note}</li>
-            ))}
-          </ul>
+          <details className={clsx(!recommended && 'mt-1')}>
+            <summary className="cursor-pointer font-semibold text-[var(--color-forest)]">
+              Detalle de idoneidad
+            </summary>
+            <ul className="mt-1 space-y-0.5 text-[var(--color-stone)]">
+              {suitability.notes.map((note) => (
+                <li key={note}>· {note}</li>
+              ))}
+            </ul>
+          </details>
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-[var(--color-fog)]">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-            Asfalto / pavimento
-          </p>
-          <p className="font-display text-xl font-bold text-[var(--color-forest)]">
-            {Math.round(surfaceStats.pavedPercent ?? 0)}%
-          </p>
-          <Bar percent={surfaceStats.pavedPercent ?? 0} tone="paved" />
-        </div>
-        <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-[var(--color-fog)]">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-            Tierra / grava
-          </p>
-          <p className="font-display text-xl font-bold text-[var(--color-forest)]">
-            {Math.round(surfaceStats.unpavedPercent ?? 0)}%
-          </p>
-          <Bar percent={surfaceStats.unpavedPercent ?? 0} tone="unpaved" />
-        </div>
-        <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-[var(--color-fog)]">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-            Sin clasificar
-          </p>
-          <p className="font-display text-xl font-bold text-[var(--color-forest)]">
-            {Math.round(surfaceStats.unknownPercent ?? 0)}%
-          </p>
-          <Bar percent={surfaceStats.unknownPercent ?? 0} tone="unknown" />
-        </div>
-      </div>
-
-      {surfaces.length > 0 && (
-        <ul className="space-y-2" aria-label="Detalle de superficies">
-          {surfaces.map((row) => {
-            const percent = total > 0 ? (row.distanceMeters / total) * 100 : 0
-            return (
-              <li key={`${row.type}-${row.value ?? 'x'}`}>
-                <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-                  <span className="font-medium text-[var(--color-ink)]">{row.type}</span>
-                  <span className="text-[var(--color-stone)]">
-                    {formatDistance(row.distanceMeters)} · {Math.round(percent)}%
-                  </span>
-                </div>
-                <Bar percent={percent} tone="neutral" />
-              </li>
-            )
-          })}
-        </ul>
-      )}
-
-      {waytypes.length > 0 && (
+      {topSurfaces.length > 0 && (
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-            Tipo de vía
-          </h4>
-          <ul className="space-y-2" aria-label="Detalle de tipos de vía">
-            {waytypes.map((row) => (
+          <p className="label-caps mb-2">Detalle</p>
+          <ul className="space-y-2">
+            {topSurfaces.map((row) => {
+              const total = surfaces.reduce((s, x) => s + x.distanceMeters, 0) || 1
+              const percent = (row.distanceMeters / total) * 100
+              return (
+                <li key={`${row.type}-${row.value ?? 'x'}`}>
+                  <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
+                    <span className="font-medium text-[var(--color-ink)]">{row.type}</span>
+                    <span className="text-[var(--color-stone)]">
+                      {formatDistance(row.distanceMeters)} · {Math.round(percent)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-mist)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--color-trail)]"
+                      style={{ width: `${Math.min(100, percent)}%` }}
+                    />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          {restSurfaces.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-semibold text-[var(--color-trail)]">
+                Ver {restSurfaces.length} más
+              </summary>
+              <ul className="mt-2 space-y-1 text-xs text-[var(--color-stone)]">
+                {restSurfaces.map((row) => (
+                  <li key={`${row.type}-${row.value ?? 'x'}`}>
+                    {row.type} · {formatDistance(row.distanceMeters)}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+
+      {topWays.length > 0 && (
+        <div>
+          <p className="label-caps mb-2">Tipo de vía</p>
+          <ul className="space-y-2">
+            {topWays.map((row) => (
               <li key={`${row.type}-${row.value ?? 'x'}`}>
                 <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
                   <span className="font-medium text-[var(--color-ink)]">{row.type}</span>
@@ -151,10 +165,29 @@ export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
                     {formatDistance(row.distanceMeters)} · {Math.round(row.percent)}%
                   </span>
                 </div>
-                <Bar percent={row.percent} tone="neutral" />
+                <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-mist)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-moss)]"
+                    style={{ width: `${Math.min(100, row.percent)}%` }}
+                  />
+                </div>
               </li>
             ))}
           </ul>
+          {restWays.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-semibold text-[var(--color-trail)]">
+                Ver {restWays.length} más
+              </summary>
+              <ul className="mt-2 space-y-1 text-xs text-[var(--color-stone)]">
+                {restWays.map((row) => (
+                  <li key={`${row.type}-${row.value ?? 'x'}`}>
+                    {row.type} · {Math.round(row.percent)}%
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
     </section>

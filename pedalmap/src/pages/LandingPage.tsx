@@ -72,7 +72,10 @@ export function LandingPage() {
               <Button className="!px-6 !py-3 text-base">Crear una ruta</Button>
             </Link>
             <Link to="/premium">
-              <Button variant="ghost" className="!border-white/30 !text-white !px-6 !py-3">
+              <Button
+                variant="ghost"
+                className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
+              >
                 Ver Premium
               </Button>
             </Link>
@@ -85,15 +88,16 @@ export function LandingPage() {
         <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
           Tres pasos claros para salir a rodar con la ruta preparada.
         </p>
-        <ol className="mt-8 grid gap-6 md:grid-cols-3">
+        <ol className="mt-10 grid gap-8 md:grid-cols-3">
           {[
-            ['1. Elige puntos y bici', 'Origen, destino u Objetivo. Cada modalidad prioriza su suelo.'],
-            ['2. Calcula', 'Distancia, desnivel, viento, superficie e idoneidad de la ruta.'],
-            ['3. Guarda, GPX o GPS', 'Sincroniza en tu cuenta, exporta GPX o inicia el seguimiento.'],
-          ].map(([title, text]) => (
-            <li key={title} className="rounded-3xl bg-white/70 p-5 ring-1 ring-[var(--color-fog)]">
-              <h3 className="font-display text-xl font-bold text-[var(--color-forest)]">{title}</h3>
-              <p className="mt-2 text-sm text-[var(--color-stone)]">{text}</p>
+            ['01', 'Elige puntos y bici', 'Origen, destino u Objetivo. Cada modalidad prioriza su suelo.'],
+            ['02', 'Calcula', 'Distancia, desnivel, viento, superficie e idoneidad ≥90%.'],
+            ['03', 'Guarda, GPX o GPS', 'Sincroniza, exporta GPX o inicia el seguimiento.'],
+          ].map(([num, title, text]) => (
+            <li key={num}>
+              <p className="font-display text-4xl font-extrabold text-[var(--color-fog)]">{num}</p>
+              <h3 className="mt-2 font-display text-xl font-bold text-[var(--color-forest)]">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-stone)]">{text}</p>
             </li>
           ))}
         </ol>
@@ -140,32 +144,36 @@ export function LandingPage() {
       </section>
 
       <section className="bg-[var(--color-panel)] px-4 py-16 text-white md:px-6">
-        <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-2 md:items-center">
-          <div>
-            <h2 className="font-display text-3xl font-extrabold">Crear rutas</h2>
-            <p className="mt-3 text-white/75">
-              Motor real de routing ciclista, afinado por modalidad de bici y tipo de suelo.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-3xl font-extrabold">Viento y elevación</h2>
-            <p className="mt-3 text-white/75">
-              Open-Meteo sobre la línea + perfil de desnivel sincronizado con el mapa.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-3xl font-extrabold">Guardar y compartir</h2>
-            <p className="mt-3 text-white/75">
-              Tus recorridos en Firestore, con enlace de solo lectura cuando quieras publicarlos.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-3xl font-extrabold">GPS y GPX</h2>
-            <p className="mt-3 text-white/75">
-              Inicia actividad en el móvil o exporta GPX hacia OsmAnd, Organic Maps, Garmin Connect o
-              Wahoo.
-            </p>
-          </div>
+        <div className="mx-auto max-w-6xl">
+          <h2 className="font-display text-3xl font-extrabold">Todo lo que necesitas para salir</h2>
+          <p className="mt-2 max-w-2xl text-white/70">
+            Routing real, viento, elevación y exportación — sin mapas falsos.
+          </p>
+          <ul className="mt-10 grid gap-8 sm:grid-cols-2">
+            {[
+              [
+                'Crear rutas',
+                'Motor ciclista afinado por modalidad y tipo de suelo, con idoneidad clara.',
+              ],
+              [
+                'Viento y elevación',
+                'Open-Meteo sobre la línea y perfil de desnivel sincronizado con el mapa.',
+              ],
+              [
+                'Guardar y compartir',
+                'Tus recorridos en la nube, con enlace de solo lectura cuando quieras.',
+              ],
+              [
+                'GPS y GPX',
+                'Actividad en el móvil o exporta a OsmAnd, Organic Maps, Garmin Connect o Wahoo.',
+              ],
+            ].map(([title, text]) => (
+              <li key={title}>
+                <h3 className="font-display text-xl font-bold text-[var(--color-signal)]">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/75">{text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 

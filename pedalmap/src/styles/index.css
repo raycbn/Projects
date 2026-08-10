@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Syne:wght@600;700;800&display=swap');
 @import 'tailwindcss';
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -19,11 +18,10 @@
 
 @layer base {
   :root {
+    --header-h: 3.5rem;
+    --tabbar-h: 3.5rem;
     color: var(--color-ink);
-    background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(214, 255, 75, 0.18), transparent 55%),
-      radial-gradient(900px 500px at 90% 0%, rgba(22, 122, 82, 0.16), transparent 50%),
-      linear-gradient(180deg, #f4faf6 0%, var(--color-mist) 45%, #e7f0ea 100%);
+    background-color: var(--color-mist);
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -31,11 +29,11 @@
 
   body {
     margin: 0;
-    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   #root {
-    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   ::selection {
@@ -54,6 +52,31 @@
     font-family: var(--font-display);
   }
 
+  .label-caps {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-stone);
+  }
+
+  .page-wash {
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(214, 255, 75, 0.18), transparent 55%),
+      radial-gradient(900px 500px at 90% 0%, rgba(22, 122, 82, 0.16), transparent 50%),
+      linear-gradient(180deg, #f4faf6 0%, var(--color-mist) 45%, #e7f0ea 100%);
+  }
+
+  .planner-shell {
+    height: calc(100dvh - var(--header-h) - var(--tabbar-h));
+  }
+
+  @media (min-width: 768px) {
+    .planner-shell {
+      height: calc(100dvh - var(--header-h));
+    }
+  }
+
   .topo-grid {
     background-image:
       linear-gradient(rgba(13, 59, 43, 0.04) 1px, transparent 1px),
@@ -63,6 +86,14 @@
 
   .text-balance {
     text-wrap: balance;
+  }
+
+  .safe-pb {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-pt {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
   }
 }
 

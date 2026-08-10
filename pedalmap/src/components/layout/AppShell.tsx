@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -14,12 +14,18 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppShell() {
   const { user, profile, logout, firebaseReady } = useAuth()
+  const { pathname } = useLocation()
+  const isPlanner = pathname.startsWith('/route-planner')
+  const wash = !isPlanner
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-[var(--color-fog)]/80 bg-[color-mix(in_oklab,var(--color-mist)_88%,white)]/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6">
-          <Link to="/" className="font-display text-xl font-extrabold tracking-tight text-[var(--color-forest)]">
+    <div className={clsx('min-h-dvh', wash && 'page-wash')}>
+      <header className="sticky top-0 z-40 h-[var(--header-h)] border-b border-[var(--color-fog)]/80 bg-[color-mix(in_oklab,var(--color-mist)_88%,white)]/95 backdrop-blur-md">
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-2 px-3 md:gap-4 md:px-6">
+          <Link
+            to="/"
+            className="font-display text-lg font-extrabold tracking-tight text-[var(--color-forest)] md:text-xl"
+          >
             Pedal<span className="text-[var(--color-trail)]">Map</span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Principal">
@@ -48,51 +54,54 @@ export function AppShell() {
                 >
                   {profile?.displayName || (user.isAnonymous ? 'Invitado' : 'Perfil')}
                 </Link>
-                <Button variant="ghost" onClick={() => void logout()} className="!py-2">
+                <Button variant="ghost" size="sm" onClick={() => void logout()}>
                   Salir
                 </Button>
               </>
             ) : (
               <Link to="/login">
-                <Button variant="secondary" className="!py-2">
+                <Button variant="secondary" size="sm">
                   {firebaseReady ? 'Entrar' : 'Entrar'}
                 </Button>
               </Link>
             )}
-            <Link to="/route-planner" className="md:hidden">
-              <Button className="!py-2">Crear</Button>
-            </Link>
           </div>
         </div>
       </header>
+
       <Outlet />
-      <footer className="border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_70%,white)] px-4 py-6 pb-24 md:pb-6">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-[var(--color-stone)] md:flex-row md:items-center md:justify-between">
-          <p className="font-display font-bold text-[var(--color-forest)]">
-            Pedal<span className="text-[var(--color-trail)]">Map</span>
-            <span className="ml-2 font-sans text-xs font-normal text-[var(--color-stone)]">
-              Beta · planifica con cabeza
-            </span>
-          </p>
-          <nav className="flex flex-wrap gap-3" aria-label="Legal">
-            <Link className="hover:text-[var(--color-forest)]" to="/privacidad">
-              Privacidad
-            </Link>
-            <Link className="hover:text-[var(--color-forest)]" to="/cookies">
-              Cookies
-            </Link>
-            <Link className="hover:text-[var(--color-forest)]" to="/terminos">
-              Términos
-            </Link>
-            <Link className="hover:text-[var(--color-forest)]" to="/premium">
-              Premium
-            </Link>
-          </nav>
-        </div>
-      </footer>
+
+      {!isPlanner && (
+        <footer className="border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_70%,white)] px-4 py-8 pb-24 md:pb-8">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-[var(--color-stone)] md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-display text-lg font-bold text-[var(--color-forest)]">
+                Pedal<span className="text-[var(--color-trail)]">Map</span>
+              </p>
+              <p className="mt-0.5 text-xs">Planifica con el suelo y el viento a tu favor.</p>
+            </div>
+            <nav className="flex flex-wrap gap-4" aria-label="Legal">
+              <Link className="hover:text-[var(--color-forest)]" to="/privacidad">
+                Privacidad
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/cookies">
+                Cookies
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/terminos">
+                Términos
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/premium">
+                Premium
+              </Link>
+            </nav>
+          </div>
+        </footer>
+      )}
+
       <CookieBanner />
+
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 gap-1 border-t border-[var(--color-fog)] bg-white/95 px-2 py-2 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-4 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
         aria-label="Móvil"
       >
         {[
@@ -106,8 +115,10 @@ export function AppShell() {
             to={to}
             className={({ isActive }) =>
               clsx(
-                'rounded-lg px-2 py-2 text-center text-xs font-semibold',
-                isActive ? 'bg-[var(--color-signal)] text-[var(--color-ink)]' : 'text-[var(--color-stone)]',
+                'flex items-center justify-center rounded-lg text-center text-xs font-semibold',
+                isActive
+                  ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
+                  : 'text-[var(--color-stone)]',
               )
             }
           >

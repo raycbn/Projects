@@ -106,16 +106,10 @@ export function RouteWeatherPanel({
   const top = forecast?.windows[0]
 
   return (
-    <section className="space-y-3 rounded-2xl bg-white/85 p-3 ring-1 ring-[var(--color-fog)]">
-      <div>
-        <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
-          Viento y mejor salida
-        </h2>
-        <p className="text-xs text-[var(--color-stone)]">
-          Elige día/ventana u hora concreta: el mapa colorea la línea (ida/vuelta) y muestra flechas
-          de dirección e intensidad.
-        </p>
-      </div>
+    <section className="space-y-3 p-2">
+      <p className="text-xs text-[var(--color-stone)]">
+        Elige día/ventana u hora: el mapa colorea la línea y muestra flechas de dirección.
+      </p>
 
       {loading && <p className="text-sm text-[var(--color-stone)]">Calculando viento…</p>}
       {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}

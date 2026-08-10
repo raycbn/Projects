@@ -166,9 +166,7 @@ export function ExplorePage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-12 pb-24">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-        Fase 6 · Comunidad
-      </p>
+      <p className="label-caps text-[var(--color-trail)]">Comunidad</p>
       <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
         Explorar
       </h1>
@@ -184,8 +182,8 @@ export function ExplorePage() {
             onClick={() => setTab(id)}
             className={
               tab === id
-                ? 'rounded-full bg-[var(--color-forest)] px-3 py-1.5 text-sm font-semibold text-white'
-                : 'rounded-full bg-white/80 px-3 py-1.5 text-sm font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]'
+                ? 'rounded-xl bg-[var(--color-signal)] px-3 py-1.5 text-sm font-semibold text-[var(--color-ink)]'
+                : 'rounded-xl bg-white/80 px-3 py-1.5 text-sm font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]'
             }
           >
             {label}
@@ -386,5 +384,12 @@ export function ExplorePage() {
 }
 
 function Empty({ hint }: { hint: string }) {
-  return <p className="text-sm text-[var(--color-stone)]">{hint}</p>
+  return (
+    <div className="rounded-2xl border border-dashed border-[var(--color-fog)] bg-white/60 px-4 py-6 text-sm text-[var(--color-stone)]">
+      <p>{hint}</p>
+      <Link to="/route-planner" className="mt-4 inline-block">
+        <Button size="sm">Crear mi ruta</Button>
+      </Link>
+    </div>
+  )
 }
