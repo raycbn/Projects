@@ -6,6 +6,7 @@ workers_dev = true
 # Free-tier friendly: no paid Cloudflare products required.
 # Secrets (wrangler secret put / .dev.vars locally — never commit):
 #   ORS_API_KEY
+#   STADIA_API_KEY   (commercial Valhalla via Stadia Maps)
 #   STRIPE_SECRET_KEY
 #   STRIPE_WEBHOOK_SECRET
 #   FIREBASE_SERVICE_ACCOUNT  (JSON string of a Spark-compatible service account)
