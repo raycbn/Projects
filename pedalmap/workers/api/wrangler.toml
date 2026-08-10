@@ -17,6 +17,7 @@ workers_dev = true
 #   APP_URL
 #   ALLOWED_ORIGINS (comma-separated)
 #   PREMIUM_ALLOWLIST (optional comma-separated emails)
+#   STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET (wrangler secret put)
 
 [vars]
 FIREBASE_PROJECT_ID = "pedalmap-79b3a"

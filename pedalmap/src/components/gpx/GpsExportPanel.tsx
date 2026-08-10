@@ -15,6 +15,12 @@ interface GpsExportPanelProps {
 /** Free / freemium bike GPS apps we can hand a GPX to via share or download. */
 const FREE_GPS_APPS = [
   {
+    id: 'strava',
+    name: 'Strava (sync GPS)',
+    blurb: 'iGPSPORT/Garmin/Wahoo → Strava → PedalMap. Conecta en Mis actividades.',
+    url: '/actividades',
+  },
+  {
     id: 'osmand',
     name: 'OsmAnd',
     blurb: 'Mapas offline y navegación. Abre el GPX con “Abrir con…”.',
