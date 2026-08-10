@@ -362,14 +362,17 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
         return json({ error: 'circularDistanceMeters required (>=1000)' }, 400)
       }
       const start = waypoints[0]
-      // Equilateral-ish loop: two vias at ~target/3 from start
-      const leg = circularDistanceMeters / 3
-      const attempts = 2
+      // Routed loops are longer than crow-flies; scale vias ~target/5 per leg.
+      const attempts = [
+        { bearing: (circularSeed * 47) % 360, legFactor: 5.0 },
+        { bearing: (circularSeed * 47 + 90) % 360, legFactor: 4.2 },
+      ]
       let best: Awaited<ReturnType<typeof routeLocations>> | null = null
       let bestScore = Number.POSITIVE_INFINITY
 
-      for (let i = 0; i < attempts; i += 1) {
-        const bearing = (circularSeed * 47 + i * 90) % 360
+      for (let i = 0; i < attempts.length; i += 1) {
+        const { bearing, legFactor } = attempts[i]
+        const leg = circularDistanceMeters / legFactor
         const via1 = offsetLatLng(start, bearing, leg)
         const via2 = offsetLatLng(start, bearing + 120, leg)
         try {
@@ -389,7 +392,6 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
             Math.max(1, circularDistanceMeters)
           let elevErr = 0
           if (targetElevationGainMeters && targetElevationGainMeters > 0) {
-            // cheap elev gain proxy from profile
             let gain = 0
             for (let p = 1; p < candidate.elevationProfile.length; p += 1) {
               const d =
@@ -405,8 +407,7 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
             bestScore = score
             best = candidate
           }
-          // Good enough — stop early
-          if (distErr < 0.18 && elevErr < 0.35) break
+          if (distErr < 0.2 && elevErr < 0.35) break
         } catch (err) {
           console.warn('[bike-route] circular attempt failed', i, err)
         }
