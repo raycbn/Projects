@@ -196,7 +196,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             error.message.toLowerCase().includes('temporarily unavailable')
           ) {
             setErrorMessage(
-              'OpenRouteService está en mantenimiento temporal. Tu clave está configurada; reinténtalo en unos minutos.',
+              'Algunos perfiles de OpenRouteService no están disponibles ahora (p. ej. cycling-road). Prueba MTB/Gravel/Urbana o reinténtalo en unos minutos.',
             )
           } else {
             setErrorMessage(

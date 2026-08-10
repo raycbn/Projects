@@ -3,11 +3,19 @@ import type { BikeType } from '@/domain/types'
 import { mapBikeProfile } from '@/adapters/routing/OpenRouteServiceProvider'
 
 const OPTIONS: Array<{ id: BikeType; label: string; note?: string }> = [
-  { id: 'road', label: 'Carretera' },
+  {
+    id: 'road',
+    label: 'Carretera',
+    note: 'Perfil cycling-road; si ORS lo tiene caído, se usa cycling-regular',
+  },
   { id: 'mtb', label: 'MTB' },
   { id: 'gravel', label: 'Gravel', note: 'Usa perfil cycling-regular (ORS no tiene gravel dedicado)' },
   { id: 'urban', label: 'Urbana', note: 'Usa perfil cycling-regular' },
-  { id: 'ebike', label: 'E-bike' },
+  {
+    id: 'ebike',
+    label: 'E-bike',
+    note: 'Perfil cycling-electric; si ORS lo tiene caído, se usa cycling-regular',
+  },
 ]
 
 interface BikeSelectorProps {

@@ -39,6 +39,27 @@ export function mapBikeProfile(bikeType: BikeType): string {
   }
 }
 
+/**
+ * When a preferred ORS profile is down (seen as Tyk "Down For Maintenance" 503),
+ * try these real cycling profiles next. Never invent non-ORS profiles.
+ */
+export function profileFallbacks(profile: string): string[] {
+  switch (profile) {
+    case 'cycling-road':
+      return ['cycling-regular']
+    case 'cycling-electric':
+      return ['cycling-regular']
+    case 'cycling-mountain':
+      return ['cycling-regular']
+    default:
+      return []
+  }
+}
+
+export function isOrsMaintenanceResponse(status: number, body: string): boolean {
+  return status === 503 || body.toLowerCase().includes('down for maintenance')
+}
+
 /** Preferences with a real ORS mapping. Others must not be faked. */
 export const ORS_SUPPORTED_PREFERENCES: RoutePreference[] = [
   'prefer_shorter',
@@ -156,7 +177,8 @@ export class OpenRouteServiceProvider implements RoutingProvider {
       throw new RoutingError('At least two waypoints are required', 'invalid_request')
     }
 
-    const profile = mapBikeProfile(request.bikeType)
+    const primaryProfile = mapBikeProfile(request.bikeType)
+    const profiles = [primaryProfile, ...profileFallbacks(primaryProfile)]
     const coordinates = waypoints.map((w) => [w.lng, w.lat])
     const options = buildOptions(request.preferences)
 
@@ -171,87 +193,109 @@ export class OpenRouteServiceProvider implements RoutingProvider {
       },
     }
 
-    const url = `${this.baseUrl}/v2/directions/${profile}/json`
+    let lastMaintenance: string | undefined
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json, application/geo+json',
-          ...(this.apiKey ? { Authorization: this.apiKey } : {}),
-        },
-        body: JSON.stringify(body),
-      })
+      for (let i = 0; i < profiles.length; i += 1) {
+        const profile = profiles[i]
+        const url = `${this.baseUrl}/v2/directions/${profile}/json`
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, application/geo+json',
+            ...(this.apiKey ? { Authorization: this.apiKey } : {}),
+          },
+          body: JSON.stringify(body),
+        })
 
-      if (response.status === 429) {
-        throw new RoutingError('Rate limit exceeded', 'rate_limited')
-      }
+        if (response.status === 429) {
+          throw new RoutingError('Rate limit exceeded', 'rate_limited')
+        }
 
-      if (!response.ok) {
-        const text = await response.text()
-        console.error('[ORS]', response.status, text.slice(0, 500))
-        if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
+        if (!response.ok) {
+          const text = await response.text()
+          console.error('[ORS]', profile, response.status, text.slice(0, 500))
+          if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
+            throw new RoutingError('No route found for preferences', 'no_route')
+          }
+          if (isOrsMaintenanceResponse(response.status, text)) {
+            lastMaintenance = profile
+            const next = profiles[i + 1]
+            if (next) {
+              console.warn(`[ORS] profile ${profile} unavailable; retrying with ${next}`)
+              continue
+            }
+            throw new RoutingError(
+              `OpenRouteService profile ${profile} is temporarily unavailable (maintenance)`,
+              'provider_error',
+              text,
+            )
+          }
+          throw new RoutingError('Provider error', 'provider_error', text)
+        }
+
+        const data = (await response.json()) as {
+          routes?: Array<{
+            summary?: { distance?: number; duration?: number; ascent?: number; descent?: number }
+            geometry?: string
+            segments?: Array<{ steps?: Array<{ instruction?: string }> }>
+          }>
+        }
+
+        const route = data.routes?.[0]
+        if (!route?.geometry) {
           throw new RoutingError('No route found for preferences', 'no_route')
         }
-        if (
-          response.status === 503 ||
-          text.toLowerCase().includes('down for maintenance')
-        ) {
-          throw new RoutingError(
-            'OpenRouteService is temporarily unavailable (maintenance)',
-            'provider_error',
-            text,
+
+        if (lastMaintenance && profile !== primaryProfile) {
+          console.info(
+            `[ORS] used fallback profile ${profile} because ${primaryProfile} was in maintenance`,
           )
         }
-        throw new RoutingError('Provider error', 'provider_error', text)
+
+        const { coordinates: coords, profile: elevationProfile } = decodeGeometry(
+          route.geometry,
+          true,
+        )
+        const distanceMeters = route.summary?.distance ?? 0
+        const durationSeconds = route.summary?.duration
+          ? Math.round(route.summary.duration)
+          : undefined
+
+        let stats = buildStatsFromProfile(
+          distanceMeters,
+          elevationProfile,
+          request.bikeType,
+          durationSeconds,
+        )
+
+        if (typeof route.summary?.ascent === 'number') {
+          stats = { ...stats, elevationGainMeters: Math.round(route.summary.ascent) }
+        }
+        if (typeof route.summary?.descent === 'number') {
+          stats = { ...stats, elevationLossMeters: Math.round(route.summary.descent) }
+        }
+
+        const rawInstructions =
+          route.segments?.flatMap(
+            (seg) => seg.steps?.map((s) => s.instruction ?? '').filter(Boolean) ?? [],
+          ) ?? []
+
+        return {
+          geometry: { type: 'LineString', coordinates: coords },
+          elevationProfile,
+          stats,
+          provider: this.name,
+          rawInstructions,
+        }
       }
 
-      const data = (await response.json()) as {
-        routes?: Array<{
-          summary?: { distance?: number; duration?: number; ascent?: number; descent?: number }
-          geometry?: string
-          segments?: Array<{ steps?: Array<{ instruction?: string }> }>
-        }>
-      }
-
-      const route = data.routes?.[0]
-      if (!route?.geometry) {
-        throw new RoutingError('No route found for preferences', 'no_route')
-      }
-
-      const { coordinates: coords, profile: elevationProfile } = decodeGeometry(route.geometry, true)
-      const distanceMeters = route.summary?.distance ?? 0
-      const durationSeconds = route.summary?.duration
-        ? Math.round(route.summary.duration)
-        : undefined
-
-      let stats = buildStatsFromProfile(
-        distanceMeters,
-        elevationProfile,
-        request.bikeType,
-        durationSeconds,
+      throw new RoutingError(
+        'OpenRouteService is temporarily unavailable (maintenance)',
+        'provider_error',
+        lastMaintenance,
       )
-
-      if (typeof route.summary?.ascent === 'number') {
-        stats = { ...stats, elevationGainMeters: Math.round(route.summary.ascent) }
-      }
-      if (typeof route.summary?.descent === 'number') {
-        stats = { ...stats, elevationLossMeters: Math.round(route.summary.descent) }
-      }
-
-      const rawInstructions =
-        route.segments?.flatMap(
-          (seg) => seg.steps?.map((s) => s.instruction ?? '').filter(Boolean) ?? [],
-        ) ?? []
-
-      return {
-        geometry: { type: 'LineString', coordinates: coords },
-        elevationProfile,
-        stats,
-        provider: this.name,
-        rawInstructions,
-      }
     } catch (error) {
       if (error instanceof RoutingError) throw error
       console.error('[ORS] network', error)
