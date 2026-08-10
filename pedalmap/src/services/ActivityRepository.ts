@@ -2,7 +2,9 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -10,9 +12,17 @@ import {
   where,
   type DocumentData,
 } from 'firebase/firestore'
-import type { Activity, ActivityStatus, ActivityTrackPoint, BikeType } from '@/domain/types'
+import type {
+  Activity,
+  ActivitySource,
+  ActivityStatus,
+  ActivityTrackPoint,
+  BikeType,
+} from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
-import { computeElevationStats, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
+import { computeActivityStats } from '@/lib/activityStats'
+
+export { computeActivityStats } from '@/lib/activityStats'
 
 function monthKeyNow(): string {
   const d = new Date()
@@ -27,6 +37,8 @@ function mapActivity(id: string, data: DocumentData): Activity {
     title: data.title,
     status: data.status,
     bikeType: data.bikeType,
+    source: data.source as ActivitySource | undefined,
+    externalId: data.externalId ? String(data.externalId) : undefined,
     startedAt: data.startedAt,
     finishedAt: data.finishedAt,
     track: data.track ?? [],
@@ -36,37 +48,15 @@ function mapActivity(id: string, data: DocumentData): Activity {
   }
 }
 
-export function computeActivityStats(
-  track: ActivityTrackPoint[],
-  startedAt: string,
-  finishedAt?: string,
-): Activity['stats'] {
-  const positions = track.map((p) => p.position)
-  const distanceMeters = Math.round(pathDistanceMeters(positions))
-  const start = Date.parse(startedAt)
-  const end = Date.parse(finishedAt ?? new Date().toISOString())
-  const durationSeconds = Math.max(0, Math.round((end - start) / 1000))
-  const profile = normalizeCyclingElevationProfile(
-    track.map((p, i) => ({
-      distanceMeters: i === 0 ? 0 : pathDistanceMeters(positions.slice(0, i + 1)),
-      elevationMeters:
-        p.elevationMeters !== undefined && Number.isFinite(p.elevationMeters)
-          ? p.elevationMeters
-          : Number.NaN,
-      position: p.position,
-    })),
-  )
-  const elev = computeElevationStats(profile)
-  return {
-    distanceMeters,
-    durationSeconds,
-    elevationGainMeters: Math.round(elev.gain),
-  }
-}
-
 export class ActivityRepository {
   isConfigured(): boolean {
     return isFirebaseConfigured()
+  }
+
+  async getById(activityId: string): Promise<Activity | null> {
+    const snap = await getDoc(doc(getDb(), 'activities', activityId))
+    if (!snap.exists()) return null
+    return mapActivity(snap.id, snap.data())
   }
 
   async listForUser(userId: string): Promise<Activity[]> {
@@ -77,6 +67,25 @@ export class ActivityRepository {
     )
     const snap = await getDocs(q)
     return snap.docs.map((d) => mapActivity(d.id, d.data()))
+  }
+
+  async findByExternalId(userId: string, externalId: string): Promise<Activity | null> {
+    try {
+      const q = query(
+        collection(getDb(), 'activities'),
+        where('userId', '==', userId),
+        where('externalId', '==', externalId),
+        limit(1),
+      )
+      const snap = await getDocs(q)
+      const first = snap.docs[0]
+      if (!first) return null
+      return mapActivity(first.id, first.data())
+    } catch (err) {
+      // Missing composite index until owner deploys firestore.indexes.json
+      console.warn('[activities] findByExternalId', err)
+      return null
+    }
   }
 
   async create(input: {
@@ -91,6 +100,7 @@ export class ActivityRepository {
       title: input.title,
       bikeType: input.bikeType,
       routeId: input.routeId,
+      source: 'gps' as ActivitySource,
       status: 'recording' as ActivityStatus,
       startedAt,
       track: [] as ActivityTrackPoint[],
@@ -103,6 +113,48 @@ export class ActivityRepository {
     return mapActivity(ref.id, { ...payload, createdAt: startedAt, updatedAt: startedAt })
   }
 
+  /** Upsert a finished import. Recomputes PedalMap Free analytics from the track. */
+  async importFinished(
+    userId: string,
+    input: Omit<Activity, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
+  ): Promise<{ activity: Activity; created: boolean }> {
+    if (input.externalId) {
+      const existing = await this.findByExternalId(userId, input.externalId)
+      if (existing) return { activity: existing, created: false }
+    }
+    const track = downsampleTrack(input.track, 3500)
+    const now = new Date().toISOString()
+    const computed = computeActivityStats(track, input.startedAt, input.finishedAt)
+    const stats: Activity['stats'] = {
+      ...computed,
+      averageHeartRateBpm:
+        computed.averageHeartRateBpm ?? input.stats.averageHeartRateBpm,
+      averageCadenceRpm: computed.averageCadenceRpm ?? input.stats.averageCadenceRpm,
+      averagePowerWatts: computed.averagePowerWatts ?? input.stats.averagePowerWatts,
+    }
+    const payload = {
+      userId,
+      title: input.title,
+      bikeType: input.bikeType,
+      routeId: input.routeId,
+      source: input.source ?? 'strava',
+      externalId: input.externalId,
+      status: 'finished' as ActivityStatus,
+      startedAt: input.startedAt,
+      finishedAt: input.finishedAt,
+      track,
+      stats,
+      monthKey: monthKeyNow(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+    const ref = await addDoc(collection(getDb(), 'activities'), payload)
+    return {
+      activity: mapActivity(ref.id, { ...payload, createdAt: now, updatedAt: now }),
+      created: true,
+    }
+  }
+
   async updateTrack(
     activityId: string,
     track: ActivityTrackPoint[],
@@ -110,7 +162,6 @@ export class ActivityRepository {
     status: ActivityStatus,
     finishedAt?: string,
   ): Promise<void> {
-    // Firestore ~1 MiB doc limit — keep a dense-enough but bounded track.
     const capped = downsampleTrack(track, 3500)
     await updateDoc(doc(getDb(), 'activities', activityId), {
       track: capped,

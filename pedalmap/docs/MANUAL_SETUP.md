@@ -26,6 +26,8 @@ sin tu cuenta de Cloudflare / Firebase console.
    npx wrangler secret put STRIPE_SECRET_KEY    # sk_test_…
    npx wrangler secret put STRIPE_WEBHOOK_SECRET # whsec_… (tras crear el webhook)
    npx wrangler secret put FIREBASE_SERVICE_ACCOUNT  # JSON entero (paso B)
+   npx wrangler secret put STRAVA_CLIENT_ID         # app Strava (paso D)
+   npx wrangler secret put STRAVA_CLIENT_SECRET
    npm run deploy
    ```
 3. Copia la URL `https://pedalmap-api.<subdomain>.workers.dev`
@@ -74,6 +76,13 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage --project p
 - Luego: `npx wrangler login && npm run deploy` en `workers/api`
 
 Ver `docs/PRODUCTION_CHECKLIST.md`.
+
+### D) Strava (puente GPS gratis)
+
+1. Crea una app en https://www.strava.com/settings/api  
+2. **Authorization Callback Domain** = host del Worker (ej. `pedalmap-api.broken-dietician.workers.dev`)  
+3. `wrangler secret put STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET` + redeploy  
+4. Detalle: `docs/STRAVA_BRIDGE.md`
 
 ## No hagas
 
