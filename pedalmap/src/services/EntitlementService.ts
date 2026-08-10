@@ -19,7 +19,10 @@ export function canCreateRoute(profile: UserProfile | null, guestCreates: number
   reason?: string
 } {
   if (!profile) {
-    if (guestCreates >= 3) return { ok: false, reason: 'guest_limit' }
+    // Offline / pre-auth guests share Free monthly create budget (not a harsh 3-try wall).
+    if (guestCreates >= FREE_LIMITS.maxRoutesCreatedPerMonth) {
+      return { ok: false, reason: 'guest_limit' }
+    }
     return { ok: true }
   }
   const limits = getLimits(profile.plan)

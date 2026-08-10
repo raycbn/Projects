@@ -24,6 +24,7 @@ import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
 import { loadCloudDraft, saveCloudDraft } from '@/services/DraftRepository'
 import { applySelectedOption } from '@/lib/routeOptions'
+import { isFirebaseConfigured } from '@/lib/firebase'
 
 const GUEST_CREATES_KEY = 'pedalmap_guest_creates'
 const LAST_DRAFT_KEY = 'pedalmap_last_draft'
@@ -95,6 +96,19 @@ function writeGuestCreates(n: number) {
     localStorage.setItem(GUEST_CREATES_KEY, String(n))
   } catch {
     /* ignore quota */
+  }
+}
+
+/** Fresh profile after anonymous warm-up (React profile in the closure may still be null). */
+async function peekLiveProfile() {
+  if (!isFirebaseConfigured()) return null
+  try {
+    const { getFirebaseAuth } = await import('@/lib/firebase')
+    const u = getFirebaseAuth().currentUser
+    if (!u) return null
+    return await authService.ensureProfile(u)
+  } catch {
+    return null
   }
 }
 
@@ -192,7 +206,19 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     setBikeType(profile.bikePreferences.bikeType || 'road')
     setPreferences(profile.bikePreferences.preferences || [])
     setHydratedProfile(true)
+    // Signed-in (incl. anonymous) uses Firestore usage — drop local guest counter.
+    setGuestCreates(0)
+    writeGuestCreates(0)
   }, [profile, hydratedProfile])
+
+  // Warm an anonymous Firebase session so Free limits apply before the first create.
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return
+    if (user) return
+    void authService.signInGuest().catch((err) => {
+      console.warn('[planner] anonymous warm-up', err)
+    })
+  }, [user])
 
   // Pull cloud draft when signing in if we don't already have a local one.
   useEffect(() => {
@@ -221,12 +247,21 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<PlannerContextValue>(() => {
     async function runCalculate(seed = circularSeed) {
-      const entitlement = canCreateRoute(profile, guestCreates)
+      // Prefer anonymous Free quota over the offline guest counter.
+      if (!profile && isFirebaseConfigured()) {
+        try {
+          await authService.signInGuest()
+        } catch (err) {
+          console.warn('[planner] anonymous before create', err)
+        }
+      }
+      const liveProfile = profile ?? (await peekLiveProfile())
+      const entitlement = canCreateRoute(liveProfile, guestCreates)
       if (!entitlement.ok) {
         setPaywallReason(entitlement.reason ?? 'create_limit')
         return
       }
-      if (routeType === 'circular' && !canUseAdvancedCircular(profile)) {
+      if (routeType === 'circular' && !canUseAdvancedCircular(liveProfile)) {
         setPaywallReason('circular_premium')
         return
       }
@@ -243,7 +278,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setStatus('calculating')
       setErrorMessage(null)
       try {
-        const prefs = clampPreferencesForPlan(preferences, profile)
+        const prefs = clampPreferencesForPlan(preferences, liveProfile)
         if (prefs.length !== preferences.length) {
           setPreferences(prefs)
           // Clamp silently — paywall already fired when the user toggled past the limit.
@@ -269,12 +304,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         persistDraft(result, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
         setStatus('success')
-        const nextGuest = guestCreates + 1
-        setGuestCreates(nextGuest)
-        writeGuestCreates(nextGuest)
-        if (user && !user.isAnonymous) {
+        if (!liveProfile) {
+          const nextGuest = guestCreates + 1
+          setGuestCreates(nextGuest)
+          writeGuestCreates(nextGuest)
+        } else if (user && !user.isAnonymous) {
           void authService.recordRouteCreated(user.uid).catch((err) => {
             console.warn('[planner] usage create', err)
+          })
+        } else if (liveProfile && user?.isAnonymous) {
+          void authService.recordRouteCreated(liveProfile.uid).catch((err) => {
+            console.warn('[planner] usage create anon', err)
           })
         }
         track('route_created', {

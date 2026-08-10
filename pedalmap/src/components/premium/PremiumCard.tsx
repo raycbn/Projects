@@ -10,7 +10,7 @@ interface PremiumCardProps {
 export function PremiumCard({ reason, onClose }: PremiumCardProps) {
   const title =
     reason === 'guest_limit'
-      ? 'Has probado el planificador como invitado'
+      ? 'Has usado el cupo de invitado en este dispositivo'
       : reason === 'circular_premium'
         ? 'Las rutas circulares avanzadas son Premium'
         : reason === 'gpx_export'
@@ -38,7 +38,9 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             ? 'Puedes seguir con A → B o Ida y vuelta en Free. Objetivo (km + desnivel) es Premium.'
             : reason === 'filter_limit'
               ? 'Desactiva un filtro o pasa a Premium para combinar más de 2.'
-              : 'Desbloquea PedalMap Premium y planifica sin fricciones.'}
+              : reason === 'guest_limit'
+                ? 'Entra o crea cuenta (también vale anónimo) para seguir creando rutas Free este mes.'
+                : 'Desbloquea PedalMap Premium y planifica sin fricciones.'}
         </p>
         <ul className="mt-4 space-y-2 text-sm">
           {[

@@ -28,9 +28,10 @@ function profile(partial: Partial<UserProfile> = {}): UserProfile {
 }
 
 describe('entitlements', () => {
-  it('allows limited guest creates', () => {
+  it('allows guest creates up to Free monthly budget', () => {
     expect(canCreateRoute(null, 0).ok).toBe(true)
-    expect(canCreateRoute(null, 3).ok).toBe(false)
+    expect(canCreateRoute(null, 3).ok).toBe(true)
+    expect(canCreateRoute(null, FREE_LIMITS.maxRoutesCreatedPerMonth).ok).toBe(false)
   })
 
   it('blocks free save limit', () => {
