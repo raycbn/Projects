@@ -70,16 +70,22 @@ URL típica: `https://pedalmap-api.<subdomain>.workers.dev`
 
 ## 5. Firebase Hosting (Spark OK)
 
+Producción actual:
+- App: https://pedalmap-79b3a.web.app
+- Worker: https://pedalmap-api.broken-dietician.workers.dev
+
 ```bash
 cd pedalmap
-# build SIN VITE_ORS_API_KEY
-VITE_PEDALMAP_API_URL=https://pedalmap-api.<subdomain>.workers.dev \
-VITE_USE_ROUTING_PROXY=true \
-VITE_STRIPE_ENABLED=true \
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_... \
-npm run build
-firebase deploy --only hosting,firestore:rules,firestore:indexes,storage
+./scripts/build-production.sh
+# Hosting (también funciona con la service account Admin SDK):
+npx firebase-tools deploy --only hosting --project pedalmap-79b3a
+# Rules / indexes / storage (cuenta owner; la SA suele dar 403 en Service Usage):
+npx firebase login
+npx firebase deploy --only firestore:rules,firestore:indexes,storage --project pedalmap-79b3a
 ```
+
+Tras el primer Hosting, **redeploy del Worker** con `APP_URL` =
+`https://pedalmap-79b3a.web.app` (ver `docs/PRODUCTION_CHECKLIST.md`).
 
 ## 6. NO hacer
 

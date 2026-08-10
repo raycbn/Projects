@@ -3,7 +3,7 @@
 ## FASE 1 — MVP ✅
 ## FASE 2 ✅
 ## FASE 3 ✅
-## FASE 4 ✅ (código + deploy guide; secrets/Blaze pendientes en entorno)
+## FASE 4 ✅ (Worker + Stripe test; Hosting live en pedalmap-79b3a.web.app)
 
 - Premium UI + Stripe Checkout / Portal / webhook
 - Contadores server-side con borrado si Free supera límites

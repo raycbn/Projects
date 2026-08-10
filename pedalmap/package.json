@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "validate:mvp": "node scripts/validate-mvp.mjs",
+    "build:prod": "bash scripts/build-production.sh",
+    "deploy:hosting": "bash scripts/build-production.sh && npx -y firebase-tools@15.26.0 deploy --only hosting --project pedalmap-79b3a",
     "worker:dev": "npm --prefix workers/api run dev",
     "worker:deploy": "npm --prefix workers/api run deploy"
   },

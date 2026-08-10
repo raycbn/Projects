@@ -52,23 +52,28 @@ sin tu cuenta de Cloudflare / Firebase console.
 ### D) Frontend env de producción / preview
 
 ```
-VITE_PEDALMAP_API_URL=https://pedalmap-api.<subdomain>.workers.dev
+VITE_PEDALMAP_API_URL=https://pedalmap-api.broken-dietician.workers.dev
 VITE_USE_ROUTING_PROXY=true
 VITE_STRIPE_ENABLED=true
 VITE_STRIPE_PUBLISHABLE_KEY=pk_test_…
 # NO VITE_ORS_API_KEY
 ```
 
-Rebuild + hosting:
+Rebuild + hosting (ya desplegado una vez → https://pedalmap-79b3a.web.app):
 ```bash
-npm run build
-firebase deploy --only hosting,firestore:rules,firestore:indexes,storage
+./scripts/build-production.sh
+npx firebase-tools deploy --only hosting --project pedalmap-79b3a
+# rules/indexes/storage con tu login owner:
+npx firebase deploy --only firestore:rules,firestore:indexes,storage --project pedalmap-79b3a
 ```
 
-### E) Ajustes en `wrangler.toml` tras tener dominio
+### E) Ajustes en `wrangler.toml` tras Hosting
 
-- `APP_URL` = URL real de la app (success/cancel Checkout)
-- `ALLOWED_ORIGINS` = orígenes permitidos CORS
+- `APP_URL` = `https://pedalmap-79b3a.web.app`
+- `ALLOWED_ORIGINS` = Hosting URLs
+- Luego: `npx wrangler login && npm run deploy` en `workers/api`
+
+Ver `docs/PRODUCTION_CHECKLIST.md`.
 
 ## No hagas
 
