@@ -266,18 +266,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               'Algunos perfiles de OpenRouteService no están disponibles ahora (p. ej. cycling-road). Prueba otra modalidad de bici o reinténtalo en unos minutos.',
             )
           } else if (error instanceof RoutingError && error.code === 'no_route') {
-            const msg = error.message || ''
-            if (/no apta|idoneidad|superficie|bike surface/i.test(msg)) {
-              setErrorMessage(
-                msg.startsWith('No apta')
-                  ? msg
-                  : 'No hay una ruta ≥90% apta para la bici elegida entre esos puntos. Cambia el tipo de bicicleta, acerca los puntos o ajusta preferencias.',
-              )
-            } else {
-              setErrorMessage(
-                'No hemos podido encontrar una ruta con esas preferencias. Prueba a reducir los filtros, cambiar el tipo de bicicleta o elegir otro punto.',
-              )
-            }
+            setErrorMessage(
+              'No hemos podido encontrar una ruta con esas preferencias. Prueba a reducir los filtros, cambiar el tipo de bicicleta o elegir otro punto.',
+            )
           } else {
             setErrorMessage(
               'No hemos podido calcular la ruta. Prueba a cambiar el tipo de bicicleta, bajar filtros o mover el punto de inicio.',

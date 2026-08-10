@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: '¿Qué cambia según el tipo de bici?',
-    a: 'Carretera prioriza asfalto; urbana, carril bici; gravel, pistas y grava compacta; MTB, senderos y tierra; e-bike, perfil eléctrico sobre pavimento. Solo marcamos recomendada si la idoneidad es ≥90%; si no, avisamos para que cambies perfil o puntos.',
+    a: 'Carretera prioriza asfalto; urbana, carril bici; gravel, pistas y grava compacta; MTB, senderos y tierra; e-bike, perfil eléctrico sobre pavimento. PedalMap prueba perfiles y alternativas ORS y te muestra la mejor candidata para ese tipo de bici, con un % de idoneidad.',
   },
   {
     q: '¿Cómo crear una ruta GPX?',
@@ -91,7 +91,7 @@ export function LandingPage() {
         <ol className="mt-10 grid gap-8 md:grid-cols-3">
           {[
             ['01', 'Elige puntos y bici', 'Origen, destino u Objetivo. Cada modalidad prioriza su suelo.'],
-            ['02', 'Calcula', 'Distancia, desnivel, viento, superficie e idoneidad ≥90%.'],
+            ['02', 'Calcula', 'Distancia, desnivel, viento y la mejor superficie para tu bici.'],
             ['03', 'Guarda, GPX o GPS', 'Sincroniza, exporta GPX o inicia el seguimiento.'],
           ].map(([num, title, text]) => (
             <li key={num}>

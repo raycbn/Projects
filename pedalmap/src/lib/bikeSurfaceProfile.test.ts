@@ -9,7 +9,7 @@ import {
 import type { BikeType } from '@/domain/types'
 
 describe('bikeSurfaceProfile', () => {
-  it('requires ≥90 suitability for every modality', () => {
+  it('uses 90 as soft optimal target for every modality', () => {
     const types: BikeType[] = ['road', 'mtb', 'gravel', 'urban', 'ebike']
     for (const t of types) {
       expect(BIKE_MODALITY_PROFILES[t].acceptScore).toBe(PROFILE_MIN_SCORE)
@@ -39,7 +39,7 @@ describe('bikeSurfaceProfile', () => {
       ],
     })
     expect(suit.score).toBeLessThan(PROFILE_MIN_SCORE)
-    expect(suit.notes[0]).toMatch(/No recomendada/)
+    expect(suit.notes[0]).toMatch(/Mejor candidata|óptima/i)
   })
 
   it('recommends road routes that are nearly all asphalt/street', () => {

@@ -66,7 +66,7 @@ export interface BikeModalityProfile {
   avoidSurfaces: string[]
   /** Primary + alternate ORS strategies to try for best surface fit. */
   strategies: RoutingStrategy[]
-  /** Score below this triggers trying the next strategy (0–100). */
+  /** Soft target: stop searching strategies once a candidate reaches this score. */
   acceptScore: number
   surfaceWeights: Record<number, number>
   waytypeWeights: Record<number, number>
@@ -493,7 +493,7 @@ export function primaryOrsProfile(
   return resolveRoutingStrategies(bikeType, preferences)[0]?.profile ?? 'cycling-regular'
 }
 
-/** Minimum suitability to consider a route recommended for the selected bike profile. */
+/** Soft target score when searching for the best route for a bike profile (not a hard reject). */
 export const PROFILE_MIN_SCORE = 90
 
 function labelFromScore(score: number): SuitabilityLabel {
@@ -529,7 +529,7 @@ function wayShare(
 
 /**
  * Score 0–100 how well ORS surface/waytype extras fit the bike modality.
- * Recommended profiles require PROFILE_MIN_SCORE (90)+.
+ * Used to rank candidate routes; PROFILE_MIN_SCORE is a soft “óptima” band.
  */
 export function scoreSurfaceSuitability(
   bikeType: BikeType,
@@ -543,7 +543,7 @@ export function scoreSurfaceSuitability(
       score: 40,
       label: 'poco_adecuada',
       notes: [
-        'ORS no devolvió detalle de superficie; no podemos garantizar idoneidad ≥90% para este perfil.',
+        'ORS no devolvió detalle de superficie; la idoneidad es orientativa para este perfil.',
       ],
       bikeType,
     }
@@ -665,10 +665,10 @@ export function scoreSurfaceSuitability(
 
   if (score < PROFILE_MIN_SCORE) {
     notes.unshift(
-      `No recomendada para ${modality.label}: ${score}/100 (objetivo ≥${PROFILE_MIN_SCORE}%).`,
+      `Mejor candidata para ${modality.label}: ${score}/100 (óptima ≥${PROFILE_MIN_SCORE}%).`,
     )
   } else if (!notes.some((n) => n.includes('sólidos') || n.includes('Pavimento') || n.includes('Mezcla'))) {
-    notes.unshift(`Recomendada para ${modality.label}: ${score}/100.`)
+    notes.unshift(`Óptima para ${modality.label}: ${score}/100.`)
   }
 
   return { score, label: labelFromScore(score), notes, bikeType }

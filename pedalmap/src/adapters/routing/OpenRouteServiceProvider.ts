@@ -285,31 +285,32 @@ export class OpenRouteServiceProvider implements RoutingProvider {
     }
 
     const strategies = resolveRoutingStrategies(request.bikeType, request.preferences)
-    const acceptScore = getBikeModality(request.bikeType).acceptScore
+    /** Soft target: stop searching early once we hit this; never a hard reject. */
+    const targetScore = getBikeModality(request.bikeType).acceptScore
     const coordinates =
       request.routeType === 'circular'
         ? [[waypoints[0].lng, waypoints[0].lat]]
         : waypoints.map((w) => [w.lng, w.lat])
 
     const targetElev = request.targetElevationGainMeters
-    // Circular: explore several seeds so we can find a surface-fit ≥90%.
+    // Circular: explore seeds = alternate nearby loops; pick best surface for the bike.
     const seeds =
       request.routeType === 'circular'
         ? targetElev && targetElev > 0
           ? Array.from({ length: 6 }, (_, i) => i)
-          : Array.from({ length: 4 }, (_, i) => (request.circularSeed ?? 0) + i)
+          : Array.from({ length: 5 }, (_, i) => (request.circularSeed ?? 0) + i)
         : [request.circularSeed ?? 0]
 
-    // Try every modality strategy (capped) until we hit acceptScore.
+    // Exhaust modality strategies (capped) to maximize surface fit for this bike.
     const maxSurfaceAttempts = Math.min(
-      request.routeType === 'circular' ? 4 : 6,
+      request.routeType === 'circular' ? 4 : Math.max(3, strategies.length),
       strategies.length,
     )
 
     let lastMaintenance: string | undefined
     const downProfiles = new Set<string>()
     let bestElev: RoutingResult | undefined
-    let bestElevScore = Number.POSITIVE_INFINITY
+    let bestElevCombo = Number.POSITIVE_INFINITY
     let bestSurface: RoutingResult | undefined
     let bestSurfaceScore = -1
     let anyOkResponse = false
@@ -338,15 +339,15 @@ export class OpenRouteServiceProvider implements RoutingProvider {
             ),
           }
 
-          // Alternatives only on first strategy attempt (quota). Retry without if rejected.
+          // Ask for alternate geometries so we can pick the one that best matches the bike.
           const tryBodies: Record<string, unknown>[] = [{ ...body }]
-          if (request.routeType === 'a_to_b' && si === 0) {
+          if (request.routeType === 'a_to_b' && si <= 1) {
             tryBodies.unshift({
               ...body,
               alternative_routes: {
-                target_count: 2,
-                share_factor: 0.55,
-                weight_factor: 1.5,
+                target_count: 3,
+                share_factor: 0.5,
+                weight_factor: 1.6,
               },
             })
           }
@@ -443,23 +444,20 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                     })
                   : undefined
 
-              // Prefer alternative with better surface fit for this bike when present.
-              let chosen = primary
-              if (alternatives?.length) {
-                const pool = [
-                  primary,
-                  ...alternatives.map((a) => ({
-                    ...a,
-                    rawInstructions: primary.rawInstructions,
-                  })),
-                ]
-                pool.sort(
-                  (a, b) =>
-                    (b.stats.surfaceStats?.suitability?.score ?? 0) -
-                    (a.stats.surfaceStats?.suitability?.score ?? 0),
-                )
-                chosen = pool[0]
-              }
+              // Score every geometry (primary + alts); keep the best surface fit for this bike.
+              const pool = [
+                primary,
+                ...(alternatives ?? []).map((a) => ({
+                  ...a,
+                  rawInstructions: primary.rawInstructions,
+                })),
+              ]
+              pool.sort(
+                (a, b) =>
+                  (b.stats.surfaceStats?.suitability?.score ?? 0) -
+                  (a.stats.surfaceStats?.suitability?.score ?? 0),
+              )
+              const chosen = pool[0]
 
               const candidate: RoutingResult = {
                 geometry: chosen.geometry,
@@ -477,23 +475,20 @@ export class OpenRouteServiceProvider implements RoutingProvider {
               }
 
               if (targetElev && targetElev > 0) {
-                // Elevation target is secondary: only keep candidates that also meet surface.
-                if (suit >= acceptScore) {
-                  const elevDiff = Math.abs(candidate.stats.elevationGainMeters - targetElev)
-                  const distTarget = request.circularDistanceMeters ?? candidate.stats.distanceMeters
-                  const distDiff =
-                    Math.abs(candidate.stats.distanceMeters - distTarget) / Math.max(1, distTarget)
-                  const score = elevDiff + distDiff * targetElev * 0.25
-                  if (score < bestElevScore) {
-                    bestElevScore = score
-                    bestElev = candidate
-                  }
-                  gotResult = true
-                  if (elevDiff <= Math.max(40, targetElev * 0.12)) {
-                    return candidate
-                  }
-                } else {
-                  gotResult = true
+                // Prefer bike surface first; among those, closest elevation target.
+                const elevDiff = Math.abs(candidate.stats.elevationGainMeters - targetElev)
+                const distTarget = request.circularDistanceMeters ?? candidate.stats.distanceMeters
+                const distDiff =
+                  Math.abs(candidate.stats.distanceMeters - distTarget) / Math.max(1, distTarget)
+                const combo =
+                  (100 - suit) * 12 + elevDiff + distDiff * Math.max(40, targetElev) * 0.2
+                if (combo < bestElevCombo) {
+                  bestElevCombo = combo
+                  bestElev = candidate
+                }
+                gotResult = true
+                if (suit >= targetScore && elevDiff <= Math.max(40, targetElev * 0.12)) {
+                  return candidate
                 }
                 break profileLoop
               }
@@ -503,39 +498,21 @@ export class OpenRouteServiceProvider implements RoutingProvider {
             }
           }
 
-          // Early exit when we already have a profile-fit route.
-          if (gotResult && bestSurfaceScore >= acceptScore && !targetElev) {
+          // Good enough for this bike profile — no need to burn more ORS quota.
+          if (gotResult && bestSurfaceScore >= targetScore && !targetElev) {
             return bestSurface!
           }
         }
 
-        // Circular with elev: keep searching seeds. Circular without elev: also keep seeds
-        // until surface is good enough.
-        if (bestSurfaceScore >= acceptScore && !targetElev) {
+        if (bestSurfaceScore >= targetScore && !targetElev) {
           return bestSurface!
         }
         if (request.routeType !== 'circular') break
       }
 
-      // Strict gate: never return a route the chosen bike cannot ride safely.
-      if (bestElev && (bestElev.stats.surfaceStats?.suitability?.score ?? 0) >= acceptScore) {
-        return bestElev
-      }
-      if (bestSurface && bestSurfaceScore >= acceptScore) {
-        return bestSurface
-      }
-
-      if (bestSurface || bestElev) {
-        const score = Math.max(
-          bestSurfaceScore,
-          bestElev?.stats.surfaceStats?.suitability?.score ?? 0,
-        )
-        throw new RoutingError(
-          `No apta para ${getBikeModality(request.bikeType).label}: mejor idoneidad ${score}/100 (mínimo ${acceptScore}). Cambia bici, puntos o preferencias.`,
-          'no_route',
-          { score, acceptScore, bikeType: request.bikeType },
-        )
-      }
+      // Always return the best bike-fit route we found (elevation-aware when requested).
+      if (targetElev && bestElev) return bestElev
+      if (bestSurface) return bestSurface
 
       if (!anyOkResponse && lastMaintenance) {
         throw new RoutingError(
@@ -547,7 +524,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
 
       throw new RoutingError(
         anyOkResponse
-          ? 'No route found that fits the selected bike surface profile'
+          ? 'No route found for preferences'
           : 'OpenRouteService is temporarily unavailable (maintenance)',
         anyOkResponse ? 'no_route' : 'provider_error',
         lastMaintenance,

@@ -7,6 +7,35 @@ interface SurfaceBreakdownProps {
   surfaceStats: SurfaceStats
 }
 
+function fitCopy(score: number, bikeLabel: string): { title: string; hint: string; tone: 'good' | 'ok' | 'warn' } {
+  if (score >= PROFILE_MIN_SCORE) {
+    return {
+      title: `Óptima para ${bikeLabel}`,
+      hint: `Idoneidad ${score}% · encaja muy bien con este perfil`,
+      tone: 'good',
+    }
+  }
+  if (score >= 75) {
+    return {
+      title: `Buena para ${bikeLabel}`,
+      hint: `Idoneidad ${score}% · mejor opción encontrada cerca de tus puntos`,
+      tone: 'ok',
+    }
+  }
+  if (score >= 55) {
+    return {
+      title: `Pasable para ${bikeLabel}`,
+      hint: `Idoneidad ${score}% · hay tramos menos ideales; prueba otra bici o puntos si quieres más ajuste`,
+      tone: 'warn',
+    }
+  }
+  return {
+    title: `Poco ideal para ${bikeLabel}`,
+    hint: `Idoneidad ${score}% · es la mejor candidata entre alternativas; cambia de perfil si el suelo no te encaja`,
+    tone: 'warn',
+  }
+}
+
 export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
   const surfaces = surfaceStats.surfaces ?? []
   const waytypes = surfaceStats.waytypes ?? []
@@ -14,43 +43,40 @@ export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
   const paved = Math.max(0, Math.min(100, surfaceStats.pavedPercent ?? 0))
   const unpaved = Math.max(0, Math.min(100, surfaceStats.unpavedPercent ?? 0))
   const unknown = Math.max(0, Math.min(100, surfaceStats.unknownPercent ?? 0))
-  const recommended = (suitability?.score ?? 0) >= PROFILE_MIN_SCORE
-  const bikeLabel = suitability ? getBikeModality(suitability.bikeType).label : null
+  const bikeLabel = suitability ? getBikeModality(suitability.bikeType).label : 'tu bici'
+  const fit = suitability ? fitCopy(suitability.score, bikeLabel) : null
   const topSurfaces = surfaces.slice(0, 3)
   const topWays = waytypes.slice(0, 3)
 
   return (
     <section aria-label="Superficie e idoneidad" className="space-y-3">
-      {suitability && (
+      {suitability && fit && (
         <div
           className={clsx(
             'rounded-2xl px-4 py-3 ring-1',
-            recommended
-              ? 'bg-[color-mix(in_oklab,var(--color-signal)_22%,white)] ring-[color-mix(in_oklab,var(--color-trail)_35%,white)]'
-              : 'bg-[#fff1f1] ring-[#f0c2c2]',
+            fit.tone === 'good' &&
+              'bg-[color-mix(in_oklab,var(--color-signal)_22%,white)] ring-[color-mix(in_oklab,var(--color-trail)_35%,white)]',
+            fit.tone === 'ok' && 'bg-[color-mix(in_oklab,var(--color-trail)_14%,white)] ring-[var(--color-fog)]',
+            fit.tone === 'warn' && 'bg-[#fff8f0] ring-[#efd2b0]',
           )}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="label-caps">{bikeLabel ?? 'Perfil'}</p>
+              <p className="label-caps">{bikeLabel}</p>
               <p
                 className={clsx(
                   'mt-1 font-display text-xl font-extrabold',
-                  recommended ? 'text-[var(--color-forest)]' : 'text-[var(--color-danger)]',
+                  fit.tone === 'warn' ? 'text-[#9a4b00]' : 'text-[var(--color-forest)]',
                 )}
               >
-                {recommended ? 'Apta para tu bici' : 'No apta para tu bici'}
+                {fit.title}
               </p>
-              <p className="mt-1 text-xs text-[var(--color-stone)]">
-                {recommended
-                  ? `Idoneidad ${suitability.score}% · objetivo ≥${PROFILE_MIN_SCORE}%`
-                  : `Idoneidad ${suitability.score}% (mínimo ${PROFILE_MIN_SCORE}%). Cambia bici o puntos.`}
-              </p>
+              <p className="mt-1 text-xs text-[var(--color-stone)]">{fit.hint}</p>
             </div>
             <p
               className={clsx(
                 'font-display text-3xl font-extrabold leading-none',
-                recommended ? 'text-[var(--color-forest)]' : 'text-[var(--color-danger)]',
+                fit.tone === 'warn' ? 'text-[#9a4b00]' : 'text-[var(--color-forest)]',
               )}
               aria-label={`Idoneidad ${suitability.score} por ciento`}
             >
