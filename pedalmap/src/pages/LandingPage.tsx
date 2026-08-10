@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: '¿Qué cambia según el tipo de bici?',
-    a: 'Carretera prioriza asfalto; urbana, carril bici; gravel, pistas y grava compacta; MTB, senderos y tierra; e-bike, perfil eléctrico sobre pavimento. PedalMap prueba perfiles y alternativas ORS y te muestra la mejor candidata para ese tipo de bici, con un % de idoneidad.',
+    a: 'Carretera, urbana, gravel, MTB y e-bike usan Valhalla (tipo de bici + superficie en el cálculo). Circulares siguen con ORS. Verás un % de idoneidad de la mejor ruta encontrada.',
   },
   {
     q: '¿Cómo crear una ruta GPX?',

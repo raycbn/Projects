@@ -46,8 +46,8 @@ export function BikeSelector({ value, onChange }: BikeSelectorProps) {
         {modality.avoidSurfaces.slice(0, 3).join(' · ')}
       </p>
       <p className="mt-1 text-[11px] text-[var(--color-stone)]">
-        Buscamos la ruta más adecuada para {modality.label} entre esos puntos (perfiles ORS +
-        alternativas).
+        Motor Valhalla: calcula la ruta según el suelo ideal de {modality.label} (no solo la puntúa
+        después).
       </p>
     </fieldset>
   )

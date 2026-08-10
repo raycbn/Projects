@@ -8,6 +8,10 @@ export interface Env {
   STRIPE_PRICE_YEARLY: string
   APP_URL: string
   ALLOWED_ORIGINS?: string
+  /** Optional: Stadia Maps API key → commercial Valhalla hosting. */
+  STADIA_API_KEY?: string
+  /** Optional: self-hosted or public Valhalla base (default FOSSGIS). */
+  VALHALLA_URL?: string
 }
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'

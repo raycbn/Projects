@@ -1,6 +1,7 @@
 import type { Env } from './types'
 import { corsHeaders, json } from './types'
 import { handleOrsProxy } from './ors'
+import { handleValhallaProxy } from './valhalla'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
 import { enforceRateLimit } from './rateLimit'
 
@@ -28,13 +29,15 @@ export default {
           json({
             ok: true,
             service: 'pedalmap-api',
-            hint: 'Use GET /health, POST /v2/directions/{profile}/geojson, POST /stripe/checkout',
+            hint: 'ORS + Valhalla bike routing proxies',
             health: '/health',
           }),
         )
       }
 
       if (path === '/health' && request.method === 'GET') {
+        const stadia = Boolean(env.STADIA_API_KEY)
+        const valhallaUrl = env.VALHALLA_URL || 'https://valhalla1.openstreetmap.de'
         return withCors(
           env,
           request,
@@ -44,6 +47,11 @@ export default {
             stack: 'cloudflare-workers',
             blaze: false,
             orsConfigured: Boolean(env.ORS_API_KEY),
+            valhalla: {
+              mode: stadia ? 'stadiamaps' : 'url',
+              url: stadia ? 'https://api.stadiamaps.com' : valhallaUrl,
+              commercialReady: stadia,
+            },
             stripeConfigured: Boolean(env.STRIPE_SECRET_KEY),
             firestoreAdminConfigured: Boolean(env.FIREBASE_SERVICE_ACCOUNT),
             prices: {
@@ -62,6 +70,40 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleOrsProxy(request, env, path))
+      }
+
+      if (path === '/valhalla/route' && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 40,
+          windowSec: 60,
+          prefix: 'valhalla',
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleValhallaProxy(request, env, 'route'))
+      }
+
+      if (path === '/valhalla/trace_attributes' && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 60,
+          windowSec: 60,
+          prefix: 'valhalla-attr',
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(
+          env,
+          request,
+          await handleValhallaProxy(request, env, 'trace_attributes'),
+        )
+      }
+
+      if (path === '/valhalla/height' && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 60,
+          windowSec: 60,
+          prefix: 'valhalla-height',
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleValhallaProxy(request, env, 'height'))
       }
 
       if (path === '/stripe/checkout' && request.method === 'POST') {
@@ -85,7 +127,6 @@ export default {
       }
 
       if (path === '/stripe/webhook' && request.method === 'POST') {
-        // Stripe webhooks don't need CORS / IP rate limit (signed)
         return handleWebhook(request, env)
       }
 
