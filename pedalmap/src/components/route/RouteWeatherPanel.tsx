@@ -181,8 +181,9 @@ export function RouteWeatherPanel({
                         : 'bg-white ring-1 ring-[var(--color-fog)] text-[var(--color-forest)]',
                     )}
                     onClick={() => {
+                      // Parent clears the window when an hour is set — don't call
+                      // onSelectWindow(null) here or it wipes the hour selection.
                       onSelectHour(h)
-                      onSelectWindow(null)
                     }}
                     title={`${formatWeatherDay(h.time)} · ${Math.round(h.windSpeedKmh)} km/h`}
                   >

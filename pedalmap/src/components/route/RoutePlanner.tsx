@@ -1,4 +1,4 @@
-import { lazy, Suspense, startTransition, useDeferredValue, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
@@ -87,8 +87,6 @@ export function RoutePlanner() {
   const [shareBusy, setShareBusy] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
-  const deferredWindHour = useDeferredValue(selectedWindHour)
-  const deferredWindWindow = useDeferredValue(selectedWindWindow)
 
   const activeDraft = editDraft ?? draft
   const vias = waypoints.filter((w) => w.kind === 'via')
@@ -102,14 +100,14 @@ export function RoutePlanner() {
 
   const windOverlay = useMemo(() => {
     if (!activeDraft?.geometry) return null
-    if (!deferredWindHour && !deferredWindWindow) return null
+    if (!selectedWindHour && !selectedWindWindow) return null
     return buildRouteWindOverlay(activeDraft.geometry, {
       routeType: activeDraft.type,
-      hour: deferredWindHour,
-      window: deferredWindHour ? null : deferredWindWindow,
+      hour: selectedWindHour,
+      window: selectedWindHour ? null : selectedWindWindow,
       sampleCount: 18,
     })
-  }, [activeDraft, deferredWindHour, deferredWindWindow])
+  }, [activeDraft, selectedWindHour, selectedWindWindow])
 
   const surfaceOverlay = useMemo(() => {
     if (!activeDraft?.geometry) return null
@@ -149,14 +147,14 @@ export function RoutePlanner() {
   }, [activeDraft])
 
   const windCaption = useMemo(() => {
-    if (deferredWindHour) {
-      return `${formatWeatherHourCaption(deferredWindHour.time)} · ${Math.round(deferredWindHour.windSpeedKmh)} km/h desde ${Math.round(deferredWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
+    if (selectedWindHour) {
+      return `${formatWeatherHourCaption(selectedWindHour.time)} · ${Math.round(selectedWindHour.windSpeedKmh)} km/h desde ${Math.round(selectedWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
     }
-    if (deferredWindWindow) {
-      return `${formatWeatherWindowCaption(deferredWindWindow.startHour, deferredWindWindow.endHour)} · ${deferredWindWindow.windSpeedKmh} km/h ${deferredWindWindow.windDirLabel} (${deferredWindWindow.relative})`
+    if (selectedWindWindow) {
+      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
     }
     return null
-  }, [deferredWindHour, deferredWindWindow])
+  }, [selectedWindHour, selectedWindWindow])
 
   async function handleSave() {
     if (!draft) return
@@ -719,16 +717,13 @@ export function RoutePlanner() {
                     selectedWindow={selectedWindWindow}
                     selectedHour={selectedWindHour}
                     onSelectWindow={(w) => {
-                      startTransition(() => {
-                        setSelectedWindWindow(w)
-                        setSelectedWindHour(null)
-                      })
+                      setSelectedWindWindow(w)
+                      // Only clear hour when picking a real window (not a null sync call).
+                      if (w) setSelectedWindHour(null)
                     }}
                     onSelectHour={(h) => {
-                      startTransition(() => {
-                        setSelectedWindHour(h)
-                        if (h) setSelectedWindWindow(null)
-                      })
+                      setSelectedWindHour(h)
+                      if (h) setSelectedWindWindow(null)
                     }}
                   />
                 </div>
