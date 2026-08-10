@@ -6,6 +6,7 @@ import { handleBikeRoute } from './bikeRoute'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
 import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
+import { handleEntitlements, handleSyncPlan } from './entitlements'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
@@ -134,6 +135,32 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleValhallaProxy(request, env, 'height'))
+      }
+
+      if (path === '/me/sync-plan' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'sync-plan',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleSyncPlan(env, identity))
+      }
+
+      if (path === '/me/entitlements' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 60,
+          windowSec: 60,
+          prefix: 'entitlements',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleEntitlements(env, identity))
       }
 
       if (path === '/stripe/checkout' && request.method === 'POST') {

@@ -110,14 +110,30 @@ export class ActivityRepository {
     status: ActivityStatus,
     finishedAt?: string,
   ): Promise<void> {
+    // Firestore ~1 MiB doc limit — keep a dense-enough but bounded track.
+    const capped = downsampleTrack(track, 3500)
     await updateDoc(doc(getDb(), 'activities', activityId), {
-      track,
+      track: capped,
       stats,
       status,
       ...(finishedAt ? { finishedAt } : {}),
       updatedAt: serverTimestamp(),
     })
   }
+}
+
+/** Keep first/last + evenly spaced samples so long rides fit under Firestore size. */
+export function downsampleTrack(
+  track: ActivityTrackPoint[],
+  maxPoints: number,
+): ActivityTrackPoint[] {
+  if (track.length <= maxPoints) return track
+  const step = Math.ceil(track.length / maxPoints)
+  const out: ActivityTrackPoint[] = []
+  for (let i = 0; i < track.length; i += step) out.push(track[i])
+  const last = track[track.length - 1]
+  if (out[out.length - 1] !== last) out.push(last)
+  return out
 }
 
 export const activityRepository = new ActivityRepository()

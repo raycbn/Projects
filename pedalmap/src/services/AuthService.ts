@@ -17,7 +17,7 @@ import type { UserProfile } from '@/domain/types'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
-import { applyPremiumAllowlist, isAllowlistedPremiumEmail } from '@/lib/premiumAllowlist'
+import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
 
 const googleProvider = new GoogleAuthProvider()
 
@@ -61,7 +61,8 @@ function emptyProfile(user: User): UserProfile {
     email,
     displayName: user.displayName,
     photoURL: user.photoURL,
-    plan: isAllowlistedPremiumEmail(email) ? 'premium' : 'free',
+    // Plan starts free; Worker /me/sync-plan upgrades allowlisted emails via Admin.
+    plan: 'free',
     bikePreferences: {
       bikeType: 'road',
       preferences: [],
@@ -264,6 +265,27 @@ export class AuthService {
         usage: {
           ...usage,
           routesSaved: (usage.routesSaved ?? 0) + 1,
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
+
+  async recordRouteDeleted(uid: string): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    const snap = await getDoc(ref)
+    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
+      routesCreatedThisMonth: 0,
+      routesSaved: 0,
+      monthKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}`,
+    }
+    await setDoc(
+      ref,
+      {
+        usage: {
+          ...usage,
+          routesSaved: Math.max(0, (usage.routesSaved ?? 0) - 1),
         },
         updatedAt: serverTimestamp(),
       },

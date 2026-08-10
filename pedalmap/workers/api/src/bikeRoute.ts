@@ -546,6 +546,14 @@ async function routeLocationsWithOptions(
     return { ...primary, alternatives: unique.slice(1) }
   }
 
+  // FOSSGIS public Valhalla: skip costing fan-out to protect shared quota.
+  if (!env.STADIA_API_KEY) {
+    const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
+    const unique = mergeUniqueRoutes([main, ...(main.alternatives ?? [])], 3)
+    const primary = unique[0] ?? main
+    return { ...primary, alternatives: unique.slice(1) }
+  }
+
   const [mainSettled, roadsSettled, hillsSettled] = await Promise.allSettled([
     routeLocations(env, locations, costing, language, { alternates: 2 }),
     routeLocations(env, locations, costingVariant(costing, 'roads'), language),

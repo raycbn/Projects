@@ -4,6 +4,7 @@ import type { RouteDraft } from '@/domain/types'
 import { exportRouteToGpx } from '@/lib/gpx'
 import { track } from '@/lib/analytics'
 import { canExportGpx } from '@/services/EntitlementService'
+import { fetchServerEntitlements } from '@/lib/planSync'
 import { useAuth } from '@/app/AuthContext'
 
 interface GpsExportPanelProps {
@@ -74,23 +75,28 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
     return typeof navigator.share === 'function' && typeof navigator.canShare === 'function'
   }, [])
 
-  function ensurePremium(): boolean {
+  async function ensurePremium(): Promise<boolean> {
     if (!canExportGpx(profile)) {
+      onPremiumRequired?.()
+      return false
+    }
+    const server = await fetchServerEntitlements()
+    if (server && !server.gpxExport) {
       onPremiumRequired?.()
       return false
     }
     return true
   }
 
-  function download() {
-    if (!ensurePremium()) return
+  async function download() {
+    if (!(await ensurePremium())) return
     downloadGpx(route)
     track('gpx_exported', { distance_m: route.stats.distanceMeters, method: 'download' })
     setMessage('GPX descargado. Ábrelo con OsmAnd, Organic Maps, Garmin Connect o Wahoo.')
   }
 
   async function shareToApps() {
-    if (!ensurePremium()) return
+    if (!(await ensurePremium())) return
     const { file } = buildGpxFile(route)
     try {
       if (canShareFiles && navigator.canShare?.({ files: [file] })) {
@@ -103,11 +109,11 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
         setMessage('Elige OsmAnd, Organic Maps, Garmin, Wahoo u otra app GPS en el menú compartir.')
         return
       }
-      download()
+      await download()
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
       console.error('[gpx share]', error)
-      download()
+      await download()
     }
   }
 
@@ -127,7 +133,7 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
         <Button variant="secondary" onClick={() => void shareToApps()}>
           Enviar a app GPS
         </Button>
-        <Button variant="ghost" onClick={download}>
+        <Button variant="ghost" onClick={() => void download()}>
           Descargar GPX
         </Button>
       </div>
@@ -163,8 +169,13 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
 export function GPXExporter({ route, onPremiumRequired }: GpsExportPanelProps) {
   const { profile } = useAuth()
 
-  function download() {
+  async function download() {
     if (!canExportGpx(profile)) {
+      onPremiumRequired?.()
+      return
+    }
+    const server = await fetchServerEntitlements()
+    if (server && !server.gpxExport) {
       onPremiumRequired?.()
       return
     }
@@ -173,7 +184,7 @@ export function GPXExporter({ route, onPremiumRequired }: GpsExportPanelProps) {
   }
 
   return (
-    <Button variant="ghost" onClick={download}>
+    <Button variant="ghost" onClick={() => void download()}>
       Descargar GPX
     </Button>
   )

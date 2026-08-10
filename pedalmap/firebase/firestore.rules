@@ -13,26 +13,54 @@ service cloud.firestore {
       return plan in ['free', 'premium'];
     }
 
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isPremiumUser() {
+      return userData().plan == 'premium';
+    }
+
+    function routesSavedCount() {
+      return userData().usage.routesSaved;
+    }
+
+    /** Free may keep at most 5 saved routes (server-side). */
+    function withinSaveLimit() {
+      return isPremiumUser() || routesSavedCount() < 5;
+    }
+
+    function usageOk() {
+      return !('usage' in request.resource.data)
+        || !('usage' in resource.data)
+        || (
+          request.resource.data.usage.routesSaved >= 0
+          && request.resource.data.usage.routesSaved
+            <= resource.data.usage.routesSaved + 1
+          && request.resource.data.usage.routesSaved
+            >= resource.data.usage.routesSaved - 1
+          && (
+            request.resource.data.usage.monthKey != resource.data.usage.monthKey
+            || (
+              request.resource.data.usage.routesCreatedThisMonth
+                >= resource.data.usage.routesCreatedThisMonth
+              && request.resource.data.usage.routesCreatedThisMonth
+                <= resource.data.usage.routesCreatedThisMonth + 1
+            )
+          )
+        );
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
         && isValidPlan(request.resource.data.plan);
-      // Plan is frozen; usage counters may only stay equal or increase (no client resets).
+      // Plan is frozen for clients (Worker/Admin + Stripe only).
+      // Usage may change by at most ±1 on routesSaved (save/delete).
       allow update: if isOwner(userId)
         && request.resource.data.plan == resource.data.plan
-        && (
-          !('usage' in request.resource.data)
-          || !('usage' in resource.data)
-          || (
-            request.resource.data.usage.routesSaved >= resource.data.usage.routesSaved
-            && (
-              request.resource.data.usage.monthKey != resource.data.usage.monthKey
-              || request.resource.data.usage.routesCreatedThisMonth
-                >= resource.data.usage.routesCreatedThisMonth
-            )
-          )
-        );
+        && usageOk();
       allow delete: if isOwner(userId);
     }
 
@@ -48,7 +76,8 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
-        && request.resource.data.title.size() <= 120;
+        && request.resource.data.title.size() <= 120
+        && withinSaveLimit();
       allow update, delete: if isOwner(resource.data.userId);
     }
 

@@ -15,7 +15,6 @@ import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
 import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
 import { routeRepository } from '@/services/RouteRepository'
 import { canSaveRoute } from '@/services/EntitlementService'
-import { authService } from '@/services/AuthService'
 import { track } from '@/lib/analytics'
 import { routeService } from '@/services/RouteService'
 import { formatDistance, formatElevation } from '@/lib/stats'
@@ -23,7 +22,8 @@ import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
 import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
 import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
 import { shareRouteCard } from '@/lib/shareCard'
-import { stashGpsRoute } from '@/lib/gpsRouteHandoff'
+import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
+import { fetchServerEntitlements } from '@/lib/planSync'
 import {
   formatWeatherHourCaption,
   formatWeatherWindowCaption,
@@ -173,14 +173,22 @@ export function RoutePlanner() {
       return
     }
     try {
+      // Server-side check (Worker) before transactional save.
+      const server = await fetchServerEntitlements()
+      if (server && server.canSaveRoute === false) {
+        showPaywall('save_limit')
+        return
+      }
       await routeRepository.save(user.uid, draft, { isPublic: false })
-      void authService.recordRouteSaved(user.uid).catch((err) => {
-        console.warn('[save] usage', err)
-      })
       track('route_saved', { distance_m: draft.stats.distanceMeters })
       setSaveMessage('Ruta guardada en Mis rutas.')
     } catch (error) {
       console.error('[save]', error)
+      const msg = error instanceof Error ? error.message : ''
+      if (msg === 'save_limit' || msg.includes('permission')) {
+        showPaywall('save_limit')
+        return
+      }
       setSaveMessage('No se pudo guardar la ruta. Inténtalo de nuevo.')
     }
   }
@@ -233,7 +241,9 @@ export function RoutePlanner() {
     if (!activeDraft) return
     setShareBusy(true)
     try {
-      const result = await shareRouteCard(activeDraft)
+      // Deep link to the app (avoid burning Free save quota on every share).
+      const url = `${window.location.origin}/route-planner`
+      const result = await shareRouteCard(activeDraft, url)
       setSaveMessage(
         result === 'shared'
           ? 'Tarjeta compartida.'
@@ -252,18 +262,28 @@ export function RoutePlanner() {
 
   function stashForRide() {
     if (!activeDraft) return
+    const instructionAtMeters = buildInstructionAtMeters(
+      activeDraft.instructions,
+      activeDraft.stats.distanceMeters,
+    )
     stashGpsRoute({
       title: activeDraft.title || 'Salida PedalMap',
       bikeType,
       geometry: activeDraft.geometry,
       instructions: activeDraft.instructions,
+      instructionAtMeters,
+      surfaceEdges: activeDraft.surfaceEdges,
     })
   }
 
   const ctaDisabled = status === 'calculating' || !canCalculate
   const ctaLabel =
     status === 'calculating'
-      ? 'Calculando ruta…'
+      ? routeType === 'out_and_back'
+        ? 'Calculando ida y vuelta…'
+        : routeType === 'circular'
+          ? 'Buscando circular Objetivo…'
+          : 'Calculando ruta…'
       : !canCalculate
         ? routeType === 'circular'
           ? 'Falta el punto de partida'
@@ -643,7 +663,7 @@ export function RoutePlanner() {
                       key={alt.id}
                       type="button"
                       className="rounded-xl bg-[var(--color-mist)] px-3 py-1.5 text-xs font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
-                      onClick={() => selectAlternative(index)}
+                      onClick={() => selectAlternative(index + 1)}
                     >
                       {alt.label} · {formatDistance(alt.stats.distanceMeters)}
                     </button>
@@ -841,7 +861,11 @@ export function RoutePlanner() {
         </div>
         {status === 'calculating' && (
           <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
-            Calculando la mejor ruta ciclista…
+            {routeType === 'out_and_back'
+              ? 'Calculando ida y vuelta (puede tardar unos segundos)…'
+              : routeType === 'circular'
+                ? 'Buscando circular Objetivo…'
+                : 'Calculando la mejor ruta ciclista…'}
           </p>
         )}
         {!activeDraft && status !== 'calculating' && !mapExpanded && (

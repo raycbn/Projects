@@ -1,11 +1,11 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -13,6 +13,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import type { RouteDraft, SavedRoute } from '@/domain/types'
+import { FREE_LIMITS } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 import { createShareSlug } from '@/lib/share'
 
@@ -69,21 +70,58 @@ export class RouteRepository {
     return this.mapDoc(first.id, first.data())
   }
 
+  /**
+   * Transactional save: enforce Free save cap + bump usage.routesSaved atomically.
+   * Firestore rules also reject creates over the Free limit.
+   */
   async save(userId: string, draft: RouteDraft, options?: { isPublic?: boolean }): Promise<SavedRoute> {
     const shareSlug = createShareSlug(draft.title)
-    const payload = {
-      ...draft,
-      userId,
-      isPublic: options?.isPublic ?? false,
-      shareSlug,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }
-    const ref = await addDoc(collection(getDb(), 'routes'), payload)
+    const db = getDb()
+    const userRef = doc(db, 'users', userId)
+    const routeRef = doc(collection(db, 'routes'))
+    const isPublic = options?.isPublic ?? false
+    const nowIso = new Date().toISOString()
 
-    if (options?.isPublic) {
-      await setDoc(doc(getDb(), 'routeShares', shareSlug), {
-        routeId: ref.id,
+    await runTransaction(db, async (tx) => {
+      const userSnap = await tx.get(userRef)
+      const usage = (userSnap.data()?.usage as
+        | { routesCreatedThisMonth?: number; routesSaved?: number; monthKey?: string }
+        | undefined) ?? {
+        routesCreatedThisMonth: 0,
+        routesSaved: 0,
+        monthKey: monthKey(),
+      }
+      const plan = (userSnap.data()?.plan as 'free' | 'premium' | undefined) ?? 'free'
+      const saved = usage.routesSaved ?? 0
+      if (plan !== 'premium' && saved >= FREE_LIMITS.maxRoutesSaved) {
+        throw new Error('save_limit')
+      }
+
+      tx.set(routeRef, {
+        ...draft,
+        userId,
+        isPublic,
+        shareSlug,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      tx.set(
+        userRef,
+        {
+          usage: {
+            routesCreatedThisMonth: usage.routesCreatedThisMonth ?? 0,
+            routesSaved: saved + 1,
+            monthKey: usage.monthKey ?? monthKey(),
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    })
+
+    if (isPublic) {
+      await setDoc(doc(db, 'routeShares', shareSlug), {
+        routeId: routeRef.id,
         userId,
         createdAt: serverTimestamp(),
       })
@@ -91,12 +129,12 @@ export class RouteRepository {
 
     return {
       ...draft,
-      id: ref.id,
+      id: routeRef.id,
       userId,
-      isPublic: options?.isPublic ?? false,
+      isPublic,
       shareSlug,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     }
   }
 
@@ -125,16 +163,44 @@ export class RouteRepository {
     return this.save(userId, draft)
   }
 
+  /** Delete route + decrement usage.routesSaved in one transaction. */
   async remove(routeId: string, userId: string): Promise<void> {
-    const ref = doc(getDb(), 'routes', routeId)
-    const existing = await getDoc(ref)
-    if (!existing.exists() || existing.data().userId !== userId) {
-      throw new Error('No tienes permiso para eliminar esta ruta')
-    }
-    const slug = existing.data().shareSlug as string | undefined
-    await deleteDoc(ref)
+    const db = getDb()
+    const routeRef = doc(db, 'routes', routeId)
+    const userRef = doc(db, 'users', userId)
+    let slug: string | undefined
+
+    await runTransaction(db, async (tx) => {
+      const existing = await tx.get(routeRef)
+      if (!existing.exists() || existing.data().userId !== userId) {
+        throw new Error('No tienes permiso para eliminar esta ruta')
+      }
+      slug = existing.data().shareSlug as string | undefined
+      const userSnap = await tx.get(userRef)
+      const usage = (userSnap.data()?.usage as
+        | { routesCreatedThisMonth?: number; routesSaved?: number; monthKey?: string }
+        | undefined) ?? {
+        routesCreatedThisMonth: 0,
+        routesSaved: 0,
+        monthKey: monthKey(),
+      }
+      tx.delete(routeRef)
+      tx.set(
+        userRef,
+        {
+          usage: {
+            routesCreatedThisMonth: usage.routesCreatedThisMonth ?? 0,
+            routesSaved: Math.max(0, (usage.routesSaved ?? 0) - 1),
+            monthKey: usage.monthKey ?? monthKey(),
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    })
+
     if (slug) {
-      await deleteDoc(doc(getDb(), 'routeShares', slug)).catch(() => undefined)
+      await deleteDoc(doc(db, 'routeShares', slug)).catch(() => undefined)
     }
   }
 

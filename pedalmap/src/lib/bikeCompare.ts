@@ -19,8 +19,30 @@ const COMPARE_SET: Array<{ bikeType: BikeType; label: string }> = [
 ]
 
 /**
- * Same A→B (or current mode) calculated for road / gravel / MTB in parallel.
+ * Same A→B (or current mode) calculated for road / gravel / MTB.
+ * Serialized (not 3-way parallel) to protect Worker/upstream quotas; cached by waypoint hash.
  */
+const compareCache = new Map<string, BikeCompareRow[]>()
+
+function compareCacheKey(input: {
+  waypoints: Waypoint[]
+  preferences: RoutePreference[]
+  routeType: RouteType
+  circularDistanceMeters?: number
+  targetElevationGainMeters?: number
+}): string {
+  const pts = input.waypoints
+    .map((w) => `${w.position.lng.toFixed(5)},${w.position.lat.toFixed(5)}`)
+    .join('|')
+  return [
+    input.routeType,
+    pts,
+    [...input.preferences].sort().join(','),
+    input.circularDistanceMeters ?? '',
+    input.targetElevationGainMeters ?? '',
+  ].join('::')
+}
+
 export async function compareBikesForWaypoints(input: {
   waypoints: Waypoint[]
   preferences: RoutePreference[]
@@ -28,31 +50,41 @@ export async function compareBikesForWaypoints(input: {
   circularDistanceMeters?: number
   targetElevationGainMeters?: number
 }): Promise<BikeCompareRow[]> {
-  const results = await Promise.all(
-    COMPARE_SET.map(async ({ bikeType, label }) => {
-      const draft = await routeService.calculate({
-        waypoints: input.waypoints,
-        bikeType,
-        preferences: input.preferences,
-        routeType: input.routeType,
-        circularDistanceMeters: input.circularDistanceMeters,
-        targetElevationGainMeters: input.targetElevationGainMeters,
-        wantAlternatives: false,
-        title: `${label} · comparación`,
-      })
-      return {
-        bikeType,
-        label,
-        draft,
-        score: draft.stats.surfaceStats?.suitability?.score ?? 0,
-        distanceMeters: draft.stats.distanceMeters,
-        elevationGainMeters: draft.stats.elevationGainMeters,
-        pavedPercent: draft.stats.surfaceStats?.pavedPercent ?? 0,
-        unpavedPercent: draft.stats.surfaceStats?.unpavedPercent ?? 0,
-      }
-    }),
-  )
-  return results.sort((a, b) => b.score - a.score)
+  const key = compareCacheKey(input)
+  const hit = compareCache.get(key)
+  if (hit) return hit
+
+  const results: BikeCompareRow[] = []
+  for (const { bikeType, label } of COMPARE_SET) {
+    const draft = await routeService.calculate({
+      waypoints: input.waypoints,
+      bikeType,
+      preferences: input.preferences,
+      routeType: input.routeType,
+      circularDistanceMeters: input.circularDistanceMeters,
+      targetElevationGainMeters: input.targetElevationGainMeters,
+      wantAlternatives: false,
+      title: `${label} · comparación`,
+    })
+    results.push({
+      bikeType,
+      label,
+      draft,
+      score: draft.stats.surfaceStats?.suitability?.score ?? 0,
+      distanceMeters: draft.stats.distanceMeters,
+      elevationGainMeters: draft.stats.elevationGainMeters,
+      pavedPercent: draft.stats.surfaceStats?.pavedPercent ?? 0,
+      unpavedPercent: draft.stats.surfaceStats?.unpavedPercent ?? 0,
+    })
+  }
+  const sorted = results.sort((a, b) => b.score - a.score)
+  compareCache.set(key, sorted)
+  // Bound memory
+  if (compareCache.size > 12) {
+    const first = compareCache.keys().next().value
+    if (first) compareCache.delete(first)
+  }
+  return sorted
 }
 
 function haversine(a: LatLng, b: LatLng): number {

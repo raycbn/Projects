@@ -166,6 +166,72 @@ export async function readSubscriptionCustomerId(
   return json.fields?.stripeCustomerId?.stringValue
 }
 
+/** Read users/{uid}.plan + usage via Admin REST. */
+export async function readUserEntitlements(
+  env: Env,
+  uid: string,
+): Promise<{ plan: 'free' | 'premium'; routesSaved: number } | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (res.status === 404) return { plan: 'free', routesSaved: 0 }
+  if (!res.ok) return null
+  const json = (await res.json()) as {
+    fields?: {
+      plan?: { stringValue?: string }
+      usage?: {
+        mapValue?: {
+          fields?: {
+            routesSaved?: { integerValue?: string; doubleValue?: number }
+          }
+        }
+      }
+    }
+  }
+  const planRaw = json.fields?.plan?.stringValue
+  const plan: 'free' | 'premium' = planRaw === 'premium' ? 'premium' : 'free'
+  const savedField = json.fields?.usage?.mapValue?.fields?.routesSaved
+  const routesSaved = Number(savedField?.integerValue ?? savedField?.doubleValue ?? 0) || 0
+  return { plan, routesSaved }
+}
+
+/** Admin-only: set users.plan (allowlist / Stripe). Client rules freeze plan. */
+export async function writeUserPlan(
+  env: Env,
+  uid: string,
+  plan: 'free' | 'premium',
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT missing — plan not persisted')
+    return
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(userUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        plan: { stringValue: plan },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`users.plan write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
 export async function writeSubscriptionCustomerId(
   env: Env,
   uid: string,

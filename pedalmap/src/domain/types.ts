@@ -175,7 +175,7 @@ export const FREE_LIMITS: FreemiumLimits = {
   maxRoutesSaved: 5,
   maxRoutesCreatedPerMonth: 15,
   gpxExport: false,
-  /** Objetivo circular (km + desnivel) es Premium; invitados pueden probarlo. */
+  /** Objetivo circular (km + desnivel) es Premium; invitados = Free (sin Objetivo avanzado). */
   advancedCircular: false,
   advancedFilters: false,
   maxActivePreferences: 2,

@@ -4,7 +4,7 @@ import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
 import type { Feature, FeatureCollection, LineString, Point } from 'geojson'
 import type { LatLng, RouteGeometry, Waypoint } from '@/domain/types'
-import { getMapStyleUrl } from '@/lib/mapTiles'
+import { getMapStyleUrl, loadMapStyleSpec } from '@/lib/mapTiles'
 
 /**
  * Vite bundles MapLibre into a chunk, so its relative worker URL breaks
@@ -13,7 +13,12 @@ import { getMapStyleUrl } from '@/lib/mapTiles'
  */
 setWorkerUrl(`${import.meta.env.BASE_URL}assets/maplibre-gl-worker.mjs`)
 
-const STYLE_URL = getMapStyleUrl()
+let cachedStyle: string | Record<string, unknown> | null = null
+async function resolveMapStyle(): Promise<string | Record<string, unknown>> {
+  if (cachedStyle) return cachedStyle
+  cachedStyle = await loadMapStyleSpec().catch(() => getMapStyleUrl())
+  return cachedStyle
+}
 
 /** Discrete wind colors — match() on string props is more reliable than float interpolate. */
 const WIND_COLOR_EXPR: maplibregl.ExpressionSpecification = [
@@ -561,68 +566,83 @@ export function MapView({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
+    const container = containerRef.current
+    let cancelled = false
+    let map: Map | null = null
+    let ro: ResizeObserver | null = null
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE_URL,
-      center: [-3.7038, 40.4168],
-      zoom: 10,
-      attributionControl: { compact: true },
-    })
-
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right')
-    map.addControl(new maplibregl.FullscreenControl(), 'top-right')
-    map.addControl(
-      new maplibregl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: false,
-      }),
-      'top-right',
-    )
-
-    const paintFromRef = (fit: boolean) => {
-      applyGeometry(map, geometryRef.current, fit)
-      applySurfaceOverlay(map, surfaceRef.current)
-      applyWindOverlay(map, windRef.current)
-      setWindArrowLayersVisible(map, showWindArrowsRef.current)
-    }
-
-    const resize = () => map.resize()
-
-    map.on('load', () => {
-      resize()
-      requestAnimationFrame(() => {
-        resize()
-        paintFromRef(true)
+    void resolveMapStyle().then((style) => {
+      if (cancelled || !container) return
+      map = new maplibregl.Map({
+        container,
+        style: style as string,
+        center: [-3.7038, 40.4168],
+        zoom: 10,
+        attributionControl: { compact: true },
       })
-    })
-    // Only repair wind stack if layers were dropped (style swap), not on every styledata tick.
-    map.on('styledata', () => {
-      if (!map.isStyleLoaded()) return
-      if (!map.getLayer('route-wind-segments') && windRef.current?.features?.length) {
-        rebuildWindLayers(map)
+
+      map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right')
+      map.addControl(new maplibregl.FullscreenControl(), 'top-right')
+      map.addControl(
+        new maplibregl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: false,
+        }),
+        'top-right',
+      )
+
+      const paintFromRef = (fit: boolean) => {
+        if (!map) return
+        applyGeometry(map, geometryRef.current, fit)
+        applySurfaceOverlay(map, surfaceRef.current)
+        applyWindOverlay(map, windRef.current)
+        setWindArrowLayersVisible(map, showWindArrowsRef.current)
       }
-      paintFromRef(false)
-    })
-    map.on('error', (e: { error?: Error }) => {
-      console.error('[maplibre]', e.error ?? e)
+
+      const resize = () => map?.resize()
+
+      map.on('load', () => {
+        resize()
+        requestAnimationFrame(() => {
+          resize()
+          paintFromRef(true)
+        })
+      })
+      // Only repair missing overlay layers after a style swap — skip no-op styledata ticks.
+      map.on('styledata', () => {
+        if (!map?.isStyleLoaded()) return
+        const needsRoute =
+          Boolean(geometryRef.current?.coordinates?.length) && !map.getLayer('route-line')
+        const needsWind =
+          Boolean(windRef.current?.features?.length) && !map.getLayer('route-wind-segments')
+        const needsSurface =
+          Boolean(surfaceRef.current?.features?.length) && !map.getLayer('route-surface-line')
+        if (!needsRoute && !needsWind && !needsSurface) return
+        if (needsWind) rebuildWindLayers(map)
+        paintFromRef(false)
+      })
+      map.on('error', (e: { error?: Error }) => {
+        console.error('[maplibre]', e.error ?? e)
+      })
+
+      ro = new ResizeObserver(() => resize())
+      ro.observe(container)
+
+      map.on('click', (e: MapMouseEvent) => {
+        onMapClickRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng })
+      })
+
+      mapRef.current = map
     })
 
-    const ro = new ResizeObserver(() => resize())
-    ro.observe(containerRef.current)
-
-    map.on('click', (e: MapMouseEvent) => {
-      onMapClickRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng })
-    })
-
-    mapRef.current = map
     return () => {
-      ro.disconnect()
+      cancelled = true
+      ro?.disconnect()
       markersRef.current.forEach((m) => m.remove())
       hoverMarkerRef.current?.remove()
       userMarkerRef.current?.remove()
-      map.remove()
-      mapRef.current = null
+      map?.remove()
+      if (mapRef.current === map) mapRef.current = null
     }
   }, [])
 

@@ -1,21 +1,17 @@
 /**
- * Hard-granted Premium accounts (ops allowlist).
- * Matched case-insensitively on the Firebase Auth email.
+ * Client no longer ships an email allowlist.
+ * Premium ops grants are synced via Worker POST /me/sync-plan (Admin write to users.plan).
+ * These helpers only trust the Firestore `plan` field after sync.
  */
-const PREMIUM_EMAILS = new Set(
-  ['rayvf2002@gmail.com', 'raymel.vb@gmail.com'].map((e) => e.toLowerCase()),
-)
-
-export function isAllowlistedPremiumEmail(email: string | null | undefined): boolean {
-  if (!email) return false
-  return PREMIUM_EMAILS.has(email.trim().toLowerCase())
-}
 
 export function applyPremiumAllowlist<T extends { email?: string | null; plan: 'free' | 'premium' }>(
   profile: T,
 ): T {
-  if (isAllowlistedPremiumEmail(profile.email)) {
-    return { ...profile, plan: 'premium' }
-  }
+  // No client-side spoof: plan comes from Firestore (Worker/Stripe Admin writes).
   return profile
+}
+
+/** @deprecated Prefer server sync — kept for tests that still call the old name. */
+export function isAllowlistedPremiumEmail(_email: string | null | undefined): boolean {
+  return false
 }

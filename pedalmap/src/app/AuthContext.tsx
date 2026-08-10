@@ -9,7 +9,7 @@ import type { User } from 'firebase/auth'
 import type { UserProfile } from '@/domain/types'
 import { authErrorMessage, authService } from '@/services/AuthService'
 import { isFirebaseConfigured } from '@/lib/firebase'
-import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
+import { syncServerPlan } from '@/lib/planSync'
 
 interface AuthContextValue {
   user: User | null
@@ -61,22 +61,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(next)
       if (next) {
         try {
+          await authService.ensureProfile(next)
+          if (cancelled) return
+          // Server-authoritative allowlist → Firestore plan (Worker Admin).
+          if (!next.isAnonymous) {
+            await syncServerPlan()
+          }
           const p = await authService.ensureProfile(next)
           if (cancelled) return
-          setProfile(
-            applyPremiumAllowlist({
-              ...p,
-              email: p.email ?? next.email,
-            }),
-          )
+          setProfile({
+            ...p,
+            email: p.email ?? next.email,
+          })
           unsubProfile = authService.watchProfile(next.uid, (live) => {
             if (live) {
-              setProfile(
-                applyPremiumAllowlist({
-                  ...live,
-                  email: live.email ?? next.email,
-                }),
-              )
+              setProfile({
+                ...live,
+                email: live.email ?? next.email,
+              })
             }
           })
         } catch (error) {

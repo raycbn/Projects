@@ -3,13 +3,17 @@ import { Link } from 'react-router-dom'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { Button } from '@/components/ui/Button'
-import { takeGpsRoute, type GpsRoutePacket } from '@/lib/gpsRouteHandoff'
+import {
+  instructionStepFromDistance,
+  takeGpsRoute,
+  type GpsRoutePacket,
+} from '@/lib/gpsRouteHandoff'
 import {
   nearestPointOnRoute,
   offRouteThresholdMeters,
   routeProgress,
 } from '@/lib/bikeCompare'
-import { formatDistance } from '@/lib/stats'
+import { formatDistance, pathDistanceMeters } from '@/lib/stats'
 import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
 import type { Waypoint } from '@/domain/types'
 
@@ -37,6 +41,7 @@ export function NavigationPage() {
   const [followReady, setFollowReady] = useState(false)
   const [offRouteAlert, setOffRouteAlert] = useState(false)
   const offRouteSince = useRef<number | null>(null)
+  const userPinnedStep = useRef(false)
   const { sample, error, supported } = useGeolocation(true)
 
   useEffect(() => {
@@ -65,6 +70,19 @@ export function NavigationPage() {
     if (!position || coords.length < 2) return 0
     return routeProgress(position, coords)
   }, [position, coords])
+
+  const totalMeters = useMemo(() => {
+    if (coords.length < 2) return 0
+    return pathDistanceMeters(coords.map(([lng, lat]) => ({ lng, lat })))
+  }, [coords])
+
+  const thresholds = useMemo(() => {
+    if (packet?.instructionAtMeters?.length) return packet.instructionAtMeters
+    if (!instructions.length || totalMeters <= 0) return []
+    return instructions.map((_, i) => (totalMeters * i) / instructions.length)
+  }, [packet?.instructionAtMeters, instructions, totalMeters])
+
+  const alongMeters = progress * totalMeters
 
   useEffect(() => {
     if (position) setFollowReady(true)
@@ -98,12 +116,16 @@ export function NavigationPage() {
 
   const currentInstruction = instructions[Math.min(step, Math.max(0, instructions.length - 1))]
 
-  // Advance instruction roughly by progress along the list
+  // Advance by distance along the route; manual prev/next holds until GPS catches up forward.
   useEffect(() => {
-    if (!instructions.length) return
-    const idx = Math.min(instructions.length - 1, Math.floor(progress * instructions.length))
-    setStep(idx)
-  }, [progress, instructions.length])
+    if (!thresholds.length) return
+    const auto = instructionStepFromDistance(alongMeters, thresholds)
+    setStep((prev) => {
+      if (userPinnedStep.current && auto <= prev) return prev
+      userPinnedStep.current = false
+      return auto
+    })
+  }, [alongMeters, thresholds])
 
   useEffect(() => {
     if (!voice || !currentInstruction || typeof window === 'undefined') return
@@ -139,7 +161,7 @@ export function NavigationPage() {
 
   const surfaceOverlay = useMemo(() => {
     if (!packet?.geometry) return null
-    return buildSurfaceRouteOverlay(packet.geometry, null)
+    return buildSurfaceRouteOverlay(packet.geometry, packet.surfaceEdges ?? null)
   }, [packet])
 
   if (!packet?.geometry?.coordinates?.length) {
@@ -241,7 +263,10 @@ export function NavigationPage() {
             size="sm"
             variant="ghost"
             disabled={step <= 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            onClick={() => {
+              userPinnedStep.current = true
+              setStep((s) => Math.max(0, s - 1))
+            }}
           >
             Anterior
           </Button>
@@ -249,7 +274,10 @@ export function NavigationPage() {
             size="sm"
             variant="ghost"
             disabled={step >= instructions.length - 1}
-            onClick={() => setStep((s) => Math.min(instructions.length - 1, s + 1))}
+            onClick={() => {
+              userPinnedStep.current = true
+              setStep((s) => Math.min(instructions.length - 1, s + 1))
+            }}
           >
             Siguiente
           </Button>

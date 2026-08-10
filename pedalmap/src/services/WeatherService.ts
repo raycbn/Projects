@@ -63,7 +63,7 @@ export class WeatherService {
 
   async forecastForRoute(
     geometry: RouteGeometry,
-    opts?: { forecastDays?: number },
+    opts?: { forecastDays?: number; signal?: AbortSignal },
   ): Promise<RouteWeatherForecast> {
     const center = midpoint(geometry)
     const routeBearingDeg = dominantRouteBearing(geometry)
@@ -86,7 +86,7 @@ export class WeatherService {
     url.searchParams.set('timezone', 'auto')
     url.searchParams.set('wind_speed_unit', 'kmh')
 
-    const response = await fetch(url.toString())
+    const response = await fetch(url.toString(), { signal: opts?.signal })
     if (!response.ok) {
       throw new Error(`Open-Meteo ${response.status}`)
     }

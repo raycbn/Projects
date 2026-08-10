@@ -60,7 +60,7 @@ export async function renderRouteShareCard(draft: RouteDraft): Promise<Blob> {
 
   ctx.fillStyle = 'rgba(255,255,255,0.45)'
   ctx.font = '500 26px DM Sans, sans-serif'
-  ctx.fillText('pedalmap-79b3a.web.app', 72, size - 72)
+  ctx.fillText(typeof window !== 'undefined' ? window.location.host : 'pedalmap.app', 72, size - 72)
 
   return await new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo generar la imagen'))), 'image/png')

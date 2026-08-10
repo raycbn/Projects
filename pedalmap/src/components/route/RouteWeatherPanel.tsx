@@ -32,6 +32,23 @@ function scoreClass(label: RideWindowAdvice['label']): string {
   }
 }
 
+/** Identity that changes when the user picks another option / geometry. */
+function geometryIdentity(route: RouteDraft): string {
+  const coords = route.geometry?.coordinates ?? []
+  const mid = coords[Math.floor(coords.length / 2)]
+  const end = coords[coords.length - 1]
+  const opt = route.selectedOptionId ?? ''
+  return [
+    coords.length,
+    Math.round(route.stats?.distanceMeters ?? 0),
+    mid?.[0]?.toFixed(5) ?? '',
+    mid?.[1]?.toFixed(5) ?? '',
+    end?.[0]?.toFixed(5) ?? '',
+    end?.[1]?.toFixed(5) ?? '',
+    opt,
+  ].join(':')
+}
+
 export function RouteWeatherPanel({
   route,
   selectedWindow,
@@ -44,18 +61,18 @@ export function RouteWeatherPanel({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const identity = useMemo(() => geometryIdentity(route), [route])
 
   useEffect(() => {
-    let cancelled = false
-    const geometryKey = `${route.geometry.coordinates.length}:${route.stats.distanceMeters}`
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
     onSelectHour(null)
     onSelectWindow(null)
     void weatherService
-      .forecastForRoute(route.geometry, { forecastDays: 7 })
+      .forecastForRoute(route.geometry, { forecastDays: 7, signal: controller.signal })
       .then((data) => {
-        if (cancelled) return
+        if (controller.signal.aborted) return
         setForecast(data)
         onForecast?.(data)
         const best = data.windows[0] ?? null
@@ -63,29 +80,22 @@ export function RouteWeatherPanel({
         setSelectedDay(day)
         onSelectWindow(best)
         onSelectHour(null)
-        track('weather_forecast_loaded', { windows: data.windows.length, geometryKey })
+        track('weather_forecast_loaded', { windows: data.windows.length, geometryKey: identity })
       })
       .catch((err) => {
+        if (controller.signal.aborted) return
         console.error('[weather]', err)
-        if (!cancelled) {
-          setError('No se pudo cargar el viento/meteo (Open-Meteo).')
-          onForecast?.(null)
-        }
+        setError('No se pudo cargar el viento/meteo (Open-Meteo).')
+        onForecast?.(null)
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
-    // Re-run when the drawn geometry identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    route.geometry.coordinates.length,
-    route.geometry.coordinates[0]?.[0],
-    route.geometry.coordinates[0]?.[1],
-    route.stats.distanceMeters,
-  ])
+  }, [identity])
 
   const days = forecast
     ? [...new Set(forecast.windows.map((w) => meteoDayKey(w.startHour)))]

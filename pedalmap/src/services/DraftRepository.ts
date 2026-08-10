@@ -1,16 +1,99 @@
 /**
- * Persist planner draft to the signed-in user's Firestore profile.
+ * Persist planner draft to the signed-in user's Firestore profile + full geometry in IndexedDB.
  * Spark-friendly: no Cloud Functions.
+ * Cloud stores a lean preview; device keeps full coords for nav/reload quality.
  */
 import { doc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore'
 import type { RouteDraft } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 
 const FIELD = 'plannerDraft'
+const IDB_NAME = 'pedalmap-drafts'
+const IDB_STORE = 'full'
+const IDB_VERSION = 1
+
+function openDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null)
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION)
+      req.onupgradeneeded = () => {
+        const db = req.result
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE)
+        }
+      }
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => resolve(null)
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
+async function saveFullLocal(uid: string, draft: RouteDraft): Promise<void> {
+  const db = await openDb()
+  if (!db) return
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      tx.objectStore(IDB_STORE).put(draft, uid)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+    } catch {
+      resolve()
+    }
+  })
+  db.close()
+}
+
+async function loadFullLocal(uid: string): Promise<RouteDraft | null> {
+  const db = await openDb()
+  if (!db) return null
+  const draft = await new Promise<RouteDraft | null>((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly')
+      const req = tx.objectStore(IDB_STORE).get(uid)
+      req.onsuccess = () => resolve((req.result as RouteDraft) ?? null)
+      req.onerror = () => resolve(null)
+    } catch {
+      resolve(null)
+    }
+  })
+  db.close()
+  return draft
+}
+
+async function clearFullLocal(uid: string): Promise<void> {
+  const db = await openDb()
+  if (!db) return
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      tx.objectStore(IDB_STORE).delete(uid)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+    } catch {
+      resolve()
+    }
+  })
+  db.close()
+}
+
+function sameRouteIdentity(a: RouteDraft, b: RouteDraft): boolean {
+  const da = Math.round(a.stats?.distanceMeters ?? 0)
+  const db = Math.round(b.stats?.distanceMeters ?? 0)
+  if (Math.abs(da - db) > 25) return false
+  const a0 = a.geometry?.coordinates?.[0]
+  const b0 = b.geometry?.coordinates?.[0]
+  if (!a0 || !b0) return false
+  return Math.abs(a0[0] - b0[0]) < 1e-4 && Math.abs(a0[1] - b0[1]) < 1e-4
+}
 
 export async function saveCloudDraft(uid: string, draft: RouteDraft): Promise<void> {
   if (!isFirebaseConfigured()) return
-  // Keep payload lean — drop ultra-dense coords if huge
+  // Always keep full geometry on-device; cloud gets a lean preview only.
+  await saveFullLocal(uid, draft)
   const lean = leanDraft(draft)
   await setDoc(
     doc(getDb(), 'users', uid),
@@ -28,11 +111,21 @@ export async function loadCloudDraft(uid: string): Promise<RouteDraft | null> {
   if (!snap.exists()) return null
   const raw = snap.data()?.[FIELD]
   if (!raw || typeof raw !== 'object') return null
-  return raw as RouteDraft
+  const cloud = raw as RouteDraft
+  const local = await loadFullLocal(uid)
+  if (
+    local?.geometry?.coordinates?.length &&
+    local.geometry.coordinates.length >= (cloud.geometry?.coordinates?.length ?? 0) &&
+    sameRouteIdentity(local, cloud)
+  ) {
+    return local
+  }
+  return cloud
 }
 
 export async function clearCloudDraft(uid: string): Promise<void> {
   if (!isFirebaseConfigured()) return
+  await clearFullLocal(uid)
   await setDoc(
     doc(getDb(), 'users', uid),
     { [FIELD]: null, updatedAt: serverTimestamp() },
@@ -40,7 +133,8 @@ export async function clearCloudDraft(uid: string): Promise<void> {
   )
 }
 
-function leanDraft(draft: RouteDraft): RouteDraft {
+/** Preview-only downsample for Firestore size — never the sole source of truth on-device. */
+export function leanDraft(draft: RouteDraft): RouteDraft {
   const downsample = (coords: [number, number][]) => {
     if (coords.length <= 800) return coords
     const step = Math.ceil(coords.length / 600)
