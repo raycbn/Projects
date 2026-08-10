@@ -2,6 +2,7 @@ import type { Env } from './types'
 import { corsHeaders, json } from './types'
 import { handleOrsProxy } from './ors'
 import { handleValhallaProxy } from './valhalla'
+import { handleBikeRoute } from './bikeRoute'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
 import { enforceRateLimit } from './rateLimit'
 
@@ -70,6 +71,16 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleOrsProxy(request, env, path))
+      }
+
+      if (path === '/valhalla/bike-route' && request.method === 'POST') {
+        const limited = await enforceRateLimit(request, {
+          limit: 30,
+          windowSec: 60,
+          prefix: 'valhalla-bike',
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleBikeRoute(request, env))
       }
 
       if (path === '/valhalla/route' && request.method === 'POST') {

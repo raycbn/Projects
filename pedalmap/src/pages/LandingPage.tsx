@@ -22,7 +22,7 @@ const faqs = [
   },
   {
     q: '¿Cómo crear una ruta circular u Objetivo?',
-    a: 'Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular real (ORS round_trip) buscando el mejor ajuste.',
+    a: 'Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular con Valhalla (perfil de bici + superficie) buscando el mejor ajuste.',
   },
   {
     q: '¿Free o Premium?',

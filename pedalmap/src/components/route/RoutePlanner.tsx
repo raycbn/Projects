@@ -258,8 +258,8 @@ export function RoutePlanner() {
           {routeType === 'circular' && (
             <div className="space-y-3 rounded-xl bg-[var(--color-mist)]/70 px-3 py-3 text-sm">
               <p className="text-xs text-[var(--color-stone)]">
-                Indica partida, km y desnivel. Generamos una circular real (ORS round_trip) buscando
-                el mejor ajuste.
+                Indica partida, km y desnivel. Generamos una circular con Valhalla (suelo según tu
+                bici) buscando el mejor ajuste al objetivo.
               </p>
               <label className="block">
                 <span className="label-caps">Distancia objetivo</span>

@@ -293,19 +293,13 @@ export class OpenRouteServiceProvider implements RoutingProvider {
         : waypoints.map((w) => [w.lng, w.lat])
 
     const targetElev = request.targetElevationGainMeters
-    // Circular: explore seeds = alternate nearby loops; pick best surface for the bike.
+    // Fallback path only — keep fanout tiny so the UI does not stall.
     const seeds =
       request.routeType === 'circular'
-        ? targetElev && targetElev > 0
-          ? Array.from({ length: 6 }, (_, i) => i)
-          : Array.from({ length: 5 }, (_, i) => (request.circularSeed ?? 0) + i)
+        ? [request.circularSeed ?? 0, (request.circularSeed ?? 0) + 1]
         : [request.circularSeed ?? 0]
 
-    // Exhaust modality strategies (capped) to maximize surface fit for this bike.
-    const maxSurfaceAttempts = Math.min(
-      request.routeType === 'circular' ? 4 : Math.max(3, strategies.length),
-      strategies.length,
-    )
+    const maxSurfaceAttempts = Math.min(2, strategies.length)
 
     let lastMaintenance: string | undefined
     const downProfiles = new Set<string>()
@@ -341,13 +335,13 @@ export class OpenRouteServiceProvider implements RoutingProvider {
 
           // Ask for alternate geometries so we can pick the one that best matches the bike.
           const tryBodies: Record<string, unknown>[] = [{ ...body }]
-          if (request.routeType === 'a_to_b' && si <= 1) {
+          if (request.routeType === 'a_to_b' && request.wantAlternatives && si === 0) {
             tryBodies.unshift({
               ...body,
               alternative_routes: {
-                target_count: 3,
-                share_factor: 0.5,
-                weight_factor: 1.6,
+                target_count: 2,
+                share_factor: 0.55,
+                weight_factor: 1.5,
               },
             })
           }

@@ -5,10 +5,8 @@ import type { RoutingRequest, RoutingResult } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
 
 /**
- * Commercial routing stack:
- * - A→B / out-and-back → Valhalla (native bike surface costing)
- * - Circular / Objetivo → ORS round_trip (Valhalla has no equivalent)
- * - Any Valhalla failure → ORS fallback so the product stays usable
+ * Valhalla-first for A→B, ida-vuelta and Objetivo.
+ * ORS only as failover (kept slim so the UI does not stall).
  */
 export class CompositeRoutingProvider implements RoutingProvider {
   readonly name = 'composite-valhalla-ors'
@@ -35,17 +33,12 @@ export class CompositeRoutingProvider implements RoutingProvider {
       )
     }
 
-    const preferValhalla =
-      request.routeType !== 'circular' && this.valhalla.isConfigured()
-
-    if (preferValhalla) {
+    if (this.valhalla.isConfigured()) {
       try {
-        const result = await this.valhalla.calculateRoute(request)
-        return result
+        return await this.valhalla.calculateRoute(request)
       } catch (error) {
         console.warn('[routing] Valhalla failed; falling back to ORS', error)
         if (!this.ors.isConfigured()) throw error
-        // Fall through to ORS
       }
     }
 
@@ -53,6 +46,11 @@ export class CompositeRoutingProvider implements RoutingProvider {
       throw new RoutingError('ORS fallback is not configured', 'not_configured')
     }
 
-    return this.ors.calculateRoute(request)
+    // Slim fallback request: avoid multi-seed / multi-strategy storms that freeze the UI
+    return this.ors.calculateRoute({
+      ...request,
+      wantAlternatives: false,
+      circularSeed: request.circularSeed ?? 0,
+    })
   }
 }

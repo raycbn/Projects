@@ -263,7 +263,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               error.message.toLowerCase().includes('temporarily unavailable'))
           ) {
             setErrorMessage(
-              'Algunos perfiles de OpenRouteService no están disponibles ahora (p. ej. cycling-road). Prueba otra modalidad de bici o reinténtalo en unos minutos.',
+              'El motor de rutas no responde bien ahora. Prueba otra vez en unos segundos o cambia el tipo de bici.',
             )
           } else if (error instanceof RoutingError && error.code === 'no_route') {
             setErrorMessage(

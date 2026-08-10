@@ -6,16 +6,16 @@
 (decisión de HeiGIT: OSM paved/unpaved poco fiable para hard-filter). PedalMap solo
 podía **rankear a posteriori** → rutas “pésimas” para carretera/gravel/MTB.
 
-**Solución estable:** **Valhalla** como motor A→B (costing nativo por tipo de bici +
-`avoid_bad_surfaces`), **ORS** para circulares (`round_trip`) y fallback.
+**Solución estable:** **Valhalla** para A→B, **ida-vuelta** y **Objetivo** (circular con vias),
+vía un solo endpoint Worker (`/valhalla/bike-route`) que enriquece superficie + elevación.
+**ORS** solo como fallback rápido (pocas intentos).
 
 | Rol | Motor | Por qué |
 |-----|-------|---------|
-| A→B / ida-vuelta | **Valhalla** | `bicycle_type` Road/Hybrid/Cross/Mountain + `avoid_bad_surfaces` cambia el grafo |
-| Circular / Objetivo | **ORS** | `options.round_trip` (Valhalla no tiene equivalente 1:1) |
-| Fallback | **ORS** | Si Valhalla cae, la app sigue calculando |
+| A→B / ida-vuelta / Objetivo | **Valhalla** | `bicycle_type` + `avoid_bad_surfaces` cambia el grafo |
+| Fallback | **ORS** (slim) | Si Valhalla cae, 1–2 intentos sin fanout |
 
-Factory: `VITE_ROUTING_PROVIDER=composite` (default) → `CompositeRoutingProvider`.
+Worker: `POST /valhalla/bike-route` (1 RTT desde el navegador).
 
 ### Mapeo PedalMap → Valhalla
 
