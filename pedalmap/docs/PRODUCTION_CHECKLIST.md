@@ -17,7 +17,7 @@ Estado actual (2026-08-10):
 | Explorar vacío | ✅ demos Madrid/Sierra |
 | Stripe | ⚠️ **test/sandbox** (no live hasta cobrar) |
 | Dominio propio | ⏳ pendiente (DNS + Auth/CORS/APP_URL) |
-| Rules/indexes deploy owner | ⏳ `firebase login` + deploy rules |
+| Rules/indexes deploy owner | ✅ publicadas por owner (2026-08-10) |
 
 ## Soft-launch gate
 
