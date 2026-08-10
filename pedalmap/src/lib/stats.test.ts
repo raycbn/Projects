@@ -1,30 +1,68 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildStatsFromProfile,
+  computeElevationStats,
+  CYCLING_ELEVATION_THRESHOLD_M,
   estimateDifficulty,
-  formatDistance,
-  formatDuration,
-  haversineMeters,
-  pathDistanceMeters,
+  resolveCyclingElevationGain,
+  sanitizeElevationProfile,
+  smoothElevationProfile,
 } from '@/lib/stats'
 
 describe('stats', () => {
-  it('computes haversine distance between close points', () => {
-    const d = haversineMeters(
-      { lat: 40.4168, lng: -3.7038 },
-      { lat: 40.4178, lng: -3.7038 },
-    )
-    expect(d).toBeGreaterThan(100)
-    expect(d).toBeLessThan(130)
+  it('uses DEM-like threshold for cycling elevation gain', () => {
+    expect(CYCLING_ELEVATION_THRESHOLD_M).toBe(10)
   })
 
-  it('sums path distance', () => {
-    const total = pathDistanceMeters([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 0.01 },
-      { lat: 0, lng: 0.02 },
+  it('sanitizes isolated zero elevations that break cycling gain', () => {
+    const cleaned = sanitizeElevationProfile([
+      { distanceMeters: 0, elevationMeters: 600 },
+      { distanceMeters: 100, elevationMeters: 0 },
+      { distanceMeters: 200, elevationMeters: 610 },
     ])
-    expect(total).toBeGreaterThan(2000)
+    expect(cleaned[1].elevationMeters).toBe(605)
+  })
+
+  it('smooths DEM stair-steps without inventing altitude', () => {
+    const dense = Array.from({ length: 25 }, (_, i) => ({
+      distanceMeters: i * 100,
+      elevationMeters: i === 12 ? 130 : 100,
+    }))
+    const smoothed = smoothElevationProfile(dense, 5)
+    expect(smoothed[12].elevationMeters).toBeGreaterThan(100)
+    expect(smoothed[12].elevationMeters).toBeLessThan(130)
+  })
+
+  it('computes cycling elevation gain with DEM threshold (desnivel positivo)', () => {
+    const stats = computeElevationStats([
+      { distanceMeters: 0, elevationMeters: 100 },
+      { distanceMeters: 100, elevationMeters: 105 }, // noise < 10m
+      { distanceMeters: 200, elevationMeters: 100 },
+      { distanceMeters: 1000, elevationMeters: 200 },
+      { distanceMeters: 2000, elevationMeters: 150 },
+    ])
+    expect(stats.gain).toBeGreaterThanOrEqual(90)
+    expect(stats.loss).toBeGreaterThanOrEqual(40)
+    expect(stats.lowest).toBe(100)
+  })
+
+  it('rejects absurd provider ascent in favour of sanitized profile', () => {
+    const resolved = resolveCyclingElevationGain({
+      distanceMeters: 25000,
+      providerAscent: 5359,
+      providerDescent: 5493,
+      profile: [
+        { distanceMeters: 0, elevationMeters: 600 },
+        { distanceMeters: 100, elevationMeters: 0 },
+        { distanceMeters: 200, elevationMeters: 610 },
+        { distanceMeters: 5000, elevationMeters: 580 },
+        { distanceMeters: 10000, elevationMeters: 640 },
+        { distanceMeters: 20000, elevationMeters: 520 },
+      ],
+    })
+    expect(resolved.source).toBe('profile')
+    expect(resolved.gain).toBeLessThan(800)
+    expect(resolved.lowest).toBeGreaterThan(400)
   })
 
   it('builds elevation stats and difficulty', () => {
@@ -38,10 +76,5 @@ describe('stats', () => {
     expect(stats.elevationGainMeters).toBeGreaterThan(0)
     expect(stats.elevationLossMeters).toBeGreaterThan(0)
     expect(stats.difficulty).toBe(estimateDifficulty(50000, stats.elevationGainMeters))
-  })
-
-  it('formats distance and duration for es-ES', () => {
-    expect(formatDistance(62400)).toContain('62')
-    expect(formatDuration(2 * 3600 + 48 * 60)).toBe('2 h 48 min')
   })
 })

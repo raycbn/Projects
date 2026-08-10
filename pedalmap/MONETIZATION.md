@@ -2,7 +2,7 @@
 
 ## Modelo
 
-**Freemium + suscripción** (mensual/anual vía Stripe en Fase 4).
+**Freemium + suscripción** (mensual/anual vía Stripe — Fase 4).
 
 ### Free
 
@@ -21,40 +21,46 @@
 - Estadísticas avanzadas
 - Base para navegación / offline futuros
 
-Límites en código: `FREE_LIMITS` / `PREMIUM_LIMITS` + `EntitlementService`.
+Límites en código: `FREE_LIMITS` / `PREMIUM_LIMITS` + `EntitlementService` (cliente) +
+`onRouteCreated` (Functions, contadores server-side).
 
 ## Paywall
 
-UI: `PremiumCard` — clara, sin engaños. Explica que Stripe aún no cobra.
+UI: `PremiumCard` + `/premium`. El cliente no puede autoasignarse `plan: premium`
+(Firestore rules).
 
-## Stripe (preparado, no activo)
+## Stripe (Fase 4)
 
-Variables futuras:
+Cliente:
 
 ```
-VITE_STRIPE_PUBLISHABLE_KEY=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
+VITE_STRIPE_ENABLED=true
+VITE_STRIPE_PUBLISHABLE_KEY=pk_...
 ```
 
-Flujo previsto:
+Functions secrets / params:
 
-1. Checkout Session desde Cloud Function
-2. Webhook → actualizar `subscriptions/{uid}` + `users.plan = premium`
-3. Firestore rules: el cliente **no** puede autoasignarse `premium`
+```
+ORS_API_KEY
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_MONTHLY
+STRIPE_PRICE_YEARLY
+APP_URL
+```
+
+Flujo:
+
+1. `createCheckoutSession` (callable) → Stripe Checkout
+2. `stripeWebhook` → `subscriptions/{uid}` + `users.plan = premium`
+3. `createCustomerPortalSession` → gestionar / cancelar
+4. `orsProxy` → routing sin exponer la API key en el navegador
 
 ## Afiliación (futuro)
 
-Colección prevista `affiliateLinks`:
-
-```
-{ id, category, label, url, merchant, active, priority }
-```
-
-Categorías: bicicletas, GPS, ropa, seguros, alojamiento, nutrición, talleres.
-
-**No** se añaden enlaces falsos en Fase 1.
+Colección prevista `affiliateLinks` — no se añaden enlaces falsos todavía.
 
 ## Analytics de conversión
 
-Eventos: `premium_clicked`, `signup_started`, `signup_completed`, `route_saved`, `gpx_exported`.
+Eventos: `premium_clicked`, `signup_started`, `signup_completed`, `route_saved`,
+`gpx_exported`, `activity_started`, `activity_finished`.

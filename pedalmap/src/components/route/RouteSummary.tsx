@@ -15,7 +15,11 @@ interface RouteSummaryProps {
 export function RouteSummary({ stats, compact }: RouteSummaryProps) {
   const items = [
     { label: 'Distancia', value: formatDistance(stats.distanceMeters) },
-    { label: 'Desnivel +', value: formatElevation(stats.elevationGainMeters) },
+    {
+      label: 'Desnivel +',
+      value: formatElevation(stats.elevationGainMeters),
+      hint: 'Desnivel positivo ciclista (suma de subidas, umbral DEM)',
+    },
     { label: 'Desnivel −', value: formatElevation(-stats.elevationLossMeters) },
     { label: 'Tiempo', value: formatDuration(stats.estimatedDurationSeconds) },
     { label: 'Dificultad', value: difficultyLabel(stats.difficulty) },
@@ -43,6 +47,7 @@ export function RouteSummary({ stats, compact }: RouteSummaryProps) {
           <div
             key={item.label}
             className="rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-[var(--color-fog)]"
+            title={'hint' in item ? item.hint : undefined}
           >
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
               {item.label}

@@ -24,6 +24,8 @@ describe('OpenRouteServiceProvider', () => {
     expect(mapBikeProfile('ebike')).toBe('cycling-electric')
     expect(mapBikeProfile('gravel')).toBe('cycling-regular')
     expect(mapBikeProfile('urban')).toBe('cycling-regular')
+    expect(mapBikeProfile('road', ['prefer_unpaved'])).toBe('cycling-mountain')
+    expect(mapBikeProfile('mtb', ['avoid_unpaved'])).toBe('cycling-regular')
   })
 
   it('falls back to cycling-regular when road/electric profiles are down', () => {
@@ -51,6 +53,11 @@ describe('OpenRouteServiceProvider', () => {
       'prefer_shorter',
       'prefer_faster',
       'prefer_less_elevation',
+      'avoid_unpaved',
+      'prefer_unpaved',
+      'prefer_bike_lanes',
+      'avoid_traffic',
+      'prefer_secondary_roads',
       'avoid_primary_roads',
     ])
   })

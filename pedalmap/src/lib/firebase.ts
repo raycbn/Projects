@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
+import { getFunctions, type Functions } from 'firebase/functions'
 import { getStorage, type FirebaseStorage } from 'firebase/storage'
 
 const firebaseConfig = {
@@ -26,6 +27,7 @@ let app: FirebaseApp | null = null
 let auth: Auth | null = null
 let db: Firestore | null = null
 let storage: FirebaseStorage | null = null
+let functionsClient: Functions | null = null
 
 export function getFirebaseApp(): FirebaseApp {
   if (!isFirebaseConfigured()) {
@@ -50,4 +52,12 @@ export function getDb(): Firestore {
 export function getFirebaseStorage(): FirebaseStorage {
   if (!storage) storage = getStorage(getFirebaseApp())
   return storage
+}
+
+export function getFirebaseFunctions(): Functions {
+  if (!functionsClient) {
+    const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1'
+    functionsClient = getFunctions(getFirebaseApp(), region)
+  }
+  return functionsClient
 }

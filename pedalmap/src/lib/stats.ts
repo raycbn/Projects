@@ -2,6 +2,16 @@ import type { Difficulty, ElevationPoint, LatLng, RouteStats } from '@/domain/ty
 
 const EARTH_RADIUS_M = 6371000
 
+/**
+ * Threshold for counting climb toward cycling elevation gain (“desnivel positivo”).
+ * ORS elevations are DEM-based (not barometric). Strava uses ~10 m for DEM / non-baro
+ * sources and ~2–3 m for barometric. We use the DEM threshold here.
+ */
+export const CYCLING_ELEVATION_THRESHOLD_M = 10
+
+/** Moving-average window (samples) to damp DEM stair-steps before gain. */
+export const CYCLING_ELEVATION_SMOOTH_WINDOW = 5
+
 export function haversineMeters(a: LatLng, b: LatLng): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180
   const dLat = toRad(b.lat - a.lat)
@@ -22,43 +32,170 @@ export function pathDistanceMeters(points: LatLng[]): number {
   return total
 }
 
-export function computeElevationStats(profile: ElevationPoint[]): {
+/**
+ * Fix DEM/ORS glitches: isolated 0/null elevations surrounded by real terrain
+ * (common on cycling-mountain) that otherwise create fake thousands of meters.
+ */
+export function sanitizeElevationProfile(profile: ElevationPoint[]): ElevationPoint[] {
+  if (profile.length === 0) return profile
+  const values = profile.map((p) => p.elevationMeters)
+
+  const nearest = (from: number, step: -1 | 1): number | undefined => {
+    for (let i = from + step; i >= 0 && i < values.length; i += step) {
+      const v = values[i]
+      if (v !== 0 && Number.isFinite(v)) return v
+    }
+    return undefined
+  }
+
+  const cleaned = values.map((v, i) => {
+    const invalid = !Number.isFinite(v) || (v === 0 && (nearest(i, -1) ?? 0) > 40)
+    if (!invalid) return v
+    const prev = nearest(i, -1)
+    const next = nearest(i, 1)
+    if (prev !== undefined && next !== undefined) return (prev + next) / 2
+    return prev ?? next ?? v
+  })
+
+  return profile.map((p, i) => ({ ...p, elevationMeters: cleaned[i] }))
+}
+
+/** Light DEM smooth so stair-step noise does not inflate cycling gain. */
+export function smoothElevationProfile(
+  profile: ElevationPoint[],
+  windowSize = CYCLING_ELEVATION_SMOOTH_WINDOW,
+): ElevationPoint[] {
+  // Sparse profiles (tests / short GPS) must not be averaged — it flattens real climbs.
+  if (profile.length < 20 || windowSize <= 1) return profile
+  const half = Math.floor(windowSize / 2)
+  const values = profile.map((p) => p.elevationMeters)
+  const smoothed = values.map((_, i) => {
+    let sum = 0
+    let n = 0
+    for (let j = Math.max(0, i - half); j <= Math.min(values.length - 1, i + half); j += 1) {
+      sum += values[j]
+      n += 1
+    }
+    return sum / n
+  })
+  return profile.map((p, i) => ({ ...p, elevationMeters: smoothed[i] }))
+}
+
+/**
+ * Cycling elevation gain/loss: cumulative positive/negative change after DEM
+ * sanitize + smooth + noise threshold (Strava-like “desnivel positivo”).
+ */
+export function computeElevationStats(
+  profile: ElevationPoint[],
+  thresholdMeters = CYCLING_ELEVATION_THRESHOLD_M,
+): {
   gain: number
   loss: number
   highest?: number
   lowest?: number
   significantClimbs: number
 } {
-  if (profile.length === 0) {
+  const cleaned = smoothElevationProfile(sanitizeElevationProfile(profile))
+  if (cleaned.length === 0) {
     return { gain: 0, loss: 0, significantClimbs: 0 }
   }
 
   let gain = 0
   let loss = 0
-  let highest = profile[0].elevationMeters
-  let lowest = profile[0].elevationMeters
+  // Track extrema on sanitized (unsmoothed) values for display honesty.
+  const forExtremes = sanitizeElevationProfile(profile)
+  let highest = forExtremes[0].elevationMeters
+  let lowest = forExtremes[0].elevationMeters
+  for (const p of forExtremes) {
+    highest = Math.max(highest, p.elevationMeters)
+    lowest = Math.min(lowest, p.elevationMeters)
+  }
+
   let climbAccum = 0
   let significantClimbs = 0
+  let pending = 0
 
-  for (let i = 1; i < profile.length; i += 1) {
-    const delta = profile[i].elevationMeters - profile[i - 1].elevationMeters
-    highest = Math.max(highest, profile[i].elevationMeters)
-    lowest = Math.min(lowest, profile[i].elevationMeters)
+  for (let i = 1; i < cleaned.length; i += 1) {
+    const delta = cleaned[i].elevationMeters - cleaned[i - 1].elevationMeters
 
     if (delta > 0) {
-      gain += delta
-      climbAccum += delta
-      if (climbAccum >= 50) {
-        significantClimbs += 1
-        climbAccum = 0
+      if (pending < 0) pending = 0
+      pending += delta
+      if (pending >= thresholdMeters) {
+        gain += pending
+        climbAccum += pending
+        pending = 0
+        if (climbAccum >= 50) {
+          significantClimbs += 1
+          climbAccum = 0
+        }
       }
     } else if (delta < 0) {
-      loss += Math.abs(delta)
-      climbAccum = 0
+      if (pending > 0) pending = 0
+      pending += delta
+      if (Math.abs(pending) >= thresholdMeters) {
+        loss += Math.abs(pending)
+        pending = 0
+        climbAccum = 0
+      }
     }
   }
 
+  if (pending >= thresholdMeters) gain += pending
+  if (pending <= -thresholdMeters) loss += Math.abs(pending)
+
   return { gain, loss, highest, lowest, significantClimbs }
+}
+
+/**
+ * Prefer a sane cycling gain: sanitized profile first; use provider ascent only
+ * when it agrees roughly (provider DEM glitches can report thousands of meters).
+ */
+export function resolveCyclingElevationGain(options: {
+  profile: ElevationPoint[]
+  providerAscent?: number
+  providerDescent?: number
+  distanceMeters: number
+}): {
+  gain: number
+  loss: number
+  highest?: number
+  lowest?: number
+  significantClimbs: number
+  source: 'profile' | 'provider'
+} {
+  const fromProfile = computeElevationStats(options.profile)
+  // ~80 m/km is extreme alpine; typical cycling routes stay well under this.
+  const maxPlausible = Math.max(800, options.distanceMeters * 0.08)
+
+  const providerGain =
+    typeof options.providerAscent === 'number' ? options.providerAscent : undefined
+  const providerLoss =
+    typeof options.providerDescent === 'number' ? options.providerDescent : undefined
+
+  const providerSane =
+    providerGain !== undefined &&
+    providerGain >= 0 &&
+    providerGain <= maxPlausible &&
+    (providerLoss === undefined || providerLoss <= maxPlausible)
+
+  if (providerSane && providerGain !== undefined) {
+    if (
+      fromProfile.gain === 0 ||
+      Math.abs(providerGain - fromProfile.gain) / Math.max(providerGain, 1) < 0.5
+    ) {
+      return {
+        gain: providerGain,
+        loss: providerLoss ?? fromProfile.loss,
+        highest: fromProfile.highest,
+        lowest: fromProfile.lowest,
+        significantClimbs: fromProfile.significantClimbs,
+        source: 'provider',
+      }
+    }
+  }
+
+  return { ...fromProfile, source: 'profile' }
 }
 
 export function estimateDifficulty(
@@ -90,13 +227,21 @@ export function buildStatsFromProfile(
   profile: ElevationPoint[],
   bikeType: string,
   durationSeconds?: number,
+  providerAscent?: number,
+  providerDescent?: number,
 ): RouteStats {
-  const elev = computeElevationStats(profile)
+  const elev = resolveCyclingElevationGain({
+    profile,
+    providerAscent,
+    providerDescent,
+    distanceMeters,
+  })
   const elevationGainMeters = Math.round(elev.gain)
+  const elevationLossMeters = Math.round(elev.loss)
   return {
     distanceMeters: Math.round(distanceMeters),
     elevationGainMeters,
-    elevationLossMeters: Math.round(elev.loss),
+    elevationLossMeters,
     estimatedDurationSeconds:
       durationSeconds ??
       estimateDurationSeconds(distanceMeters, elevationGainMeters, bikeType),

@@ -7,6 +7,8 @@ export type AnalyticsEvent =
   | 'premium_clicked'
   | 'signup_started'
   | 'signup_completed'
+  | 'activity_started'
+  | 'activity_finished'
 
 type Payload = Record<string, string | number | boolean | undefined>
 

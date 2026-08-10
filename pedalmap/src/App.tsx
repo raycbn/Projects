@@ -12,6 +12,8 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { ExplorePage } from '@/pages/ExplorePage'
 import { PrivacyPage, CookiesPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
+import { ActivityPage } from '@/pages/ActivityPage'
+import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
 import { seoPages } from '@/content/seoPages'
 
 export default function App() {
@@ -24,6 +26,8 @@ export default function App() {
               <Route index element={<LandingPage />} />
               <Route path="route-planner" element={<RoutePlannerPage />} />
               <Route path="my-routes" element={<MyRoutesPage />} />
+              <Route path="actividades" element={<MyActivitiesPage />} />
+              <Route path="actividad" element={<ActivityPage />} />
               <Route path="explorar" element={<ExplorePage />} />
               <Route path="premium" element={<PremiumPage />} />
               <Route path="perfil" element={<ProfilePage />} />

@@ -9,7 +9,7 @@ import type {
   RouteStats,
 } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
-import { buildStatsFromProfile } from '@/lib/stats'
+import { buildStatsFromProfile, sanitizeElevationProfile } from '@/lib/stats'
 import {
   surfaceStatsFromOrsExtras,
   waytypeBreakdownFromOrsExtras,
@@ -25,7 +25,18 @@ export const ORS_BASE = 'https://api.heigit.org/openrouteservice'
 /** @deprecated Use ORS_BASE. Kept only for migration notes/tests. */
 export const ORS_LEGACY_BASE = 'https://api.openrouteservice.org'
 
-export function mapBikeProfile(bikeType: BikeType): string {
+export function mapBikeProfile(
+  bikeType: BikeType,
+  preferences: RoutePreference[] = [],
+): string {
+  if (preferences.includes('prefer_unpaved')) return 'cycling-mountain'
+  if (preferences.includes('avoid_unpaved') && (bikeType === 'mtb' || bikeType === 'gravel')) {
+    return 'cycling-regular'
+  }
+  if (preferences.includes('prefer_bike_lanes') && bikeType !== 'mtb') {
+    return 'cycling-regular'
+  }
+
   switch (bikeType) {
     case 'road':
       return 'cycling-road'
@@ -56,23 +67,53 @@ export function isOrsMaintenanceResponse(status: number, body: string): boolean 
   return status === 503 || body.toLowerCase().includes('down for maintenance')
 }
 
-/** Preferences with a real ORS mapping. Others must not be faked. */
+/**
+ * Preferences with a real ORS cycling effect (options and/or profile choice).
+ * Note: `avoid_features: highways` is driving-only and returns 400 on cycling-*.
+ * Secondary / primary prefs map to ORS `green` weighting (real soft bias).
+ */
 export const ORS_SUPPORTED_PREFERENCES: RoutePreference[] = [
   'prefer_shorter',
   'prefer_faster',
   'prefer_less_elevation',
+  'avoid_unpaved',
+  'prefer_unpaved',
+  'prefer_bike_lanes',
+  'avoid_traffic',
+  'prefer_secondary_roads',
   'avoid_primary_roads',
 ]
 
-function buildOptions(preferences: RoutePreference[], routeType: RoutingRequest['routeType'], circularDistanceMeters?: number) {
+function buildOptions(
+  preferences: RoutePreference[],
+  routeType: RoutingRequest['routeType'],
+  circularDistanceMeters?: number,
+) {
   const avoid_features: string[] = ['steps']
-  if (preferences.includes('avoid_primary_roads')) {
-    avoid_features.push('highways')
+  // Real cycling avoid_features: steps, ferries, fords (NOT highways).
+  if (preferences.includes('avoid_traffic')) {
+    avoid_features.push('ferries', 'fords')
+  }
+
+  const weightings: Record<string, number> = {}
+  if (preferences.includes('prefer_less_elevation')) {
+    weightings.steepness_difficulty = 0
+  } else if (preferences.includes('prefer_unpaved')) {
+    weightings.steepness_difficulty = 2
+  }
+
+  // Soft “quieter / greener” bias — ORS cycling supports `green`, not `quietness`.
+  if (
+    preferences.includes('prefer_secondary_roads') ||
+    preferences.includes('avoid_primary_roads') ||
+    preferences.includes('prefer_bike_lanes')
+  ) {
+    weightings.green = preferences.includes('avoid_primary_roads') ? 1 : 0.8
   }
 
   const profile_params: Record<string, unknown> = {}
-  if (preferences.includes('prefer_less_elevation')) {
-    profile_params.weightings = { steepness_difficulty: 0 }
+  if (Object.keys(weightings).length) {
+    profile_params.weightings = weightings
   }
 
   const options: Record<string, unknown> = {
@@ -165,26 +206,22 @@ function featureToPartialResult(
     throw new RoutingError('No route found for preferences', 'no_route')
   }
 
-  const { coordinates: coords, profile: elevationProfile } = geometryFromOrsCoordinates(rawCoords)
+  const { coordinates: coords, profile: elevationProfileRaw } = geometryFromOrsCoordinates(rawCoords)
+  const elevationProfile = sanitizeElevationProfile(elevationProfileRaw)
   const summary = feature.properties?.summary
   const distanceMeters = summary?.distance ?? 0
   const durationSeconds = summary?.duration ? Math.round(summary.duration) : undefined
+  const ascent = feature.properties?.ascent ?? summary?.ascent
+  const descent = feature.properties?.descent ?? summary?.descent
 
   let stats = buildStatsFromProfile(
     distanceMeters,
     elevationProfile,
     bikeType,
     durationSeconds,
+    typeof ascent === 'number' ? ascent : undefined,
+    typeof descent === 'number' ? descent : undefined,
   )
-
-  const ascent = feature.properties?.ascent ?? summary?.ascent
-  const descent = feature.properties?.descent ?? summary?.descent
-  if (typeof ascent === 'number') {
-    stats = { ...stats, elevationGainMeters: Math.round(ascent) }
-  }
-  if (typeof descent === 'number') {
-    stats = { ...stats, elevationLossMeters: Math.round(descent) }
-  }
 
   const surfaceStats = surfaceStatsFromOrsExtras(feature.properties?.extras)
   const waytypes = waytypeBreakdownFromOrsExtras(feature.properties?.extras)
@@ -216,21 +253,31 @@ function resolveApiKey(): string | undefined {
   return typeof key === 'string' && key.trim() ? key.trim() : undefined
 }
 
+function resolveProxyUrl(): string | undefined {
+  const useProxy = String(import.meta.env.VITE_USE_ROUTING_PROXY || '').toLowerCase() === 'true'
+  const proxy = import.meta.env.VITE_ROUTING_PROXY_URL
+  if (!useProxy || typeof proxy !== 'string' || !proxy.trim()) return undefined
+  return proxy.trim().replace(/\/+$/, '')
+}
+
 export class OpenRouteServiceProvider implements RoutingProvider {
   readonly name = 'openrouteservice'
   private readonly apiKey: string | undefined
   private readonly baseUrl: string
+  private readonly viaProxy: boolean
 
   constructor(
     apiKey: string | undefined = resolveApiKey(),
-    baseUrl: string = (import.meta.env.VITE_ROUTING_PROXY_URL as string | undefined) || ORS_BASE,
+    baseUrl?: string,
   ) {
-    this.apiKey = apiKey
-    this.baseUrl = baseUrl.replace(/\/+$/, '')
+    const proxy = resolveProxyUrl()
+    this.viaProxy = Boolean(proxy)
+    this.apiKey = this.viaProxy ? undefined : apiKey
+    this.baseUrl = (baseUrl ?? proxy ?? ORS_BASE).replace(/\/+$/, '')
   }
 
   isConfigured(): boolean {
-    return Boolean(this.apiKey) || Boolean(import.meta.env.VITE_ROUTING_PROXY_URL)
+    return Boolean(this.apiKey) || this.viaProxy || Boolean(resolveProxyUrl())
   }
 
   async calculateRoute(request: RoutingRequest): Promise<RoutingResult> {
@@ -257,7 +304,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
       throw new RoutingError('At least two waypoints are required', 'invalid_request')
     }
 
-    const primaryProfile = mapBikeProfile(request.bikeType)
+    const primaryProfile = mapBikeProfile(request.bikeType, request.preferences)
     const profiles = [primaryProfile, ...profileFallbacks(primaryProfile)]
     const coordinates =
       request.routeType === 'circular'

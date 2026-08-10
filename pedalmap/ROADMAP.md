@@ -1,12 +1,13 @@
 # ROADMAP — PedalMap
 
-## FASE 1 — MVP (esta entrega)
+## FASE 1 — MVP ✅
 
 - Landing PedalMap
 - Mapa MapLibre real
-- Geocoding Nominatim
+- Geocoding Nominatim (+ Photon fallback)
 - Routing ORS A→B / ida y vuelta
-- Distancia, tiempo, desnivel, elevación
+- Distancia, tiempo, desnivel positivo ciclista, elevación
+- Superficie / tipo de vía (extra_info ORS) estilo Strava
 - Waypoints básicos
 - Auth email/Google/reset + guest planner
 - Guardar rutas Firestore
@@ -14,27 +15,30 @@
 - SEO páginas útiles
 - Tests + docs
 
-## FASE 2
+## FASE 2 ✅
 
-- GPX import/export completo en UI
-- Edición avanzada / reordenar waypoints
-- Rutas circulares (algoritmo real)
+- GPX import/export en UI del planificador
+- Edición avanzada / reordenar waypoints + recalcular
+- Rutas circulares reales (`ORS round_trip`)
 
-## FASE 3
+## FASE 3 ✅
 
-- Preferencias avanzadas con soporte real del motor
-- Alternativas de ruta
-- Perfil ciclista persistente enriquecido
+- Preferencias con soporte real ORS (green / steepness / perfiles)
+- Alternativas de ruta ORS (`alternative_routes`)
+- Perfil ciclista persistente (bici + prefs en Firestore)
 
-## FASE 4
+## FASE 4 ✅ (scaffold desplegable)
 
-- Premium + Stripe
-- Límites server-side
-- Proxy Functions para ORS key
+- Premium UI + Stripe Checkout / Customer Portal (Cloud Functions)
+- Webhook Stripe → `subscriptions/{uid}` + `users.plan`
+- Límites freemium client + contadores server-side (`onRouteCreated`)
+- Proxy Functions `orsProxy` para ocultar ORS_API_KEY
 
-## FASE 5
+## FASE 5 ✅ (base)
 
-- GPS / navegación / activities
+- Actividades GPS (`/actividad`, `/actividades`)
+- Geolocalización + track + desnivel positivo
+- Persistencia Firestore `activities`
 
 ## FASE 6
 

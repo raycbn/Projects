@@ -19,7 +19,7 @@ import type {
 import { RoutingError } from '@/domain/types'
 import { routeService } from '@/services/RouteService'
 import { track } from '@/lib/analytics'
-import { canCreateRoute } from '@/services/EntitlementService'
+import { canCreateRoute, canUseAdvancedCircular } from '@/services/EntitlementService'
 import { useAuth } from '@/app/AuthContext'
 
 interface PlannerContextValue {
@@ -200,6 +200,10 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         const entitlement = canCreateRoute(profile, guestCreates)
         if (!entitlement.ok) {
           setPaywallReason(entitlement.reason ?? 'create_limit')
+          return
+        }
+        if (routeType === 'circular' && profile && !canUseAdvancedCircular(profile)) {
+          setPaywallReason('circular_premium')
           return
         }
 

@@ -352,6 +352,11 @@ export function RoutePlanner() {
               </Button>
               <GPXExporter route={activeDraft} onPremiumRequired={() => showPaywall('gpx_export')} />
               <GPXImporter onImported={setDraftFromImport} />
+              <Link
+                to={`/actividad?title=${encodeURIComponent(activeDraft.title || 'Salida PedalMap')}&bike=${bikeType}`}
+              >
+                <Button variant="secondary">Iniciar GPS</Button>
+              </Link>
             </div>
             {saveMessage && (
               <p className="text-sm text-[var(--color-trail)]">

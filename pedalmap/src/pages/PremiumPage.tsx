@@ -1,20 +1,74 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { track } from '@/lib/analytics'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { useAuth } from '@/app/AuthContext'
+import { stripeService } from '@/services/StripeService'
 
 export function PremiumPage() {
   usePageMeta({
     title: 'PedalMap Premium',
     description:
-      'Rutas ilimitadas, GPX, filtros avanzados y rutas circulares. Suscripción preparada para Stripe.',
+      'Rutas ilimitadas, GPX, filtros avanzados y rutas circulares. Suscripción vía Stripe (Fase 4).',
     path: '/premium',
   })
+
+  const { user } = useAuth()
+  const [params] = useSearchParams()
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(() => {
+    if (params.get('checkout') === 'success') return 'Pago recibido. Premium se activará en unos segundos.'
+    if (params.get('checkout') === 'cancel') return 'Checkout cancelado.'
+    return null
+  })
+  const stripeReady = stripeService.isConfigured()
+
+  async function startCheckout(interval: 'month' | 'year') {
+    if (!user || user.isAnonymous) {
+      setMessage('Inicia sesión para suscribirte.')
+      return
+    }
+    if (!stripeReady) {
+      track('premium_clicked', { source: 'premium_page_preview' })
+      setMessage(
+        'Stripe está cableado en código (Cloud Functions). Activa VITE_STRIPE_ENABLED=true y despliega Functions en Blaze para cobrar de verdad.',
+      )
+      return
+    }
+    setBusy(true)
+    try {
+      const { url } = await stripeService.startCheckout(interval)
+      window.location.assign(url)
+    } catch (error) {
+      console.error('[stripe]', error)
+      setMessage('No se pudo abrir Stripe Checkout. Revisa Functions y precios.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function openPortal() {
+    if (!stripeReady) {
+      setMessage('Portal de cliente disponible cuando Stripe esté activo.')
+      return
+    }
+    setBusy(true)
+    try {
+      const { url } = await stripeService.openCustomerPortal()
+      window.location.assign(url)
+    } catch (error) {
+      console.error('[stripe portal]', error)
+      setMessage('No hay suscripción Stripe asociada a esta cuenta.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12 pb-24">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-        Monetización
+        Fase 4 · Monetización
       </p>
       <h1 className="mt-2 font-display text-4xl font-extrabold text-[var(--color-forest)]">
         PedalMap Premium
@@ -42,19 +96,36 @@ export function PremiumPage() {
             <li>Filtros avanzados</li>
             <li>Rutas circulares avanzadas</li>
             <li>Estadísticas avanzadas</li>
-            <li>Base para navegación y offline</li>
+            <li>Base para navegación GPS</li>
           </ul>
-          <Button
-            className="mt-6"
-            onClick={() => track('premium_clicked', { source: 'premium_page' })}
-          >
-            Probar Premium
-          </Button>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={() => void startCheckout('month')}>
+              Mensual
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void startCheckout('year')}
+            >
+              Anual
+            </Button>
+            <Button variant="ghost" className="!text-white !border-white/20" disabled={busy} onClick={() => void openPortal()}>
+              Gestionar
+            </Button>
+          </div>
           <p className="mt-3 text-xs text-white/50">
-            Stripe estará conectado en la Fase 4. No hay cobros reales todavía.
+            {stripeReady
+              ? 'Checkout real vía Stripe + webhook (Cloud Functions).'
+              : 'Scaffold Fase 4 listo. Sin cobros hasta activar Stripe + Functions.'}
           </p>
         </div>
       </div>
+
+      {message && (
+        <p className="mt-6 rounded-2xl bg-[var(--color-mist)] px-4 py-3 text-sm text-[var(--color-forest)]">
+          {message}
+        </p>
+      )}
 
       <Link to="/route-planner" className="mt-8 inline-block">
         <Button variant="ghost">Volver al planificador</Button>

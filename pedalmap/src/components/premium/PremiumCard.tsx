@@ -11,7 +11,11 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
   const title =
     reason === 'guest_limit'
       ? 'Has probado el planificador como invitado'
-      : 'Has llegado al límite de rutas gratuitas'
+      : reason === 'circular_premium'
+        ? 'Las rutas circulares avanzadas son Premium'
+        : reason === 'gpx_export'
+          ? 'La exportación GPX es Premium'
+          : 'Has llegado al límite de rutas gratuitas'
 
   return (
     <div
@@ -60,8 +64,8 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           )}
         </div>
         <p className="mt-4 text-xs text-white/50">
-          Los pagos reales se activarán cuando integremos Stripe. Ahora mismo puedes explorar el
-          diseño y los límites del plan gratuito.
+          Fase 4: Stripe Checkout + webhook vía Cloud Functions. Sin cobros hasta activar
+          VITE_STRIPE_ENABLED y secretos en Blaze.
         </p>
       </div>
     </div>

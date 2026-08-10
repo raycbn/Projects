@@ -1,4 +1,4 @@
-import type { FreemiumLimits, UserPlan, UserProfile } from '@/domain/types'
+import type { FreemiumLimits, RoutePreference, UserPlan, UserProfile } from '@/domain/types'
 import { FREE_LIMITS, PREMIUM_LIMITS } from '@/domain/types'
 
 export function getLimits(plan: UserPlan): FreemiumLimits {
@@ -33,4 +33,30 @@ export function canCreateRoute(profile: UserProfile | null, guestCreates: number
 export function canExportGpx(profile: UserProfile | null): boolean {
   if (!profile) return false
   return getLimits(profile.plan).gpxExport
+}
+
+export function canUseAdvancedFilters(profile: UserProfile | null): boolean {
+  if (!profile) return true // guests can try filters in MVP; paywall on save/create limits
+  return getLimits(profile.plan).advancedFilters
+}
+
+export function canUseAdvancedCircular(profile: UserProfile | null): boolean {
+  if (!profile) return true
+  return getLimits(profile.plan).advancedCircular
+}
+
+/** Preferences that require Premium when the user is on free + already signed in. */
+export const PREMIUM_FILTER_PREFERENCES: RoutePreference[] = [
+  'prefer_secondary_roads',
+  'avoid_primary_roads',
+  'prefer_unpaved',
+  'avoid_unpaved',
+]
+
+export function filterPreferencesForPlan(
+  preferences: RoutePreference[],
+  profile: UserProfile | null,
+): RoutePreference[] {
+  if (canUseAdvancedFilters(profile)) return preferences
+  return preferences.filter((p) => !PREMIUM_FILTER_PREFERENCES.includes(p))
 }

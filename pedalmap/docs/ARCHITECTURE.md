@@ -60,7 +60,7 @@ La edición usa `editDraft` temporal hasta “Guardar cambios”.
 | Firestore | users, routes, routeShares, favorites, activities, subscriptions |
 | Storage | GPX del usuario (preparado) |
 | Hosting | SPA `dist/` |
-| Functions | (Fase 4) proxy API key + Stripe webhooks |
+| Functions | Fase 4: `orsProxy`, Stripe Checkout/webhook, contadores freemium |
 
 ## Guest-first
 
@@ -70,7 +70,10 @@ La edición usa `editDraft` temporal hasta “Guardar cambios”.
 
 ## Actividades / GPS (Fase 5)
 
-Colección `activities` y tipos preparados. El planner no bloquea un futuro “Iniciar actividad”.
+- Tipos: `Activity`, `ActivityTrackPoint`
+- UI: `/actividad` (grabación GPS) y `/actividades` (historial)
+- Persistencia: colección Firestore `activities`
+- Desnivel positivo con el mismo algoritmo ciclista que el planner
 
 ## SEO
 

@@ -223,3 +223,42 @@ export class GeocodingError extends Error {
     this.cause = cause
   }
 }
+
+/** Live GPS activity (Fase 5). */
+export type ActivityStatus = 'recording' | 'paused' | 'finished'
+
+export interface ActivityTrackPoint {
+  position: LatLng
+  elevationMeters?: number
+  recordedAt: string
+  accuracyMeters?: number
+}
+
+export interface Activity {
+  id: string
+  userId: string
+  routeId?: string
+  title: string
+  status: ActivityStatus
+  bikeType: BikeType
+  startedAt: string
+  finishedAt?: string
+  track: ActivityTrackPoint[]
+  stats: {
+    distanceMeters: number
+    durationSeconds: number
+    elevationGainMeters: number
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SubscriptionRecord {
+  userId: string
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+  status: 'none' | 'active' | 'past_due' | 'canceled' | 'trialing'
+  plan: UserPlan
+  currentPeriodEnd?: string
+  updatedAt: string
+}

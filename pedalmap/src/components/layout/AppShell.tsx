@@ -31,6 +31,9 @@ export function AppShell() {
             <NavLink to="/my-routes" className={navClass}>
               Mis rutas
             </NavLink>
+            <NavLink to="/actividades" className={navClass}>
+              Actividades
+            </NavLink>
             <NavLink to="/premium" className={navClass}>
               Premium
             </NavLink>
@@ -69,7 +72,7 @@ export function AppShell() {
         {[
           ['/', 'Inicio'],
           ['/route-planner', 'Crear'],
-          ['/my-routes', 'Rutas'],
+          ['/actividades', 'GPS'],
           ['/perfil', 'Perfil'],
         ].map(([to, label]) => (
           <NavLink
