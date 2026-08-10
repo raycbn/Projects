@@ -1,16 +1,21 @@
-# Cloudflare temporary Worker — RECLAMAR YA
+# Cloudflare Worker — reclamado
 
-Cuenta preview nueva. **Caduca en ~60 minutos si no la reclamas.**
+Estado: **reclamado y operativo**.
 
-1. Abre (cuenta Cloudflare free o créala):
-   https://dash.cloudflare.com/claim-preview?claimToken=2sgQ-SU1hXkigQSnyouK8G7Kgpx0ezkAtpcTuYL_55A
+- Worker: https://pedalmap-api.broken-dietician.workers.dev
+- Health: `GET /health` → ok (ORS + Stripe + Firestore admin)
+- Stripe webhook test: `https://pedalmap-api.broken-dietician.workers.dev/stripe/webhook`
 
-2. Worker URL:
-   https://pedalmap-api.broken-dietician.workers.dev
+Cliente:
+```
+VITE_PEDALMAP_API_URL=https://pedalmap-api.broken-dietician.workers.dev
+VITE_USE_ROUTING_PROXY=true
+VITE_STRIPE_ENABLED=true
+```
 
-3. Stripe webhook (test) apuntando a:
-   https://pedalmap-api.broken-dietician.workers.dev/stripe/webhook
-
-4. Secrets ya subidos: ORS_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, FIREBASE_SERVICE_ACCOUNT
-
-5. Tras reclamar, si `/health` muestra challenge, desactiva Bot Fight en el dashboard.
+Para futuros deploys desde tu máquina:
+```bash
+cd pedalmap/workers/api
+npx wrangler login
+npm run deploy
+```
