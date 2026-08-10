@@ -32,7 +32,7 @@ function resolveUpstream(env: Env, action: ValhallaAction): { url: string; heade
         ? '/route/v1'
         : action === 'trace_attributes'
           ? '/trace_attributes/v1'
-          : '/height/v1'
+          : '/elevation/v1'
     return {
       url: `https://api.stadiamaps.com${path}?api_key=${encodeURIComponent(env.STADIA_API_KEY)}`,
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -286,10 +286,22 @@ async function enrichTrip(
     }).catch(() => ({ range_height: [] })),
   ])
 
-  const pairs = (height as { range_height?: Array<[number, number]> }).range_height ?? []
-  // Never invent elevation — empty profile is better than a fake flat 600 m.
-  const elevationProfile = pairs.length
-    ? pairs.map(([rangeM, elev], i) => {
+  const heightBody = height as {
+    range_height?: Array<[number, number | null]>
+    height?: Array<number | null>
+  }
+
+  // Prefer range_height; rebuild ranges from sample spacing if only height[].
+  let elevationProfile: Array<{
+    distanceMeters: number
+    elevationMeters: number
+    position: { lng: number; lat: number }
+  }> = []
+
+  if (heightBody.range_height?.length) {
+    elevationProfile = heightBody.range_height
+      .map(([rangeM, elev], i) => {
+        if (elev === null || elev === undefined || !Number.isFinite(elev)) return null
         const c = sampled[Math.min(i, sampled.length - 1)]
         return {
           distanceMeters: rangeM,
@@ -297,7 +309,22 @@ async function enrichTrip(
           position: { lng: c[0], lat: c[1] },
         }
       })
-    : []
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+  } else if (heightBody.height?.length) {
+    let acc = 0
+    elevationProfile = heightBody.height
+      .map((elev, i) => {
+        const c = sampled[Math.min(i, sampled.length - 1)]
+        if (i > 0) acc += haversine(sampled[i - 1], c)
+        if (elev === null || elev === undefined || !Number.isFinite(elev)) return null
+        return {
+          distanceMeters: acc,
+          elevationMeters: elev,
+          position: { lng: c[0], lat: c[1] },
+        }
+      })
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+  }
 
   return {
     coordinates,

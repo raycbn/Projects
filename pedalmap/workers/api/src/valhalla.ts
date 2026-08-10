@@ -8,12 +8,13 @@ type ValhallaAction = 'route' | 'trace_attributes' | 'height'
 
 function resolveUpstream(env: Env, action: ValhallaAction): { url: string; headers: HeadersInit } {
   if (env.STADIA_API_KEY) {
+    // Stadia: route/trace use Valhalla paths; elevation is /elevation/v1 (not /height).
     const path =
       action === 'route'
         ? '/route/v1'
         : action === 'trace_attributes'
           ? '/trace_attributes/v1'
-          : '/height/v1'
+          : '/elevation/v1'
     return {
       url: `https://api.stadiamaps.com${path}?api_key=${encodeURIComponent(env.STADIA_API_KEY)}`,
       headers: {
