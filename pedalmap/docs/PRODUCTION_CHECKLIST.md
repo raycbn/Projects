@@ -10,7 +10,7 @@ Estado actual (2026-08-10):
 | Health | ✅ ORS + Stripe + Firestore admin |
 | Firestore rules/indexes deploy | ⏳ necesita login Firebase (owner) |
 | Storage rules deploy | ⏳ necesita login Firebase (owner) |
-| Worker `APP_URL` → Hosting | ⏳ necesita `wrangler login` + redeploy |
+| Worker `APP_URL` → Hosting | ✅ redeployed (`APP_URL` + Origin Stripe returns) |
 
 ## 1) Ya hecho
 
@@ -18,17 +18,15 @@ Estado actual (2026-08-10):
 - Cliente apunta al Worker reclamado
 - `firebase deploy --only hosting` → live
 
-## 2) Tú: actualizar Worker (Stripe redirects)
+## 2) Worker (Stripe redirects) — hecho
 
-El checkout Stripe usa `APP_URL` del Worker para `success` / `cancel` / portal.
-Hay que apuntarlo a Hosting (ahora mismo puede seguir un túnel temporal).
+`APP_URL=https://pedalmap-79b3a.web.app` y CORS Hosting desplegados.
+Checkout/portal usan Origin allowlisted si viene del navegador.
 
+Para redeploy futuro:
 ```bash
 cd pedalmap/workers/api
-npx wrangler login
-# wrangler.toml ya debe tener:
-#   APP_URL = "https://pedalmap-79b3a.web.app"
-#   ALLOWED_ORIGINS = "https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com"
+npx wrangler login   # o sesión ya activa
 npm run deploy
 ```
 
