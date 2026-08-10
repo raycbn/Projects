@@ -103,6 +103,29 @@ function intensityBucket(speedKmh: number): 'flojo' | 'moderado' | 'fuerte' | 'm
   return 'muy_fuerte'
 }
 
+/** Offset a lon/lat by bearing (deg, from north) and distance (m). */
+function offsetByBearing(
+  position: [number, number],
+  bearingDeg: number,
+  meters: number,
+): [number, number] {
+  const R = 6371000
+  const br = (bearingDeg * Math.PI) / 180
+  const lat1 = (position[1] * Math.PI) / 180
+  const lng1 = (position[0] * Math.PI) / 180
+  const ang = meters / R
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(br),
+  )
+  const lng2 =
+    lng1 +
+    Math.atan2(
+      Math.sin(br) * Math.sin(ang) * Math.cos(lat1),
+      Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2),
+    )
+  return [(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI]
+}
+
 /**
  * Build map overlay: short colored line segments + arrow points for a chosen hour/window.
  */
@@ -118,8 +141,11 @@ export function buildRouteWindOverlay(
 
   const cum = cumulativeDistances(coords)
   const total = cum[cum.length - 1] || 1
-  const samples = Math.max(12, Math.min(36, opts.sampleCount ?? 24))
+  // Dense enough to read on a half-screen mobile map; cap for long routes.
+  const samples = Math.max(16, Math.min(40, opts.sampleCount ?? 28))
   const windToward = (wind.windFromDeg + 180) % 360
+  // Short wind ticks (~280–450 m) so direction stays readable at city zoom.
+  const barbMeters = Math.max(280, Math.min(450, total / samples / 2.2))
   const features: Feature<Point | LineString>[] = []
 
   for (let s = 0; s < samples; s += 1) {
@@ -136,19 +162,22 @@ export function buildRouteWindOverlay(
     const intensity = intensityBucket(wind.windSpeedKmh)
     const headwindScore = Math.max(0, relative)
     const tailwindScore = Math.max(0, -relative)
+    const shared = {
+      leg,
+      relative: relativeKind,
+      relativeFactor: Number(relative.toFixed(3)),
+      headwindScore,
+      tailwindScore,
+      windSpeedKmh: Number(wind.windSpeedKmh.toFixed(1)),
+      intensity,
+      timeLabel: wind.timeLabel,
+    }
 
     features.push({
       type: 'Feature',
       properties: {
         kind: 'segment',
-        leg,
-        relative: relativeKind,
-        relativeFactor: Number(relative.toFixed(3)),
-        headwindScore,
-        tailwindScore,
-        windSpeedKmh: Number(wind.windSpeedKmh.toFixed(1)),
-        intensity,
-        timeLabel: wind.timeLabel,
+        ...shared,
       },
       geometry: {
         type: 'LineString',
@@ -158,21 +187,32 @@ export function buildRouteWindOverlay(
 
     const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
     if (!mid) continue
+
+    // Barb: short line pointing where the wind blows (toward). Always visible even if icons fail.
+    const barbTip = offsetByBearing(mid.position, windToward, barbMeters)
+    features.push({
+      type: 'Feature',
+      properties: {
+        kind: 'barb',
+        ...shared,
+        windTowardDeg: Number(windToward.toFixed(1)),
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [mid.position, barbTip],
+      },
+    })
+
     features.push({
       type: 'Feature',
       properties: {
         kind: 'arrow',
-        leg,
-        relative: relativeKind,
-        relativeFactor: Number(relative.toFixed(3)),
-        headwindScore,
+        ...shared,
         windSpeedKmh: Math.round(wind.windSpeedKmh),
         windFromLabel: bearingLabel(wind.windFromDeg),
         windTowardDeg: Number(windToward.toFixed(1)),
         travelBearing: mid.travelBearing,
-        intensity,
-        timeLabel: wind.timeLabel,
-        label: `${wind.timeLabel} · ${Math.round(wind.windSpeedKmh)}km/h ${relativeKind}`,
+        label: `${Math.round(wind.windSpeedKmh)} km/h`,
         legLabel: leg === 'ruta' ? '' : leg.toUpperCase(),
       },
       geometry: {
