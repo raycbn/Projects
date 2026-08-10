@@ -191,6 +191,13 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             setErrorMessage(
               'Las rutas circulares avanzadas están en preparación. Mientras tanto, usa A → B o Ida y vuelta.',
             )
+          } else if (
+            error instanceof RoutingError &&
+            error.message.toLowerCase().includes('temporarily unavailable')
+          ) {
+            setErrorMessage(
+              'OpenRouteService está en mantenimiento temporal. Tu clave está configurada; reinténtalo en unos minutos.',
+            )
           } else {
             setErrorMessage(
               'No hemos podido encontrar una ruta con esas preferencias. Prueba a reducir los filtros, cambiar el tipo de bicicleta o elegir otro punto.',

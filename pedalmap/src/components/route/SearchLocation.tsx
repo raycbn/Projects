@@ -25,14 +25,24 @@ export function SearchLocation({
   const [results, setResults] = useState<PlaceSuggestion[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(valueLabel ?? null)
 
   useEffect(() => {
-    if (valueLabel !== undefined) setQuery(valueLabel)
+    if (valueLabel !== undefined) {
+      setQuery(valueLabel)
+      setSelectedLabel(valueLabel)
+    }
   }, [valueLabel])
 
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([])
+      return
+    }
+    // Avoid re-opening suggestions right after a successful pick.
+    if (selectedLabel && query === selectedLabel) {
+      setResults([])
+      setOpen(false)
       return
     }
 
@@ -53,7 +63,7 @@ export function SearchLocation({
     }, 350)
 
     return () => window.clearTimeout(handle)
-  }, [query, proximity])
+  }, [query, proximity, selectedLabel])
 
   return (
     <div className="relative">
@@ -67,7 +77,10 @@ export function SearchLocation({
         aria-autocomplete="list"
         aria-controls={listId}
         aria-expanded={open}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setSelectedLabel(null)
+          setQuery(e.target.value)
+        }}
         onFocus={() => results.length && setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
       />
@@ -87,8 +100,10 @@ export function SearchLocation({
                 className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
+                  setSelectedLabel(item.label)
                   setQuery(item.label)
                   setOpen(false)
+                  setResults([])
                   onSelect(item)
                 }}
               >

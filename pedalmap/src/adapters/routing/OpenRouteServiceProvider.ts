@@ -194,6 +194,16 @@ export class OpenRouteServiceProvider implements RoutingProvider {
         if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
           throw new RoutingError('No route found for preferences', 'no_route')
         }
+        if (
+          response.status === 503 ||
+          text.toLowerCase().includes('down for maintenance')
+        ) {
+          throw new RoutingError(
+            'OpenRouteService is temporarily unavailable (maintenance)',
+            'provider_error',
+            text,
+          )
+        }
         throw new RoutingError('Provider error', 'provider_error', text)
       }
 
