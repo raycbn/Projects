@@ -188,7 +188,7 @@ export function buildRouteWindOverlay(
     const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
     if (!mid) continue
 
-    // Barb: short line pointing where the wind blows (toward). Always visible even if icons fail.
+    // Barb + chevron tip (pure LineStrings — visible without MapLibre symbol images).
     const barbTip = offsetByBearing(mid.position, windToward, barbMeters)
     features.push({
       type: 'Feature',
@@ -200,6 +200,22 @@ export function buildRouteWindOverlay(
       geometry: {
         type: 'LineString',
         coordinates: [mid.position, barbTip],
+      },
+    })
+
+    const wing = Math.max(90, barbMeters * 0.42)
+    const left = offsetByBearing(barbTip, (windToward + 145) % 360, wing)
+    const right = offsetByBearing(barbTip, (windToward + 215) % 360, wing)
+    features.push({
+      type: 'Feature',
+      properties: {
+        kind: 'arrowhead',
+        ...shared,
+        windTowardDeg: Number(windToward.toFixed(1)),
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [left, barbTip, right],
       },
     })
 
@@ -217,7 +233,8 @@ export function buildRouteWindOverlay(
       },
       geometry: {
         type: 'Point',
-        coordinates: mid.position,
+        // Sit slightly toward the barb tip so the icon is not buried in the thick route stroke.
+        coordinates: offsetByBearing(mid.position, windToward, barbMeters * 0.55),
       },
     })
   }

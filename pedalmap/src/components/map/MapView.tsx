@@ -176,16 +176,21 @@ function createWindArrowImage(
 }
 
 const WIND_ARROW_IMAGES: Record<string, string> = {
-  'wind-arrow-cola': '#16a34a',
-  'wind-arrow-lateral': '#0284c7',
-  'wind-arrow-cara': '#ea580c',
+  'wind-arrow-cola-v2': '#16a34a',
+  'wind-arrow-lateral-v2': '#0284c7',
+  'wind-arrow-cara-v2': '#ea580c',
 }
 
 function ensureWindArrowImages(map: Map) {
   for (const [id, fill] of Object.entries(WIND_ARROW_IMAGES)) {
     if (map.hasImage(id)) continue
-    const img = createWindArrowImage(fill)
-    map.addImage(id, img, { pixelRatio: 2 })
+    try {
+      const img = createWindArrowImage(fill)
+      // MapLibre accepts { width, height, data }; avoid pixelRatio quirks that shrink icons to invisible.
+      map.addImage(id, img)
+    } catch (error) {
+      console.warn('[maplibre] wind arrow image', id, error)
+    }
   }
 }
 
@@ -243,11 +248,45 @@ function ensureWindLayers(map: Map) {
       id: 'route-wind-barbs',
       type: 'line',
       source: 'route-wind-lines',
-      minzoom: 11,
       filter: ['==', ['get', 'kind'], 'barb'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-width': 4.5,
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8,
+          3.5,
+          12,
+          5,
+          15,
+          6.5,
+        ],
+        'line-opacity': 1,
+        'line-color': WIND_COLOR_EXPR,
+      },
+    })
+  }
+
+  if (!map.getLayer('route-wind-arrowheads')) {
+    map.addLayer({
+      id: 'route-wind-arrowheads',
+      type: 'line',
+      source: 'route-wind-lines',
+      filter: ['==', ['get', 'kind'], 'arrowhead'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8,
+          4,
+          12,
+          6.5,
+          15,
+          8,
+        ],
         'line-opacity': 1,
         'line-color': WIND_COLOR_EXPR,
       },
@@ -259,38 +298,38 @@ function ensureWindLayers(map: Map) {
       id: 'route-wind-arrows',
       type: 'symbol',
       source: 'route-wind-points',
-      minzoom: 10.5,
       filter: ['==', ['get', 'kind'], 'arrow'],
       layout: {
         'icon-image': [
           'match',
           ['get', 'relative'],
           'cola',
-          'wind-arrow-cola',
+          'wind-arrow-cola-v2',
           'cara',
-          'wind-arrow-cara',
-          'wind-arrow-lateral',
+          'wind-arrow-cara-v2',
+          'wind-arrow-lateral-v2',
         ],
         'icon-size': [
           'interpolate',
           ['linear'],
           ['zoom'],
-          9,
-          0.45,
-          12,
-          0.7,
-          15,
-          0.9,
+          8,
+          0.28,
+          11,
+          0.42,
+          14,
+          0.58,
         ],
-        'icon-rotate': ['get', 'windTowardDeg'],
+        'icon-rotate': ['to-number', ['get', 'windTowardDeg']],
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-padding': 0,
+        'symbol-placement': 'point',
       },
       paint: {
-        'icon-opacity': 1,
+        'icon-opacity': 0.95,
       },
     })
   }
@@ -300,7 +339,7 @@ function ensureWindLayers(map: Map) {
       id: 'route-wind-labels',
       type: 'symbol',
       source: 'route-wind-points',
-      minzoom: 12,
+      minzoom: 11,
       filter: [
         'all',
         ['==', ['get', 'kind'], 'arrow'],
@@ -326,6 +365,7 @@ function ensureWindLayers(map: Map) {
   for (const id of [
     'route-wind-segments',
     'route-wind-barbs',
+    'route-wind-arrowheads',
     'route-wind-arrows',
     'route-wind-labels',
   ]) {
@@ -418,7 +458,12 @@ function splitWindOverlay(overlay: FeatureCollection | null | undefined): {
 function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
   if (!map.isStyleLoaded()) return false
   ensureRouteLayers(map)
-  ensureWindLayers(map)
+  // Upgrade path: older sessions may lack arrowhead layer — rebuild wind stack once.
+  if (overlay?.features?.length && !map.getLayer('route-wind-arrowheads')) {
+    rebuildWindLayers(map)
+  } else {
+    ensureWindLayers(map)
+  }
 
   const lineSource = map.getSource('route-wind-lines') as maplibregl.GeoJSONSource | undefined
   const pointSource = map.getSource('route-wind-points') as maplibregl.GeoJSONSource | undefined
@@ -436,6 +481,7 @@ function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefine
   for (const id of [
     'route-wind-segments',
     'route-wind-barbs',
+    'route-wind-arrowheads',
     'route-wind-arrows',
     'route-wind-labels',
   ]) {
@@ -451,6 +497,7 @@ function rebuildWindLayers(map: Map) {
   for (const id of [
     'route-wind-labels',
     'route-wind-arrows',
+    'route-wind-arrowheads',
     'route-wind-barbs',
     'route-wind-segments',
   ]) {
