@@ -17,6 +17,8 @@ import { canSaveRoute } from '@/services/EntitlementService'
 import { track } from '@/lib/analytics'
 import { routeService } from '@/services/RouteService'
 import { formatDistance } from '@/lib/stats'
+import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
+import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 import clsx from 'clsx'
 
 const MapView = lazy(() =>
@@ -64,6 +66,8 @@ export function RoutePlanner() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(true)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
+  const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
+  const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
 
   const activeDraft = editDraft ?? draft
   const vias = waypoints.filter((w) => w.kind === 'via')
@@ -75,9 +79,35 @@ export function RoutePlanner() {
     [activeDraft],
   )
 
+  const windOverlay = useMemo(() => {
+    if (!activeDraft?.geometry) return null
+    if (!selectedWindHour && !selectedWindWindow) return null
+    return buildRouteWindOverlay(activeDraft.geometry, {
+      routeType: activeDraft.type,
+      hour: selectedWindHour,
+      window: selectedWindHour ? null : selectedWindWindow,
+    })
+  }, [activeDraft, selectedWindHour, selectedWindWindow])
+
+  const windCaption = useMemo(() => {
+    if (selectedWindHour) {
+      return `${selectedWindHour.time.slice(0, 10)} ${selectedWindHour.time.slice(11, 16)} · ${Math.round(selectedWindHour.windSpeedKmh)} km/h desde ${Math.round(selectedWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
+    }
+    if (selectedWindWindow) {
+      return `${selectedWindWindow.startHour.slice(0, 10)} ${selectedWindWindow.startHour.slice(11, 16)}–${selectedWindWindow.endHour.slice(11, 16)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
+    }
+    return null
+  }, [selectedWindHour, selectedWindWindow])
+
   useEffect(() => {
     if (status === 'success' && draft) setPanelOpen(true)
   }, [status, draft])
+
+  useEffect(() => {
+    // Reset wind selection when the route geometry changes substantially
+    setSelectedWindHour(null)
+    setSelectedWindWindow(null)
+  }, [fitKey])
 
   async function handleSave() {
     if (!draft) return
@@ -392,7 +422,13 @@ export function RoutePlanner() {
               </Link>
             </div>
 
-            <RouteWeatherPanel route={activeDraft} />
+            <RouteWeatherPanel
+              route={activeDraft}
+              selectedWindow={selectedWindWindow}
+              selectedHour={selectedWindHour}
+              onSelectWindow={setSelectedWindWindow}
+              onSelectHour={setSelectedWindHour}
+            />
             <GpsExportPanel
               route={activeDraft}
               onPremiumRequired={() => showPaywall('gpx_export')}
@@ -442,6 +478,8 @@ export function RoutePlanner() {
               waypoints={waypoints}
               geometry={activeDraft?.geometry}
               hoverPoint={hoverPoint}
+              windOverlay={windOverlay}
+              windCaption={windCaption}
               fitKey={fitKey}
               onWaypointDrag={
                 status === 'editing'

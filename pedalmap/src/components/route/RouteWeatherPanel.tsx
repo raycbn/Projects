@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { RouteDraft } from '@/domain/types'
 import {
   weatherService,
+  type HourlyWeatherPoint,
   type RideWindowAdvice,
   type RouteWeatherForecast,
 } from '@/services/WeatherService'
@@ -10,6 +11,11 @@ import clsx from 'clsx'
 
 interface RouteWeatherPanelProps {
   route: RouteDraft
+  selectedWindow: RideWindowAdvice | null
+  selectedHour: HourlyWeatherPoint | null
+  onForecast?: (forecast: RouteWeatherForecast | null) => void
+  onSelectWindow: (window: RideWindowAdvice | null) => void
+  onSelectHour: (hour: HourlyWeatherPoint | null) => void
 }
 
 function formatWindowDay(iso: string): string {
@@ -34,7 +40,14 @@ function scoreClass(label: RideWindowAdvice['label']): string {
   }
 }
 
-export function RouteWeatherPanel({ route }: RouteWeatherPanelProps) {
+export function RouteWeatherPanel({
+  route,
+  selectedWindow,
+  selectedHour,
+  onForecast,
+  onSelectWindow,
+  onSelectHour,
+}: RouteWeatherPanelProps) {
   const [forecast, setForecast] = useState<RouteWeatherForecast | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,13 +62,20 @@ export function RouteWeatherPanel({ route }: RouteWeatherPanelProps) {
       .then((data) => {
         if (cancelled) return
         setForecast(data)
-        const firstDay = data.windows[0]?.startHour.slice(0, 10) ?? null
-        setSelectedDay(firstDay)
+        onForecast?.(data)
+        const best = data.windows[0] ?? null
+        const day = best?.startHour.slice(0, 10) ?? null
+        setSelectedDay(day)
+        onSelectWindow(best)
+        onSelectHour(null)
         track('weather_forecast_loaded', { windows: data.windows.length })
       })
       .catch((err) => {
         console.error('[weather]', err)
-        if (!cancelled) setError('No se pudo cargar el viento/meteo (Open-Meteo).')
+        if (!cancelled) {
+          setError('No se pudo cargar el viento/meteo (Open-Meteo).')
+          onForecast?.(null)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -63,6 +83,8 @@ export function RouteWeatherPanel({ route }: RouteWeatherPanelProps) {
     return () => {
       cancelled = true
     }
+    // Intentionally only when geometry identity changes enough via route draft
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.geometry])
 
   const days = forecast
@@ -71,6 +93,11 @@ export function RouteWeatherPanel({ route }: RouteWeatherPanelProps) {
   const dayWindows = forecast?.windows
     .filter((w) => !selectedDay || w.startHour.startsWith(selectedDay))
     .sort((a, b) => a.startHour.localeCompare(b.startHour))
+
+  const dayHours = useMemo(() => {
+    if (!forecast || !selectedDay) return []
+    return forecast.hours.filter((h) => h.time.startsWith(selectedDay) && Number(h.time.slice(11, 13)) >= 6 && Number(h.time.slice(11, 13)) <= 21)
+  }, [forecast, selectedDay])
 
   const top = forecast?.windows[0]
 
@@ -81,8 +108,8 @@ export function RouteWeatherPanel({ route }: RouteWeatherPanelProps) {
           Viento y mejor salida
         </h2>
         <p className="text-xs text-[var(--color-stone)]">
-          Previsión gratis (Open-Meteo) según el trazado de la ruta. Elige día/hora con menos cara
-          y lluvia.
+          Elige día/ventana u hora concreta: el mapa colorea la línea (ida/vuelta) y muestra flechas
+          de dirección e intensidad.
         </p>
       </div>
 
@@ -120,41 +147,95 @@ export function RouteWeatherPanel({ route }: RouteWeatherPanelProps) {
                     ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
                     : 'bg-white ring-1 ring-[var(--color-fog)]',
                 )}
-                onClick={() => setSelectedDay(day)}
+                onClick={() => {
+                  setSelectedDay(day)
+                  const first = forecast.windows.find((w) => w.startHour.startsWith(day)) ?? null
+                  onSelectWindow(first)
+                  onSelectHour(null)
+                }}
               >
                 {formatWindowDay(`${day}T12:00`)}
               </button>
             ))}
           </div>
 
-          <ul className="space-y-2">
-            {(dayWindows ?? []).map((w) => (
-              <li
-                key={`${w.startHour}-${w.endHour}`}
-                className="rounded-xl bg-[color-mix(in_oklab,var(--color-mist)_55%,white)] px-3 py-2"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+              Hora concreta (mapa)
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {dayHours.map((h) => {
+                const active = selectedHour?.time === h.time
+                return (
+                  <button
+                    key={h.time}
+                    type="button"
                     className={clsx(
-                      'rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
-                      scoreClass(w.label),
+                      'rounded-md px-2 py-1 text-[11px] font-semibold',
+                      active
+                        ? 'bg-[var(--color-forest)] text-white'
+                        : 'bg-white ring-1 ring-[var(--color-fog)] text-[var(--color-forest)]',
                     )}
+                    onClick={() => {
+                      onSelectHour(h)
+                      onSelectWindow(null)
+                    }}
+                    title={`${Math.round(h.windSpeedKmh)} km/h`}
                   >
-                    {w.label} · {w.score}
-                  </span>
-                  <span className="text-sm font-semibold text-[var(--color-forest)]">
-                    {formatHourRange(w.startHour, w.endHour)}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-[var(--color-stone)]">
-                  Viento {w.windSpeedKmh} km/h desde {w.windDirLabel} ({w.relative}) · {w.temperatureC}
-                  °C · precip {w.precipitationMm} mm
-                </p>
-                {w.notes.length > 0 && (
-                  <p className="mt-0.5 text-[11px] text-[var(--color-stone)]">{w.notes.join(' · ')}</p>
-                )}
-              </li>
-            ))}
+                    {h.time.slice(11, 16)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <ul className="space-y-2">
+            {(dayWindows ?? []).map((w) => {
+              const active =
+                !selectedHour &&
+                selectedWindow?.startHour === w.startHour &&
+                selectedWindow?.endHour === w.endHour
+              return (
+                <li key={`${w.startHour}-${w.endHour}`}>
+                  <button
+                    type="button"
+                    className={clsx(
+                      'w-full rounded-xl px-3 py-2 text-left',
+                      active
+                        ? 'bg-[color-mix(in_oklab,var(--color-signal)_28%,white)] ring-2 ring-[var(--color-signal)]'
+                        : 'bg-[color-mix(in_oklab,var(--color-mist)_55%,white)] ring-1 ring-transparent',
+                    )}
+                    onClick={() => {
+                      onSelectWindow(w)
+                      onSelectHour(null)
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={clsx(
+                          'rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide',
+                          scoreClass(w.label),
+                        )}
+                      >
+                        {w.label} · {w.score}
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--color-forest)]">
+                        {formatHourRange(w.startHour, w.endHour)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--color-stone)]">
+                      Viento {w.windSpeedKmh} km/h desde {w.windDirLabel} ({w.relative}) ·{' '}
+                      {w.temperatureC}°C · precip {w.precipitationMm} mm
+                    </p>
+                    {w.notes.length > 0 && (
+                      <p className="mt-0.5 text-[11px] text-[var(--color-stone)]">
+                        {w.notes.join(' · ')}
+                      </p>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
           </ul>
 
           <p className="text-[10px] text-[var(--color-stone)]">{forecast.attribution}</p>

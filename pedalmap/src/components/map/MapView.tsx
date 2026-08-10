@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
+import type { FeatureCollection } from 'geojson'
 import type { LatLng, RouteGeometry, Waypoint } from '@/domain/types'
 import { getMapStyleUrl } from '@/lib/mapTiles'
 
@@ -18,6 +19,9 @@ interface MapViewProps {
   waypoints: Waypoint[]
   geometry?: RouteGeometry | null
   hoverPoint?: LatLng | null
+  /** Wind overlay along the route (segments + arrows) for a selected hour/window. */
+  windOverlay?: FeatureCollection | null
+  windCaption?: string | null
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
@@ -54,10 +58,124 @@ function ensureRouteLayers(map: Map) {
   })
 }
 
+function ensureWindLayers(map: Map) {
+  if (map.getSource('route-wind')) return
+
+  map.addSource('route-wind', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+
+  map.addLayer({
+    id: 'route-wind-segments',
+    type: 'line',
+    source: 'route-wind',
+    filter: ['==', ['get', 'kind'], 'segment'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['get', 'windSpeedKmh'],
+        5,
+        4,
+        20,
+        7,
+        40,
+        11,
+      ],
+      'line-opacity': 0.92,
+      'line-color': [
+        'interpolate',
+        ['linear'],
+        ['get', 'relativeFactor'],
+        -1,
+        '#1f7a4d',
+        -0.35,
+        '#2f9b6a',
+        0,
+        '#6b8fad',
+        0.35,
+        '#d97706',
+        1,
+        '#c2410c',
+      ],
+    },
+  })
+
+  map.addLayer({
+    id: 'route-wind-arrows',
+    type: 'symbol',
+    source: 'route-wind',
+    filter: ['==', ['get', 'kind'], 'arrow'],
+    layout: {
+      'text-field': '➤',
+      'text-size': [
+        'interpolate',
+        ['linear'],
+        ['get', 'windSpeedKmh'],
+        5,
+        12,
+        20,
+        16,
+        40,
+        22,
+      ],
+      'text-rotate': ['get', 'windTowardDeg'],
+      'text-rotation-alignment': 'map',
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+      'symbol-placement': 'point',
+    },
+    paint: {
+      'text-color': [
+        'match',
+        ['get', 'relative'],
+        'cara',
+        '#9a3412',
+        'cola',
+        '#14532d',
+        '#1e3a5f',
+      ],
+      'text-halo-color': '#ffffff',
+      'text-halo-width': 1.4,
+    },
+  })
+
+  map.addLayer({
+    id: 'route-wind-labels',
+    type: 'symbol',
+    source: 'route-wind',
+    filter: ['==', ['get', 'kind'], 'arrow'],
+    layout: {
+      'text-field': [
+        'format',
+        ['get', 'legLabel'],
+        { 'font-scale': 0.75 },
+        '\n',
+        {},
+        ['get', 'label'],
+        { 'font-scale': 0.7 },
+      ],
+      'text-size': 10,
+      'text-offset': [0, 1.6],
+      'text-anchor': 'top',
+      'text-allow-overlap': false,
+      'symbol-sort-key': ['get', 'windSpeedKmh'],
+    },
+    paint: {
+      'text-color': '#0d3b2b',
+      'text-halo-color': 'rgba(255,255,255,0.92)',
+      'text-halo-width': 1.5,
+    },
+  })
+}
+
 function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boolean) {
   if (!map.isStyleLoaded()) return false
 
   ensureRouteLayers(map)
+  ensureWindLayers(map)
   const source = map.getSource('route') as maplibregl.GeoJSONSource | undefined
   if (!source) return false
 
@@ -86,10 +204,21 @@ function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boo
   return true
 }
 
+function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
+  if (!map.isStyleLoaded()) return false
+  ensureWindLayers(map)
+  const source = map.getSource('route-wind') as maplibregl.GeoJSONSource | undefined
+  if (!source) return false
+  source.setData(overlay ?? { type: 'FeatureCollection', features: [] })
+  return true
+}
+
 export function MapView({
   waypoints,
   geometry,
   hoverPoint,
+  windOverlay,
+  windCaption,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -101,7 +230,9 @@ export function MapView({
   const markersRef = useRef<Marker[]>([])
   const hoverMarkerRef = useRef<Marker | null>(null)
   const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
+  const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
   geometryRef.current = geometry
+  windRef.current = windOverlay
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -126,6 +257,7 @@ export function MapView({
 
     const paintFromRef = (fit: boolean) => {
       applyGeometry(map, geometryRef.current, fit)
+      applyWindOverlay(map, windRef.current)
     }
 
     const resize = () => map.resize()
@@ -199,7 +331,14 @@ export function MapView({
     const map = mapRef.current
     if (!map) return
     applyGeometry(map, geometry, Boolean(fitKey))
+    applyWindOverlay(map, windRef.current)
   }, [geometry, fitKey])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    applyWindOverlay(map, windOverlay)
+  }, [windOverlay])
 
   useEffect(() => {
     const map = mapRef.current
@@ -223,11 +362,23 @@ export function MapView({
   }, [hoverPoint])
 
   return (
-    <div
-      ref={containerRef}
-      className={className ?? 'h-full min-h-[320px] w-full'}
-      role="application"
-      aria-label="Mapa de rutas ciclistas"
-    />
+    <div className={className ? `relative ${className}` : 'relative h-full min-h-[320px] w-full'}>
+      <div
+        ref={containerRef}
+        className="absolute inset-0 h-full w-full"
+        role="application"
+        aria-label="Mapa de rutas ciclistas"
+      />
+      {windCaption && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(92%,22rem)] rounded-xl bg-white/90 px-3 py-2 text-[11px] text-[var(--color-forest)] shadow-md ring-1 ring-[var(--color-fog)]">
+          <p className="font-semibold">Viento en ruta</p>
+          <p className="text-[var(--color-stone)]">{windCaption}</p>
+          <p className="mt-1 text-[10px] text-[var(--color-stone)]">
+            Verde = cola · Azul = lateral · Naranja/rojo = cara · Flecha = hacia dónde sopla · Grosor
+            = intensidad
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
