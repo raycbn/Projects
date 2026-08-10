@@ -103,11 +103,8 @@ export function RoutePlanner() {
     if (status === 'success' && draft) setPanelOpen(true)
   }, [status, draft])
 
-  useEffect(() => {
-    // Reset wind selection when the route geometry changes substantially
-    setSelectedWindHour(null)
-    setSelectedWindWindow(null)
-  }, [fitKey])
+  // Wind selection is owned by RouteWeatherPanel after each forecast load.
+  // Do not clear it on fitKey — that raced the forecast callback and left the map without overlay.
 
   async function handleSave() {
     if (!draft) return

@@ -118,11 +118,10 @@ export function buildRouteWindOverlay(
 
   const cum = cumulativeDistances(coords)
   const total = cum[cum.length - 1] || 1
-  const samples = Math.max(8, Math.min(28, opts.sampleCount ?? 16))
+  const samples = Math.max(12, Math.min(36, opts.sampleCount ?? 24))
   const windToward = (wind.windFromDeg + 180) % 360
   const features: Feature<Point | LineString>[] = []
 
-  // Segment coloring: one line feature per sample interval
   for (let s = 0; s < samples; s += 1) {
     const d0 = (total * s) / samples
     const d1 = (total * (s + 1)) / samples
@@ -135,7 +134,6 @@ export function buildRouteWindOverlay(
     const relativeKind = windRelativeLabel(relative)
     const leg = legForProgress(midProgress, opts.routeType)
     const intensity = intensityBucket(wind.windSpeedKmh)
-    // headwindScore 0..1 for styling
     const headwindScore = Math.max(0, relative)
     const tailwindScore = Math.max(0, -relative)
 
@@ -145,10 +143,10 @@ export function buildRouteWindOverlay(
         kind: 'segment',
         leg,
         relative: relativeKind,
-        relativeFactor: relative,
+        relativeFactor: Number(relative.toFixed(3)),
         headwindScore,
         tailwindScore,
-        windSpeedKmh: wind.windSpeedKmh,
+        windSpeedKmh: Number(wind.windSpeedKmh.toFixed(1)),
         intensity,
         timeLabel: wind.timeLabel,
       },
@@ -158,33 +156,30 @@ export function buildRouteWindOverlay(
       },
     })
 
-    // Arrow at segment midpoint (skip every other on dense routes for readability)
-    if (s % 2 === 0) {
-      const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
-      if (!mid) continue
-      features.push({
-        type: 'Feature',
-        properties: {
-          kind: 'arrow',
-          leg,
-          relative: relativeKind,
-          relativeFactor: relative,
-          headwindScore,
-          windSpeedKmh: Math.round(wind.windSpeedKmh),
-          windFromLabel: bearingLabel(wind.windFromDeg),
-          windTowardDeg: windToward,
-          travelBearing: mid.travelBearing,
-          intensity,
-          timeLabel: wind.timeLabel,
-          label: `${wind.timeLabel} · ${Math.round(wind.windSpeedKmh)}km/h ${relativeKind}`,
-          legLabel: leg === 'ruta' ? '' : leg.toUpperCase(),
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: mid.position,
-        },
-      })
-    }
+    const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
+    if (!mid) continue
+    features.push({
+      type: 'Feature',
+      properties: {
+        kind: 'arrow',
+        leg,
+        relative: relativeKind,
+        relativeFactor: Number(relative.toFixed(3)),
+        headwindScore,
+        windSpeedKmh: Math.round(wind.windSpeedKmh),
+        windFromLabel: bearingLabel(wind.windFromDeg),
+        windTowardDeg: Number(windToward.toFixed(1)),
+        travelBearing: mid.travelBearing,
+        intensity,
+        timeLabel: wind.timeLabel,
+        label: `${wind.timeLabel} · ${Math.round(wind.windSpeedKmh)}km/h ${relativeKind}`,
+        legLabel: leg === 'ruta' ? '' : leg.toUpperCase(),
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: mid.position,
+      },
+    })
   }
 
   return { type: 'FeatureCollection', features }

@@ -55,8 +55,11 @@ export function RouteWeatherPanel({
 
   useEffect(() => {
     let cancelled = false
+    const geometryKey = `${route.geometry.coordinates.length}:${route.stats.distanceMeters}`
     setLoading(true)
     setError(null)
+    onSelectHour(null)
+    onSelectWindow(null)
     void weatherService
       .forecastForRoute(route.geometry, { forecastDays: 7 })
       .then((data) => {
@@ -68,7 +71,7 @@ export function RouteWeatherPanel({
         setSelectedDay(day)
         onSelectWindow(best)
         onSelectHour(null)
-        track('weather_forecast_loaded', { windows: data.windows.length })
+        track('weather_forecast_loaded', { windows: data.windows.length, geometryKey })
       })
       .catch((err) => {
         console.error('[weather]', err)
@@ -83,9 +86,14 @@ export function RouteWeatherPanel({
     return () => {
       cancelled = true
     }
-    // Intentionally only when geometry identity changes enough via route draft
+    // Re-run when the drawn geometry identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.geometry])
+  }, [
+    route.geometry.coordinates.length,
+    route.geometry.coordinates[0]?.[0],
+    route.geometry.coordinates[0]?.[1],
+    route.stats.distanceMeters,
+  ])
 
   const days = forecast
     ? [...new Set(forecast.windows.map((w) => w.startHour.slice(0, 10)))]

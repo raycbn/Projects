@@ -58,117 +58,151 @@ function ensureRouteLayers(map: Map) {
   })
 }
 
+function createWindArrowImage(): { data: Uint8Array; width: number; height: number } {
+  const width = 64
+  const height = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    return { data: new Uint8Array(width * height * 4), width, height }
+  }
+  ctx.clearRect(0, 0, width, height)
+  ctx.translate(width / 2, height / 2)
+  // Point to the right (0° in MapLibre icon-rotate is east / right)
+  ctx.beginPath()
+  ctx.moveTo(22, 0)
+  ctx.lineTo(-18, -14)
+  ctx.lineTo(-10, 0)
+  ctx.lineTo(-18, 14)
+  ctx.closePath()
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  ctx.lineWidth = 3
+  ctx.strokeStyle = '#04140e'
+  ctx.stroke()
+  const imageData = ctx.getImageData(0, 0, width, height)
+  return { data: new Uint8Array(imageData.data.buffer), width, height }
+}
+
+function ensureWindArrowImage(map: Map) {
+  if (map.hasImage('wind-arrow')) return
+  const img = createWindArrowImage()
+  map.addImage('wind-arrow', img, { pixelRatio: 2 })
+}
+
 function ensureWindLayers(map: Map) {
-  if (map.getSource('route-wind')) return
+  ensureWindArrowImage(map)
+  if (!map.getSource('route-wind')) {
+    map.addSource('route-wind', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
+  }
 
-  map.addSource('route-wind', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  })
+  if (!map.getLayer('route-wind-segments')) {
+    map.addLayer({
+      id: 'route-wind-segments',
+      type: 'line',
+      source: 'route-wind',
+      filter: ['==', ['get', 'kind'], 'segment'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['get', 'windSpeedKmh'],
+          0,
+          6,
+          10,
+          9,
+          25,
+          13,
+          45,
+          17,
+        ],
+        'line-opacity': 0.95,
+        'line-color': [
+          'interpolate',
+          ['linear'],
+          ['get', 'relativeFactor'],
+          -1,
+          '#16a34a',
+          -0.35,
+          '#22c55e',
+          0,
+          '#38bdf8',
+          0.35,
+          '#f97316',
+          1,
+          '#dc2626',
+        ],
+      },
+    })
+  }
 
-  map.addLayer({
-    id: 'route-wind-segments',
-    type: 'line',
-    source: 'route-wind',
-    filter: ['==', ['get', 'kind'], 'segment'],
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: {
-      'line-width': [
-        'interpolate',
-        ['linear'],
-        ['get', 'windSpeedKmh'],
-        5,
-        4,
-        20,
-        7,
-        40,
-        11,
-      ],
-      'line-opacity': 0.92,
-      'line-color': [
-        'interpolate',
-        ['linear'],
-        ['get', 'relativeFactor'],
-        -1,
-        '#1f7a4d',
-        -0.35,
-        '#2f9b6a',
-        0,
-        '#6b8fad',
-        0.35,
-        '#d97706',
-        1,
-        '#c2410c',
-      ],
-    },
-  })
+  if (!map.getLayer('route-wind-arrows')) {
+    map.addLayer({
+      id: 'route-wind-arrows',
+      type: 'symbol',
+      source: 'route-wind',
+      filter: ['==', ['get', 'kind'], 'arrow'],
+      layout: {
+        'icon-image': 'wind-arrow',
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['get', 'windSpeedKmh'],
+          0,
+          0.55,
+          15,
+          0.75,
+          35,
+          1.05,
+        ],
+        'icon-rotate': ['get', 'windTowardDeg'],
+        'icon-rotation-alignment': 'map',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    })
+  }
 
-  map.addLayer({
-    id: 'route-wind-arrows',
-    type: 'symbol',
-    source: 'route-wind',
-    filter: ['==', ['get', 'kind'], 'arrow'],
-    layout: {
-      'text-field': '➤',
-      'text-size': [
-        'interpolate',
-        ['linear'],
-        ['get', 'windSpeedKmh'],
-        5,
-        12,
-        20,
-        16,
-        40,
-        22,
-      ],
-      'text-rotate': ['get', 'windTowardDeg'],
-      'text-rotation-alignment': 'map',
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-      'symbol-placement': 'point',
-    },
-    paint: {
-      'text-color': [
-        'match',
-        ['get', 'relative'],
-        'cara',
-        '#9a3412',
-        'cola',
-        '#14532d',
-        '#1e3a5f',
-      ],
-      'text-halo-color': '#ffffff',
-      'text-halo-width': 1.4,
-    },
-  })
+  if (!map.getLayer('route-wind-labels')) {
+    map.addLayer({
+      id: 'route-wind-labels',
+      type: 'symbol',
+      source: 'route-wind',
+      filter: ['==', ['get', 'kind'], 'arrow'],
+      layout: {
+        'text-field': [
+          'format',
+          ['get', 'legLabel'],
+          { 'font-scale': 0.8 },
+          '\n',
+          {},
+          ['get', 'label'],
+          { 'font-scale': 0.72 },
+        ],
+        'text-size': 11,
+        'text-offset': [0, 1.8],
+        'text-anchor': 'top',
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+      },
+      paint: {
+        'text-color': '#0d3b2b',
+        'text-halo-color': 'rgba(255,255,255,0.95)',
+        'text-halo-width': 1.6,
+      },
+    })
+  }
 
-  map.addLayer({
-    id: 'route-wind-labels',
-    type: 'symbol',
-    source: 'route-wind',
-    filter: ['==', ['get', 'kind'], 'arrow'],
-    layout: {
-      'text-field': [
-        'format',
-        ['get', 'legLabel'],
-        { 'font-scale': 0.75 },
-        '\n',
-        {},
-        ['get', 'label'],
-        { 'font-scale': 0.7 },
-      ],
-      'text-size': 10,
-      'text-offset': [0, 1.6],
-      'text-anchor': 'top',
-      'text-allow-overlap': false,
-      'symbol-sort-key': ['get', 'windSpeedKmh'],
-    },
-    paint: {
-      'text-color': '#0d3b2b',
-      'text-halo-color': 'rgba(255,255,255,0.92)',
-      'text-halo-width': 1.5,
-    },
-  })
+  // Keep wind visuals above the base route line
+  for (const id of ['route-wind-segments', 'route-wind-arrows', 'route-wind-labels']) {
+    if (map.getLayer(id)) map.moveLayer(id)
+  }
 }
 
 function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boolean) {
@@ -209,7 +243,18 @@ function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefine
   ensureWindLayers(map)
   const source = map.getSource('route-wind') as maplibregl.GeoJSONSource | undefined
   if (!source) return false
-  source.setData(overlay ?? { type: 'FeatureCollection', features: [] })
+  const data = overlay ?? { type: 'FeatureCollection' as const, features: [] }
+  source.setData(data)
+
+  const hasWind = data.features.length > 0
+  // Dim lime base route so colored wind segments dominate
+  if (map.getLayer('route-line')) {
+    map.setPaintProperty('route-line', 'line-opacity', hasWind ? 0.25 : 1)
+    map.setPaintProperty('route-line', 'line-width', hasWind ? 3 : 5)
+  }
+  if (map.getLayer('route-line-casing')) {
+    map.setPaintProperty('route-line-casing', 'line-opacity', hasWind ? 0.2 : 0.55)
+  }
   return true
 }
 
