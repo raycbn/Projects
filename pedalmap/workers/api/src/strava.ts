@@ -121,7 +121,7 @@ export async function handleStravaOAuthCallback(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const appUrl = (env.APP_URL || 'https://pedalmap-79b3a.web.app').replace(/\/+$/, '')
+  const appUrl = (env.APP_URL || 'https://pedalmap.es').replace(/\/+$/, '')
   if (!stravaConfigured(env)) {
     return Response.redirect(`${appUrl}/actividades?strava=error&reason=not_configured`, 302)
   }

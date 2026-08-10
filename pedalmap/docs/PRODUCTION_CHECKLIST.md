@@ -16,7 +16,7 @@ Estado actual (2026-08-10):
 | Superficie por modalidad | ✅ scoring + multi-strategy ORS |
 | Explorar vacío | ✅ demos Madrid/Sierra |
 | Stripe | ⚠️ **test/sandbox** (no live hasta cobrar) |
-| Dominio propio | ⏳ pendiente (DNS + Auth/CORS/APP_URL) |
+| Dominio propio | ⏳ `pedalmap.es` — ver `docs/DOMAIN_PEDALMAP_ES.md` (IONOS DNS + Firebase custom domain) |
 | Rules/indexes deploy owner | ✅ publicadas por owner (2026-08-10) |
 
 ## Soft-launch gate

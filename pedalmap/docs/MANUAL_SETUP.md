@@ -80,11 +80,12 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage --project p
 5. `firebase deploy --only firestore:rules` tras añadir `gpsConnections`.  
 6. Strava queda opcional/legacy (`docs/STRAVA_BRIDGE.md`) — no se muestra en la UI.
 
-### E) Ajustes en `wrangler.toml` tras Hosting
+### E) Ajustes en `wrangler.toml` tras Hosting / dominio
 
-- `APP_URL` = `https://pedalmap-79b3a.web.app`
-- `ALLOWED_ORIGINS` = Hosting URLs
-- Luego: `npx wrangler login && npm run deploy` en `workers/api`
+- `APP_URL` = `https://pedalmap.es` (ya en código)
+- `ALLOWED_ORIGINS` incluye `pedalmap.es` + `www` + Hosting Firebase
+- Dominio IONOS: `docs/DOMAIN_PEDALMAP_ES.md`
+- Luego: `npm run deploy` en `workers/api`
 
 Ver `docs/PRODUCTION_CHECKLIST.md`.
 

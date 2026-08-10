@@ -87,7 +87,7 @@ App Introduction: Cycling route planner and ride logger. We sync finished rides 
 redirect_url: https://pedalmap-api.broken-dietician.workers.dev/gps/igpsport/oauth/callback
 callback_url: https://pedalmap-api.broken-dietician.workers.dev/gps/igpsport/webhook
 Company name: [TU RAZÓN SOCIAL / NOMBRE]
-Official website: https://pedalmap-79b3a.web.app
+Official website: https://pedalmap.es
 Application Logo: [adjuntar PNG 120x120]
 ```
 
@@ -99,6 +99,7 @@ Application Logo: [adjuntar PNG 120x120]
 4. webhook_url = webhook arriba + webhook_token  
 5. Secrets + deploy  
 6. Pedir Production review cuando Sandbox esté estable  
+7. En la ficha de la app, website / descripción → `https://pedalmap.es` 
 
 ## Garmin (checklist)
 

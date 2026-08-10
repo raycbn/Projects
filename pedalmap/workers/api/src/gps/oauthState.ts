@@ -64,7 +64,7 @@ export function workerCallbackUrl(request: Request, provider: string): string {
 }
 
 export function appRedirect(env: { APP_URL?: string }, ok: boolean, provider: string, reason?: string): Response {
-  const appUrl = (env.APP_URL || 'https://pedalmap-79b3a.web.app').replace(/\/+$/, '')
+  const appUrl = (env.APP_URL || 'https://pedalmap.es').replace(/\/+$/, '')
   if (ok) {
     return Response.redirect(`${appUrl}/actividades?gps=connected&provider=${provider}`, 302)
   }
