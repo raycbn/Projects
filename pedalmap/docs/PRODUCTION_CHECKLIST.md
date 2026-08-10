@@ -46,12 +46,18 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage --project p
 ## 4) QA en producción (test)
 
 1. Abrir https://pedalmap-79b3a.web.app
-2. Login (Auth domain Hosting suele estar autorizado automáticamente)
+2. Login (en **móvil** Google usa redirección, no popup)
 3. Planificar ruta A→B (proxy ORS)
 4. Free: 3 filtros → paywall
 5. `/premium` → Stripe test (`4242…`)
 6. Tras pagar: Firestore `users/{uid}.plan` = `premium`
 7. Portal de cliente desde `/premium`
+
+### Google Auth
+
+- Dominios autorizados OK: `pedalmap-79b3a.web.app`, `firebaseapp.com`, `localhost`
+- Móvil / touch: `signInWithRedirect` (evita `auth/popup-closed-by-user` por COOP)
+- Desktop: popup; si el navegador bloquea → redirect
 
 ## 5) Rebuild + redeploy Hosting
 
