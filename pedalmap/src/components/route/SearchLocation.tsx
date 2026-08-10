@@ -77,6 +77,8 @@ export function SearchLocation({
         aria-autocomplete="list"
         aria-controls={listId}
         aria-expanded={open}
+        title={selectedLabel || query || undefined}
+        className="truncate"
         onChange={(e) => {
           setSelectedLabel(null)
           setQuery(e.target.value)
@@ -84,6 +86,11 @@ export function SearchLocation({
         onFocus={() => results.length && setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
       />
+      {selectedLabel && selectedLabel.length > 42 && (
+        <p className="mt-1 line-clamp-2 break-words text-[11px] text-[var(--color-stone)]" title={selectedLabel}>
+          {selectedLabel}
+        </p>
+      )}
       {loading && (
         <p className="mt-1 text-xs text-[var(--color-stone)] animate-pulse-soft">Buscando…</p>
       )}

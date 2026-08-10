@@ -34,7 +34,11 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           {title}
         </h2>
         <p className="mt-2 text-sm text-white/75">
-          Desbloquea PedalMap Premium y planifica sin fricciones.
+          {reason === 'circular_premium'
+            ? 'Puedes seguir con A → B o Ida y vuelta en Free. Objetivo (km + desnivel) es Premium.'
+            : reason === 'filter_limit'
+              ? 'Desactiva un filtro o pasa a Premium para combinar más de 2.'
+              : 'Desbloquea PedalMap Premium y planifica sin fricciones.'}
         </p>
         <ul className="mt-4 space-y-2 text-sm">
           {[

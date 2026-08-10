@@ -76,6 +76,7 @@ export function RoutePlanner() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
   const [locating, setLocating] = useState(false)
+  const [mapExpanded, setMapExpanded] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
 
@@ -157,10 +158,20 @@ export function RoutePlanner() {
         : 'Crear ruta'
 
   return (
-    <div className="planner-shell flex flex-col overflow-hidden lg:grid lg:grid-cols-2">
+    <div
+      className={clsx(
+        'planner-shell flex flex-col overflow-hidden lg:grid lg:grid-cols-2',
+        mapExpanded && 'max-lg:!grid max-lg:grid-rows-[1fr_0]',
+      )}
+    >
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
 
-      <aside className="order-2 flex min-h-0 flex-[1.15] flex-col overflow-hidden border-t border-[var(--color-fog)] bg-white lg:order-1 lg:flex-1 lg:border-r lg:border-t-0">
+      <aside
+        className={clsx(
+          'order-2 flex min-h-0 flex-[1.15] flex-col overflow-hidden border-t border-[var(--color-fog)] bg-white lg:order-1 lg:flex-1 lg:border-r lg:border-t-0',
+          mapExpanded && 'max-lg:hidden',
+        )}
+      >
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-28 lg:p-5 lg:pb-28">
           <div>
             <p className="label-caps text-[var(--color-trail)]">PedalMap</p>
@@ -180,25 +191,27 @@ export function RoutePlanner() {
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de ruta">
             {(
               [
-                ['a_to_b', 'A → B'],
-                ['out_and_back', 'Ida y vuelta'],
-                ['circular', 'Objetivo'],
+                ['a_to_b', 'A → B', 'Punto a punto'],
+                ['out_and_back', 'Ida y vuelta', 'Ida y retorno'],
+                ['circular', 'Objetivo', 'Km / desnivel'],
               ] as const
-            ).map(([id, label]) => (
+            ).map(([id, label, hint]) => (
               <button
                 key={id}
                 type="button"
                 role="tab"
                 aria-selected={routeType === id}
+                title={hint}
                 className={clsx(
-                  'rounded-xl px-3 py-2 text-sm font-semibold transition',
+                  'min-h-11 rounded-xl px-3 py-2 text-left text-sm font-semibold transition',
                   routeType === id
                     ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
                     : 'bg-[var(--color-mist)] text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]',
                 )}
                 onClick={() => setRouteType(id)}
               >
-                {label}
+                <span className="block leading-tight">{label}</span>
+                <span className="block text-[10px] font-medium opacity-70">{hint}</span>
               </button>
             ))}
           </div>
@@ -302,7 +315,17 @@ export function RoutePlanner() {
               </p>
               <label className="block">
                 <span className="label-caps">Distancia objetivo</span>
-                <div className="mt-2 flex items-center gap-3">
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+                    aria-label="Bajar 1 km"
+                    onClick={() =>
+                      setCircularDistanceMeters(Math.max(5000, circularDistanceMeters - 1000))
+                    }
+                  >
+                    −
+                  </button>
                   <input
                     type="range"
                     min={5000}
@@ -312,6 +335,16 @@ export function RoutePlanner() {
                     onChange={(e) => setCircularDistanceMeters(Number(e.target.value))}
                     className="w-full accent-[var(--color-trail)]"
                   />
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+                    aria-label="Subir 1 km"
+                    onClick={() =>
+                      setCircularDistanceMeters(Math.min(80000, circularDistanceMeters + 1000))
+                    }
+                  >
+                    +
+                  </button>
                   <strong className="min-w-16 text-right text-[var(--color-forest)]">
                     {formatDistance(circularDistanceMeters)}
                   </strong>
@@ -319,7 +352,17 @@ export function RoutePlanner() {
               </label>
               <label className="block">
                 <span className="label-caps">Desnivel positivo objetivo</span>
-                <div className="mt-2 flex items-center gap-3">
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+                    aria-label="Bajar 50 m de desnivel"
+                    onClick={() =>
+                      setTargetElevationGainMeters(Math.max(0, targetElevationGainMeters - 50))
+                    }
+                  >
+                    −
+                  </button>
                   <input
                     type="range"
                     min={0}
@@ -329,6 +372,16 @@ export function RoutePlanner() {
                     onChange={(e) => setTargetElevationGainMeters(Number(e.target.value))}
                     className="w-full accent-[var(--color-trail)]"
                   />
+                  <button
+                    type="button"
+                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+                    aria-label="Subir 50 m de desnivel"
+                    onClick={() =>
+                      setTargetElevationGainMeters(Math.min(2500, targetElevationGainMeters + 50))
+                    }
+                  >
+                    +
+                  </button>
                   <strong className="min-w-16 text-right text-[var(--color-forest)]">
                     {targetElevationGainMeters === 0 ? 'Libre' : `${targetElevationGainMeters} m`}
                   </strong>
@@ -541,7 +594,12 @@ export function RoutePlanner() {
         </div>
       </aside>
 
-      <section className="relative order-1 min-h-[42vh] flex-1 bg-[var(--color-fog)] lg:order-2 lg:min-h-0">
+      <section
+        className={clsx(
+          'relative order-1 min-h-[42vh] flex-1 bg-[var(--color-fog)] lg:order-2 lg:min-h-0',
+          mapExpanded && 'max-lg:min-h-0 max-lg:flex-1',
+        )}
+      >
         <Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-[var(--color-stone)]">
@@ -565,12 +623,19 @@ export function RoutePlanner() {
             }
           />
         </Suspense>
+        <button
+          type="button"
+          className="absolute right-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:hidden"
+          onClick={() => setMapExpanded((v) => !v)}
+        >
+          {mapExpanded ? 'Ver formulario' : 'Ampliar mapa'}
+        </button>
         {status === 'calculating' && (
           <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
             Calculando la mejor ruta ciclista…
           </p>
         )}
-        {!activeDraft && status !== 'calculating' && (
+        {!activeDraft && status !== 'calculating' && !mapExpanded && (
           <p className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(92%,18rem)] rounded-xl bg-white/95 px-3 py-2 text-xs text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:bottom-4">
             Toca el mapa: 1º inicio · 2º destino
           </p>

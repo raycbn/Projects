@@ -27,7 +27,7 @@ export function BikeSelector({ value, onChange }: BikeSelectorProps) {
               title={opt.blurb}
               onClick={() => onChange(id)}
               className={clsx(
-                'rounded-xl px-3 py-2 text-sm font-semibold transition',
+                'min-h-11 rounded-xl px-3 py-2.5 text-sm font-semibold transition',
                 value === id
                   ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
                   : 'bg-white text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] hover:bg-[var(--color-mist)]',

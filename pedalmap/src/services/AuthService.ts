@@ -142,6 +142,8 @@ export class AuthService {
     track('signup_started', { method: 'google' })
     const auth = getFirebaseAuth()
 
+    // Always redirect on coarse/mobile/in-app browsers. Popup leaves a stuck overlay
+    // that blocks the app on many phones and embedded webviews.
     if (prefersGoogleRedirect()) {
       await signInWithRedirect(auth, googleProvider)
       return null
@@ -157,8 +159,12 @@ export class AuthService {
         typeof error === 'object' && error && 'code' in error
           ? String((error as { code?: string }).code || '')
           : ''
-      // Popup blocked, or COOP makes Firebase think the window closed after success.
-      if (code === 'auth/popup-blocked') {
+      // Popup blocked / COOP / cancelled → fall back to redirect (no stuck window).
+      if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/cancelled-popup-request'
+      ) {
         await signInWithRedirect(auth, googleProvider)
         return null
       }
