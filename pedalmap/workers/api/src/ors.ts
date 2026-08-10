@@ -21,21 +21,53 @@ export async function handleOrsProxy(request: Request, env: Env, path: string): 
   }
 
   const body = await request.text()
-  const upstream = await fetch(`${ORS_BASE}/v2/directions/${profile}/geojson`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, application/geo+json',
-      Authorization: env.ORS_API_KEY,
-    },
-    body,
-  })
+  let upstream: Response
+  try {
+    upstream = await fetch(`${ORS_BASE}/v2/directions/${profile}/geojson`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, application/geo+json',
+        Authorization: env.ORS_API_KEY,
+      },
+      body,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'ORS upstream unreachable'
+    return json(
+      {
+        error: 'ORS network error',
+        message,
+        profile,
+        maintenance: false,
+      },
+      502,
+    )
+  }
 
   const text = await upstream.text()
+  const contentType = upstream.headers.get('Content-Type') || ''
+  const looksHtml = contentType.includes('text/html') || text.trimStart().startsWith('<!')
+  const maintenance =
+    upstream.status === 503 || text.toLowerCase().includes('down for maintenance')
+
+  // Normalize HeiGIT HTML maintenance pages so the SPA always gets JSON.
+  if (maintenance || (looksHtml && upstream.status >= 500)) {
+    return json(
+      {
+        error: 'OpenRouteService temporarily unavailable',
+        maintenance: true,
+        profile,
+        status: upstream.status,
+      },
+      503,
+    )
+  }
+
   return new Response(text, {
     status: upstream.status,
     headers: {
-      'Content-Type': upstream.headers.get('Content-Type') || 'application/json',
+      'Content-Type': contentType.includes('json') ? contentType : 'application/json',
     },
   })
 }

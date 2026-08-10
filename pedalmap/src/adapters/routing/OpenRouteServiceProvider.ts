@@ -54,7 +54,13 @@ export function profileFallbacks(profile: string): string[] {
 }
 
 export function isOrsMaintenanceResponse(status: number, body: string): boolean {
-  return status === 503 || body.toLowerCase().includes('down for maintenance')
+  if (status === 503) return true
+  const lower = body.toLowerCase()
+  return (
+    lower.includes('down for maintenance') ||
+    lower.includes('"maintenance":true') ||
+    lower.includes('temporarily unavailable')
+  )
 }
 
 /**
@@ -301,6 +307,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
     )
 
     let lastMaintenance: string | undefined
+    const downProfiles = new Set<string>()
     let bestElev: RoutingResult | undefined
     let bestElevScore = Number.POSITIVE_INFINITY
     let bestSurface: RoutingResult | undefined
@@ -312,8 +319,9 @@ export class OpenRouteServiceProvider implements RoutingProvider {
         for (let si = 0; si < maxSurfaceAttempts; si += 1) {
           const strategy: RoutingStrategy = strategies[si]
           const profiles = [strategy.profile, ...profileFallbacks(strategy.profile)].filter(
-            (p, idx, arr) => arr.indexOf(p) === idx,
+            (p, idx, arr) => arr.indexOf(p) === idx && !downProfiles.has(p),
           )
+          if (!profiles.length) continue
 
           const body: Record<string, unknown> = {
             coordinates,
@@ -330,18 +338,17 @@ export class OpenRouteServiceProvider implements RoutingProvider {
             ),
           }
 
-          // Always ask ORS for alternatives on A→B so we can pick best surface fit.
-          // If alternatives fail for a profile, retry once without them.
-          const tryBodies: Record<string, unknown>[] = [body]
-          if (request.routeType === 'a_to_b') {
-            body.alternative_routes = {
-              target_count: 3,
-              share_factor: 0.55,
-              weight_factor: 1.5,
-            }
-            const withoutAlts = { ...body }
-            delete withoutAlts.alternative_routes
-            tryBodies.push(withoutAlts)
+          // Alternatives only on first strategy attempt (quota). Retry without if rejected.
+          const tryBodies: Record<string, unknown>[] = [{ ...body }]
+          if (request.routeType === 'a_to_b' && si === 0) {
+            tryBodies.unshift({
+              ...body,
+              alternative_routes: {
+                target_count: 2,
+                share_factor: 0.55,
+                weight_factor: 1.5,
+              },
+            })
           }
 
           let gotResult = false
@@ -350,15 +357,28 @@ export class OpenRouteServiceProvider implements RoutingProvider {
             const url = `${this.baseUrl}/v2/directions/${profile}/geojson`
 
             for (let bi = 0; bi < tryBodies.length; bi += 1) {
-              const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Accept: 'application/json, application/geo+json',
-                  ...(this.apiKey ? { Authorization: this.apiKey } : {}),
-                },
-                body: JSON.stringify(tryBodies[bi]),
-              })
+              let response: Response
+              try {
+                response = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json, application/geo+json',
+                    ...(this.apiKey ? { Authorization: this.apiKey } : {}),
+                  },
+                  body: JSON.stringify(tryBodies[bi]),
+                })
+              } catch (fetchErr) {
+                console.error('[ORS] fetch failed', profile, fetchErr)
+                // Soft: try next profile/body before declaring hard network failure
+                if (bi < tryBodies.length - 1) continue
+                if (i < profiles.length - 1) continue profileLoop
+                throw new RoutingError(
+                  'Network error talking to routing provider',
+                  'network',
+                  fetchErr,
+                )
+              }
 
               if (response.status === 429) {
                 throw new RoutingError('Rate limit exceeded', 'rate_limited')
@@ -372,6 +392,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                 }
                 if (isOrsMaintenanceResponse(response.status, text)) {
                   lastMaintenance = profile
+                  downProfiles.add(profile)
                   const next = profiles[i + 1]
                   if (next) {
                     console.warn(`[ORS] profile ${profile} unavailable; retrying with ${next}`)
@@ -381,11 +402,22 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                 }
                 // Alternatives sometimes rejected — try next body variant
                 if (bi < tryBodies.length - 1) continue
+                // 502 from worker = upstream blip; try next profile
+                if (response.status === 502 && i < profiles.length - 1) {
+                  continue profileLoop
+                }
                 throw new RoutingError('Provider error', 'provider_error', text)
               }
 
               anyOkResponse = true
-              const data = (await response.json()) as OrsGeoJsonResponse
+              let data: OrsGeoJsonResponse
+              try {
+                data = (await response.json()) as OrsGeoJsonResponse
+              } catch (parseErr) {
+                console.error('[ORS] bad JSON', profile, parseErr)
+                if (bi < tryBodies.length - 1) continue
+                continue profileLoop
+              }
               const features = data.features ?? []
               if (!features.length) {
                 if (bi < tryBodies.length - 1) continue
