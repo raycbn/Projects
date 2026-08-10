@@ -37,21 +37,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
+    let cancelled = false
     let unsubProfile: (() => void) | undefined
+
+    // Finish Google redirect before attaching the auth listener so the session is ready.
+    void authService.completeGoogleRedirect().catch((error) => {
+      console.error('[auth] google redirect', error)
+    })
+
     const unsubAuth = authService.watch(async (next) => {
+      if (cancelled) return
       unsubProfile?.()
       unsubProfile = undefined
       setUser(next)
       if (next) {
         try {
           const p = await authService.ensureProfile(next)
+          if (cancelled) return
           setProfile(p)
           unsubProfile = authService.watchProfile(next.uid, (live) => {
             if (live) setProfile(live)
           })
         } catch (error) {
           console.error('[auth] profile', error)
-          setProfile(null)
+          if (!cancelled) setProfile(null)
         }
       } else {
         setProfile(null)
@@ -59,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
     return () => {
+      cancelled = true
       unsubProfile?.()
       unsubAuth()
     }

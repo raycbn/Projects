@@ -12,12 +12,29 @@ export interface Env {
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'
 
-export function corsHeaders(env: Env, request: Request): HeadersInit {
-  const origin = request.headers.get('Origin') || ''
-  const allowed = (env.ALLOWED_ORIGINS || '')
+export function allowedOrigins(env: Env): string[] {
+  return (env.ALLOWED_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
+}
+
+export function isOriginAllowed(env: Env, origin: string): boolean {
+  if (!origin) return false
+  const allowed = allowedOrigins(env)
+  return allowed.includes('*') || allowed.includes(origin)
+}
+
+/** Prefer the browser Origin (Hosting) when allowlisted; else fall back to APP_URL. */
+export function resolveAppUrl(env: Env, request: Request): string {
+  const origin = request.headers.get('Origin') || ''
+  if (isOriginAllowed(env, origin)) return origin.replace(/\/+$/, '')
+  return (env.APP_URL || '').replace(/\/+$/, '')
+}
+
+export function corsHeaders(env: Env, request: Request): HeadersInit {
+  const origin = request.headers.get('Origin') || ''
+  const allowed = allowedOrigins(env)
   const allowOrigin =
     origin && (allowed.includes(origin) || allowed.includes('*')) ? origin : allowed[0] || '*'
   return {

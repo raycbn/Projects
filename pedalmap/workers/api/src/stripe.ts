@@ -1,5 +1,5 @@
 import type { Env } from './types'
-import { json } from './types'
+import { json, resolveAppUrl } from './types'
 import { verifyFirebaseIdToken } from './firebaseAuth'
 import {
   readSubscriptionCustomerId,
@@ -51,13 +51,14 @@ export async function handleCheckout(request: Request, env: Env): Promise<Respon
     await writeSubscriptionCustomerId(env, identity.uid, customerId)
   }
 
+  const appUrl = resolveAppUrl(env, request)
   const sessionRes = await stripeForm(env, 'checkout/sessions', {
     mode: 'subscription',
     customer: customerId,
     'line_items[0][price]': priceId,
     'line_items[0][quantity]': '1',
-    success_url: `${env.APP_URL}/premium?checkout=success`,
-    cancel_url: `${env.APP_URL}/premium?checkout=cancel`,
+    success_url: `${appUrl}/premium?checkout=success`,
+    cancel_url: `${appUrl}/premium?checkout=cancel`,
     'metadata[firebaseUid]': identity.uid,
     'subscription_data[metadata][firebaseUid]': identity.uid,
     allow_promotion_codes: 'true',
@@ -77,7 +78,7 @@ export async function handlePortal(request: Request, env: Env): Promise<Response
 
   const portalRes = await stripeForm(env, 'billing_portal/sessions', {
     customer: customerId,
-    return_url: `${env.APP_URL}/premium`,
+    return_url: `${resolveAppUrl(env, request)}/premium`,
   })
   const portal = (await portalRes.json()) as { url?: string; error?: { message?: string } }
   if (!portalRes.ok || !portal.url) {

@@ -1,11 +1,13 @@
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  getRedirectResult,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
   type User,
@@ -17,6 +19,38 @@ import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
 
 const googleProvider = new GoogleAuthProvider()
+
+/** Popup + COOP is unreliable on phones / in-app browsers. Prefer redirect there. */
+export function prefersGoogleRedirect(): boolean {
+  if (typeof window === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
+  const inApp = /Instagram|FBAN|FBAV|Line\/|WhatsApp|Twitter/i.test(ua)
+  const coarse = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches)
+  return mobile || inApp || coarse
+}
+
+export function authErrorMessage(error: unknown, fallback: string): string {
+  const code =
+    typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: string }).code || '')
+      : ''
+  switch (code) {
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Inicio con Google cancelado.'
+    case 'auth/popup-blocked':
+      return 'El navegador bloqueó la ventana de Google. Reinténtalo; usaremos redirección.'
+    case 'auth/unauthorized-domain':
+      return 'Este dominio no está autorizado en Firebase Auth.'
+    case 'auth/network-request-failed':
+      return 'Sin conexión. Revisa la red e inténtalo de nuevo.'
+    case 'auth/account-exists-with-different-credential':
+      return 'Ya existe una cuenta con este email usando otro método.'
+    default:
+      return fallback
+  }
+}
 
 function emptyProfile(user: User): UserProfile {
   const now = new Date().toISOString()
@@ -92,12 +126,44 @@ export class AuthService {
     })
   }
 
-  async signInGoogle(): Promise<User> {
-    track('signup_started', { method: 'google' })
-    const result = await signInWithPopup(getFirebaseAuth(), googleProvider)
+  /**
+   * Completes Google redirect sign-in after returning from accounts.google.com.
+   * Safe to call on every cold start; no-ops when there is no pending redirect.
+   */
+  async completeGoogleRedirect(): Promise<User | null> {
+    const result = await getRedirectResult(getFirebaseAuth())
+    if (!result?.user) return null
     await this.ensureProfile(result.user)
     track('signup_completed', { method: 'google' })
     return result.user
+  }
+
+  async signInGoogle(): Promise<User | null> {
+    track('signup_started', { method: 'google' })
+    const auth = getFirebaseAuth()
+
+    if (prefersGoogleRedirect()) {
+      await signInWithRedirect(auth, googleProvider)
+      return null
+    }
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      await this.ensureProfile(result.user)
+      track('signup_completed', { method: 'google' })
+      return result.user
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error && 'code' in error
+          ? String((error as { code?: string }).code || '')
+          : ''
+      // Popup blocked, or COOP makes Firebase think the window closed after success.
+      if (code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, googleProvider)
+        return null
+      }
+      throw error
+    }
   }
 
   async registerEmail(email: string, password: string, displayName?: string): Promise<User> {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/app/AuthContext'
+import { authErrorMessage } from '@/services/AuthService'
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -96,10 +97,17 @@ export function AuthForm({ mode }: AuthFormProps) {
             type="button"
             variant="secondary"
             className="w-full"
-            onClick={() => void signInGoogle().catch((err) => {
-              console.error(err)
-              setError('No se pudo iniciar sesión con Google.')
-            })}
+            disabled={loading}
+            onClick={() => {
+              setError(null)
+              setLoading(true)
+              void signInGoogle()
+                .catch((err) => {
+                  console.error(err)
+                  setError(authErrorMessage(err, 'No se pudo iniciar sesión con Google.'))
+                })
+                .finally(() => setLoading(false))
+            }}
           >
             Continuar con Google
           </Button>
@@ -107,10 +115,17 @@ export function AuthForm({ mode }: AuthFormProps) {
             type="button"
             variant="ghost"
             className="w-full"
-            onClick={() => void signInGuest().catch((err) => {
-              console.error(err)
-              setError('No se pudo entrar como invitado.')
-            })}
+            disabled={loading}
+            onClick={() => {
+              setError(null)
+              setLoading(true)
+              void signInGuest()
+                .catch((err) => {
+                  console.error(err)
+                  setError(authErrorMessage(err, 'No se pudo entrar como invitado.'))
+                })
+                .finally(() => setLoading(false))
+            }}
           >
             Seguir como invitado
           </Button>
