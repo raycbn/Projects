@@ -26,6 +26,10 @@ sin tu cuenta de Cloudflare / Firebase console.
    npx wrangler secret put STRIPE_SECRET_KEY    # sk_test_…
    npx wrangler secret put STRIPE_WEBHOOK_SECRET # whsec_… (tras crear el webhook)
    npx wrangler secret put FIREBASE_SERVICE_ACCOUNT  # JSON entero (paso B)
+   # GPS oficiales (paso D) — cuando tengas client ids:
+   # npx wrangler secret put WAHOO_CLIENT_ID / WAHOO_CLIENT_SECRET / WAHOO_WEBHOOK_TOKEN
+   # npx wrangler secret put IGPSPORT_CLIENT_ID / IGPSPORT_CLIENT_SECRET / IGPSPORT_WEBHOOK_TOKEN
+   # npx wrangler secret put GARMIN_CLIENT_ID / GARMIN_CLIENT_SECRET / GARMIN_WEBHOOK_TOKEN
    npm run deploy
    ```
 3. Copia la URL `https://pedalmap-api.<subdomain>.workers.dev`
@@ -67,11 +71,21 @@ npx firebase-tools deploy --only hosting --project pedalmap-79b3a
 npx firebase deploy --only firestore:rules,firestore:indexes,storage --project pedalmap-79b3a
 ```
 
-### E) Ajustes en `wrangler.toml` tras Hosting
+### D) GPS oficiales (auto-upload iGPSPORT / Wahoo / Garmin)
 
-- `APP_URL` = `https://pedalmap-79b3a.web.app`
-- `ALLOWED_ORIGINS` = Hosting URLs
-- Luego: `npx wrangler login && npm run deploy` en `workers/api`
+1. Sigue `docs/GPS_OFFICIAL_SYNC.md` (emails de solicitud + secrets).  
+2. Wahoo suele ser el más rápido (sandbox self-serve).  
+3. iGPSPORT: email a `global@igpsport.com` con redirect + callback del Worker.  
+4. Garmin: Connect Developer Program.  
+5. `firebase deploy --only firestore:rules` tras añadir `gpsConnections`.  
+6. Strava queda opcional/legacy (`docs/STRAVA_BRIDGE.md`) — no se muestra en la UI.
+
+### E) Ajustes en `wrangler.toml` tras Hosting / dominio
+
+- `APP_URL` = `https://pedalmap.es` (ya en código)
+- `ALLOWED_ORIGINS` incluye `pedalmap.es` + `www` + Hosting Firebase
+- Dominio IONOS: `docs/DOMAIN_PEDALMAP_ES.md`
+- Luego: `npm run deploy` en `workers/api`
 
 Ver `docs/PRODUCTION_CHECKLIST.md`.
 

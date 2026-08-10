@@ -2,7 +2,7 @@ import type { Env } from './types'
 import { json } from './types'
 
 const DEFAULT_VALHALLA = 'https://valhalla1.openstreetmap.de'
-const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap-79b3a.web.app; bike routing)'
+const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap.es; bike routing)'
 
 type BikeType = 'road' | 'mtb' | 'gravel' | 'urban' | 'ebike'
 type RouteType = 'a_to_b' | 'out_and_back' | 'circular'

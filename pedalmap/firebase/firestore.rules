@@ -103,6 +103,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /** Strava OAuth tokens — Worker Admin only. */
+    match /stravaConnections/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
+    /** Official GPS OAuth tokens (Wahoo / iGPSPORT / Garmin) — Worker Admin only. */
+    match /gpsConnections/{docId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /gpsProviderIndex/{docId} {
+      allow read, write: if false;
+    }
+
+    match /gpsImportIndex/{docId} {
+      allow read, write: if false;
+    }
+
     match /follows/{userId}/following/{followeeId} {
       allow read: if isSignedIn();
       allow write: if isOwner(userId);
