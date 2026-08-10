@@ -119,7 +119,7 @@ export function LandingPage() {
                 <li>· Hasta {FREE_LIMITS.maxRoutesSaved} rutas guardadas</li>
                 <li>· {FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes</li>
                 <li>· {FREE_LIMITS.maxActivePreferences} filtros a la vez</li>
-                <li>· Objetivo circular, viento y mapa</li>
+                <li>· A→B, ida-vuelta, viento y superficie</li>
               </ul>
               <Link to="/route-planner" className="mt-6 inline-block">
                 <Button>Probar gratis</Button>
@@ -129,8 +129,8 @@ export function LandingPage() {
               <h3 className="font-display text-2xl font-bold">Premium</h3>
               <ul className="mt-4 space-y-2 text-sm text-white/85">
                 <li>· Rutas y filtros ilimitados</li>
+                <li>· Modo Objetivo (circular km + desnivel)</li>
                 <li>· Exportación / compartir GPX</li>
-                <li>· Todo el planificador sin paywall</li>
                 <li>· 4,99 €/mes o 39,99 €/año</li>
               </ul>
               <Link to="/premium" className="mt-6 inline-block">

@@ -90,7 +90,7 @@ export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
       <div>
         <div className="mb-2 flex items-end justify-between gap-2">
           <h3 className="font-display text-base font-bold text-[var(--color-forest)]">Composición</h3>
-          <p className="text-[10px] text-[var(--color-stone)]">OSM · ORS</p>
+          <p className="text-[10px] text-[var(--color-stone)]">OSM · Valhalla</p>
         </div>
         <div
           className="flex h-3 overflow-hidden rounded-full bg-[var(--color-mist)] ring-1 ring-[var(--color-fog)]"

@@ -130,6 +130,13 @@ function bicycleCosting(bikeType: BikeType, preferences: string[] = []) {
   if (preferences.includes('prefer_bike_lanes') || preferences.includes('avoid_primary_roads')) {
     base.use_roads = Math.min(Number(base.use_roads), 0.35)
   }
+  if (preferences.includes('prefer_secondary_roads')) {
+    base.use_roads = Math.min(Math.max(Number(base.use_roads), 0.35), 0.5)
+  }
+  if (preferences.includes('avoid_traffic')) {
+    base.use_roads = Math.min(Number(base.use_roads), 0.4)
+    base.use_ferry = Math.min(Number(base.use_ferry), 0.05)
+  }
   return base
 }
 
@@ -280,6 +287,7 @@ async function enrichTrip(
   ])
 
   const pairs = (height as { range_height?: Array<[number, number]> }).range_height ?? []
+  // Never invent elevation — empty profile is better than a fake flat 600 m.
   const elevationProfile = pairs.length
     ? pairs.map(([rangeM, elev], i) => {
         const c = sampled[Math.min(i, sampled.length - 1)]
@@ -289,11 +297,7 @@ async function enrichTrip(
           position: { lng: c[0], lat: c[1] },
         }
       })
-    : sampled.map((c, i) => ({
-        distanceMeters: (i / Math.max(1, sampled.length - 1)) * Math.max(distanceMeters, 1),
-        elevationMeters: 600,
-        position: { lng: c[0], lat: c[1] },
-      }))
+    : []
 
   return {
     coordinates,

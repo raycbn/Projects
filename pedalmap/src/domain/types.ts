@@ -97,7 +97,11 @@ export interface RouteDraft {
   circularDistanceMeters?: number
   /** Optional target elevation gain (meters) for circular / objetivo mode. */
   targetElevationGainMeters?: number
-  /** Extra ORS alternatives (index 0 is usually the active geometry). */
+  /** Seed for Objetivo variants (“Otra variante”). */
+  circularSeed?: number
+  /** Turn-by-turn instructions from the routing provider (when available). */
+  instructions?: string[]
+  /** Extra alternatives (index 0 is usually the active geometry). */
   alternatives?: RouteAlternative[]
 }
 
@@ -147,7 +151,8 @@ export const FREE_LIMITS: FreemiumLimits = {
   maxRoutesSaved: 5,
   maxRoutesCreatedPerMonth: 15,
   gpxExport: false,
-  advancedCircular: true,
+  /** Objetivo circular (km + desnivel) es Premium; invitados pueden probarlo. */
+  advancedCircular: false,
   advancedFilters: false,
   maxActivePreferences: 2,
 }

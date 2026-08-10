@@ -19,7 +19,7 @@
 @layer base {
   :root {
     --header-h: 3.5rem;
-    --tabbar-h: 3.5rem;
+    --tabbar-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
     color: var(--color-ink);
     background-color: var(--color-mist);
     font-family: var(--font-sans);
@@ -68,7 +68,7 @@
   }
 
   .planner-shell {
-    height: calc(100dvh - var(--header-h) - var(--tabbar-h));
+    height: calc(100dvh - var(--header-h));
   }
 
   @media (min-width: 768px) {

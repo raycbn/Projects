@@ -106,9 +106,8 @@ export function PremiumPage() {
             <li>Rutas ilimitadas</li>
             <li>Exportación GPX</li>
             <li>Filtros ilimitados</li>
-            <li>Rutas circulares avanzadas</li>
-            <li>Estadísticas avanzadas</li>
-            <li>Base para navegación GPS</li>
+            <li>Modo Objetivo (circular km + desnivel)</li>
+            <li>Sin paywall en el planificador</li>
           </ul>
           <div className="mt-6 flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => void startCheckout('year')}>

@@ -11,6 +11,7 @@ import {
 import type { Activity, ActivityTrackPoint, BikeType } from '@/domain/types'
 import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
 import { track } from '@/lib/analytics'
+import { takeGpsRoute, type GpsRoutePacket } from '@/lib/gpsRouteHandoff'
 
 export function ActivityPage() {
   usePageMeta({
@@ -26,9 +27,14 @@ export function ActivityPage() {
   const [localTrack, setLocalTrack] = useState<ActivityTrackPoint[]>([])
   const [status, setStatus] = useState<'idle' | 'recording' | 'paused' | 'finished'>('idle')
   const [message, setMessage] = useState<string | null>(null)
+  const [plannedRoute, setPlannedRoute] = useState<GpsRoutePacket | null>(null)
   const [bikeType] = useState<BikeType>((params.get('bike') as BikeType) || 'road')
-  const title = params.get('title') || 'Salida PedalMap'
+  const title = params.get('title') || plannedRoute?.title || 'Salida PedalMap'
   const routeId = params.get('routeId') || undefined
+
+  useEffect(() => {
+    setPlannedRoute(takeGpsRoute())
+  }, [])
 
   const recording = status === 'recording'
   const { sample, error: geoError, supported } = useGeolocation(recording)
@@ -128,6 +134,12 @@ export function ActivityPage() {
       <p className="mt-2 text-sm text-[var(--color-stone)]">
         Usa el GPS del dispositivo para registrar distancia y desnivel positivo de tu salida.
       </p>
+      {plannedRoute?.geometry?.coordinates?.length ? (
+        <p className="mt-2 rounded-xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-forest)]">
+          Ruta planificada lista: <strong>{plannedRoute.title}</strong> ·{' '}
+          {plannedRoute.geometry.coordinates.length} puntos de referencia en el track.
+        </p>
+      ) : null}
 
       <div className="mt-6 grid grid-cols-3 gap-3">
         <Stat label="Distancia" value={formatDistance(liveStats.distanceMeters)} />

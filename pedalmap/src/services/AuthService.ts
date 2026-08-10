@@ -208,6 +208,53 @@ export class AuthService {
       { merge: true },
     )
   }
+
+  /** Client-side usage counters (Spark — no Cloud Functions required). */
+  async recordRouteCreated(uid: string): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    const snap = await getDoc(ref)
+    const key = `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}`
+    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
+      routesCreatedThisMonth: 0,
+      routesSaved: 0,
+      monthKey: key,
+    }
+    const created =
+      usage.monthKey === key ? (usage.routesCreatedThisMonth ?? 0) + 1 : 1
+    await setDoc(
+      ref,
+      {
+        usage: {
+          routesCreatedThisMonth: created,
+          routesSaved: usage.routesSaved ?? 0,
+          monthKey: key,
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
+
+  async recordRouteSaved(uid: string): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    const snap = await getDoc(ref)
+    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
+      routesCreatedThisMonth: 0,
+      routesSaved: 0,
+      monthKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}`,
+    }
+    await setDoc(
+      ref,
+      {
+        usage: {
+          ...usage,
+          routesSaved: (usage.routesSaved ?? 0) + 1,
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
 }
 
 export const authService = new AuthService()

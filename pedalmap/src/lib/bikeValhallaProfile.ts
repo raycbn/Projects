@@ -130,6 +130,7 @@ export function getValhallaCosting(
   }
   if (preferences.includes('avoid_traffic')) {
     base.use_roads = Math.min(base.use_roads, 0.4)
+    base.use_ferry = Math.min(base.use_ferry ?? 0.15, 0.05)
   }
 
   return base

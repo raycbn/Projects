@@ -14,10 +14,12 @@ import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
 import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
 import { routeRepository } from '@/services/RouteRepository'
 import { canSaveRoute } from '@/services/EntitlementService'
+import { authService } from '@/services/AuthService'
 import { track } from '@/lib/analytics'
 import { routeService } from '@/services/RouteService'
 import { formatDistance } from '@/lib/stats'
 import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
+import { stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import {
   formatWeatherHourCaption,
   formatWeatherWindowCaption,
@@ -50,6 +52,7 @@ export function RoutePlanner() {
     hoverPoint,
     setHoverPoint,
     calculate,
+    calculateAnotherVariant,
     startEditing,
     cancelEditing,
     saveEdits,
@@ -65,10 +68,14 @@ export function RoutePlanner() {
     wantAlternatives,
     setWantAlternatives,
     setDraftFromImport,
+    handleMapTap,
+    useMyLocationAsStart,
+    canCalculate,
   } = usePlanner()
   const { user, profile, firebaseReady } = useAuth()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
+  const [locating, setLocating] = useState(false)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
 
@@ -102,9 +109,6 @@ export function RoutePlanner() {
     return null
   }, [selectedWindHour, selectedWindWindow])
 
-  // Wind selection is owned by RouteWeatherPanel after each forecast load.
-  // Do not clear it on fitKey — that raced the forecast callback and left the map without overlay.
-
   async function handleSave() {
     if (!draft) return
     if (!user || user.isAnonymous) {
@@ -122,6 +126,9 @@ export function RoutePlanner() {
     }
     try {
       await routeRepository.save(user.uid, draft, { isPublic: false })
+      void authService.recordRouteSaved(user.uid).catch((err) => {
+        console.warn('[save] usage', err)
+      })
       track('route_saved', { distance_m: draft.stats.distanceMeters })
       setSaveMessage('Ruta guardada en Mis rutas.')
     } catch (error) {
@@ -130,11 +137,29 @@ export function RoutePlanner() {
     }
   }
 
+  async function handleLocate() {
+    setLocating(true)
+    try {
+      await useMyLocationAsStart()
+    } finally {
+      setLocating(false)
+    }
+  }
+
+  const ctaDisabled = status === 'calculating' || !canCalculate
+  const ctaLabel =
+    status === 'calculating'
+      ? 'Calculando ruta…'
+      : !canCalculate
+        ? routeType === 'circular'
+          ? 'Falta el punto de partida'
+          : 'Falta inicio o destino'
+        : 'Crear ruta'
+
   return (
     <div className="planner-shell flex flex-col overflow-hidden lg:grid lg:grid-cols-2">
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
 
-      {/* Datos — mitad inferior (móvil) / mitad izquierda (desktop) */}
       <aside className="order-2 flex min-h-0 flex-[1.15] flex-col overflow-hidden border-t border-[var(--color-fog)] bg-white lg:order-1 lg:flex-1 lg:border-r lg:border-t-0">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-28 lg:p-5 lg:pb-28">
           <div>
@@ -147,6 +172,9 @@ export function RoutePlanner() {
                 Routing no configurado: falta el proxy Worker (VITE_PEDALMAP_API_URL).
               </p>
             )}
+            <p className="mt-1 text-xs text-[var(--color-stone)]">
+              Toca el mapa para poner inicio y destino, o usa búsqueda / Estoy aquí.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de ruta">
@@ -173,6 +201,17 @@ export function RoutePlanner() {
                 {label}
               </button>
             ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={locating}
+              onClick={() => void handleLocate()}
+            >
+              {locating ? 'Localizando…' : 'Estoy aquí'}
+            </Button>
           </div>
 
           <SearchLocation
@@ -258,8 +297,8 @@ export function RoutePlanner() {
           {routeType === 'circular' && (
             <div className="space-y-3 rounded-xl bg-[var(--color-mist)]/70 px-3 py-3 text-sm">
               <p className="text-xs text-[var(--color-stone)]">
-                Indica partida, km y desnivel. Generamos una circular con Valhalla (suelo según tu
-                bici) buscando el mejor ajuste al objetivo.
+                Indica partida, km y desnivel. Generamos una circular con el suelo según tu bici.
+                Premium desbloquea Objetivo en cuentas Free.
               </p>
               <label className="block">
                 <span className="label-caps">Distancia objetivo</span>
@@ -314,7 +353,7 @@ export function RoutePlanner() {
                 checked={wantAlternatives}
                 onChange={(e) => setWantAlternatives(e.target.checked)}
               />
-              Pedir alternativas ORS
+              Pedir alternativas (si el motor las ofrece)
             </label>
           )}
 
@@ -340,6 +379,22 @@ export function RoutePlanner() {
                 />
               </div>
 
+              {activeDraft.instructions && activeDraft.instructions.length > 0 && (
+                <details className="rounded-2xl bg-[var(--color-mist)]/50">
+                  <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-[var(--color-forest)]">
+                    Indicaciones ({activeDraft.instructions.length})
+                  </summary>
+                  <ol className="max-h-48 space-y-1.5 overflow-y-auto border-t border-[var(--color-fog)] px-3 py-2 text-xs text-[var(--color-stone)]">
+                    {activeDraft.instructions.map((step, i) => (
+                      <li key={`${i}-${step.slice(0, 24)}`} className="flex gap-2">
+                        <span className="font-semibold text-[var(--color-forest)]">{i + 1}.</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
+
               {draft?.alternatives && draft.alternatives.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -362,6 +417,17 @@ export function RoutePlanner() {
                 </div>
               )}
 
+              {routeType === 'circular' && (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={status === 'calculating' || !canCalculate}
+                  onClick={() => void calculateAnotherVariant()}
+                >
+                  Otra variante
+                </Button>
+              )}
+
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button className="w-full" onClick={() => void handleSave()}>
                   Guardar ruta
@@ -369,6 +435,13 @@ export function RoutePlanner() {
                 <Link
                   className="w-full"
                   to={`/actividad?title=${encodeURIComponent(activeDraft.title || 'Salida PedalMap')}&bike=${bikeType}`}
+                  onClick={() =>
+                    stashGpsRoute({
+                      title: activeDraft.title || 'Salida PedalMap',
+                      bikeType,
+                      geometry: activeDraft.geometry,
+                    })
+                  }
                 >
                   <Button variant="secondary" className="w-full">
                     Iniciar GPS
@@ -457,18 +530,17 @@ export function RoutePlanner() {
           )}
         </div>
 
-        <div className="sticky bottom-0 z-10 border-t border-[var(--color-fog)] bg-white/95 p-3 backdrop-blur md:p-4">
+        <div className="sticky bottom-0 z-10 border-t border-[var(--color-fog)] bg-white/95 p-3 backdrop-blur safe-pb md:p-4">
           <Button
             className="w-full !py-3 text-base"
-            disabled={status === 'calculating'}
+            disabled={ctaDisabled}
             onClick={() => void calculate()}
           >
-            {status === 'calculating' ? 'Calculando ruta…' : 'Crear ruta'}
+            {ctaLabel}
           </Button>
         </div>
       </aside>
 
-      {/* Mapa — mitad superior (móvil) / mitad derecha (desktop) */}
       <section className="relative order-1 min-h-[42vh] flex-1 bg-[var(--color-fog)] lg:order-2 lg:min-h-0">
         <Suspense
           fallback={
@@ -485,6 +557,7 @@ export function RoutePlanner() {
             windOverlay={windOverlay}
             windCaption={windCaption}
             fitKey={fitKey}
+            onMapClick={handleMapTap}
             onWaypointDrag={
               status === 'editing'
                 ? (id, position) => updateWaypointPosition(id, position)
@@ -495,6 +568,11 @@ export function RoutePlanner() {
         {status === 'calculating' && (
           <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
             Calculando la mejor ruta ciclista…
+          </p>
+        )}
+        {!activeDraft && status !== 'calculating' && (
+          <p className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(92%,18rem)] rounded-xl bg-white/95 px-3 py-2 text-xs text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:bottom-4">
+            Toca el mapa: 1º inicio · 2º destino
           </p>
         )}
       </section>

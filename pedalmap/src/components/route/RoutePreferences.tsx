@@ -5,23 +5,23 @@ import { applyPreferenceToggle, maxActivePreferences } from '@/services/Entitlem
 import { FREE_LIMITS } from '@/domain/types'
 
 const OPTIONS: Array<{ id: RoutePreference; label: string; hint?: string }> = [
-  { id: 'prefer_shorter', label: 'Menor distancia' },
-  { id: 'prefer_faster', label: 'Más rápida' },
-  { id: 'prefer_less_elevation', label: 'Menor desnivel', hint: 'ORS steepness_difficulty = 0' },
-  { id: 'avoid_unpaved', label: 'Evitar sin asfaltar', hint: 'Perfil más carretera/regular' },
-  { id: 'prefer_unpaved', label: 'Priorizar caminos', hint: 'Perfil mountain + steepness MTB' },
-  { id: 'prefer_bike_lanes', label: 'Priorizar carril bici', hint: 'Perfil regular + green' },
+  { id: 'prefer_shorter', label: 'Menor distancia', hint: 'Prioriza el camino más corto' },
+  { id: 'prefer_faster', label: 'Más rápida', hint: 'Prioriza tiempo estimado' },
+  { id: 'prefer_less_elevation', label: 'Menor desnivel', hint: 'Evita cuestas fuertes' },
+  { id: 'avoid_unpaved', label: 'Evitar sin asfaltar', hint: 'Más asfalto / pavimento' },
+  { id: 'prefer_unpaved', label: 'Priorizar caminos', hint: 'Más tierra, grava o pista' },
+  { id: 'prefer_bike_lanes', label: 'Priorizar carril bici', hint: 'Prefiere vías ciclistas' },
   {
     id: 'prefer_secondary_roads',
     label: 'Carreteras secundarias',
-    hint: 'Sesgo ORS green',
+    hint: 'Menos tráfico, vías calmadas',
   },
   {
     id: 'avoid_primary_roads',
     label: 'Evitar principales',
-    hint: 'Sesgo green máximo (ORS cycling)',
+    hint: 'Huye de arterias rápidas',
   },
-  { id: 'avoid_traffic', label: 'Evitar ferry/vado', hint: 'avoid ferries + fords' },
+  { id: 'avoid_traffic', label: 'Evitar ferry/vado', hint: 'Menos ferry y tramos complicados' },
 ]
 
 interface RoutePreferencesProps {

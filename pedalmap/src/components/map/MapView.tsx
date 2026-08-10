@@ -416,8 +416,10 @@ export function MapView({
   const hoverMarkerRef = useRef<Marker | null>(null)
   const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
+  const onMapClickRef = useRef(onMapClick)
   geometryRef.current = geometry
   windRef.current = windOverlay
+  onMapClickRef.current = onMapClick
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -456,7 +458,6 @@ export function MapView({
     })
     map.on('styledata', () => {
       if (map.isStyleLoaded()) {
-        // Style reload drops custom images — rebuild wind stack
         rebuildWindLayers(map)
         paintFromRef(Boolean(geometryRef.current))
       }
@@ -468,11 +469,9 @@ export function MapView({
     const ro = new ResizeObserver(() => resize())
     ro.observe(containerRef.current)
 
-    if (onMapClick) {
-      map.on('click', (e: MapMouseEvent) => {
-        onMapClick({ lat: e.lngLat.lat, lng: e.lngLat.lng })
-      })
-    }
+    map.on('click', (e: MapMouseEvent) => {
+      onMapClickRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng })
+    })
 
     mapRef.current = map
     return () => {
@@ -482,7 +481,6 @@ export function MapView({
       map.remove()
       mapRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -566,10 +564,10 @@ export function MapView({
         aria-label="Mapa de rutas ciclistas"
       />
       {windCaption && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(92%,22rem)] rounded-xl bg-white/90 px-3 py-2 text-[11px] text-[var(--color-forest)] shadow-md ring-1 ring-[var(--color-fog)]">
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[min(88%,16rem)] rounded-xl bg-white/90 px-2.5 py-1.5 text-[10px] text-[var(--color-forest)] shadow-md ring-1 ring-[var(--color-fog)] sm:max-w-[min(92%,22rem)] sm:px-3 sm:py-2 sm:text-[11px]">
           <p className="font-semibold">Viento en ruta</p>
           <p className="text-[var(--color-stone)]">{windCaption}</p>
-          <p className="mt-1 text-[10px] text-[var(--color-stone)]">
+          <p className="mt-1 hidden text-[10px] text-[var(--color-stone)] sm:block">
             Verde = cola · Azul = lateral · Naranja = cara · Flecha = hacia dónde sopla
           </p>
         </div>

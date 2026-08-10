@@ -40,9 +40,8 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           {[
             'Rutas ilimitadas',
             'Exportación GPX',
-            'Filtros avanzados',
-            'Rutas circulares avanzadas',
-            'Estadísticas avanzadas',
+            'Más de 2 filtros a la vez',
+            'Modo Objetivo (circular con km/desnivel)',
           ].map((item) => (
             <li key={item} className="flex gap-2">
               <span className="text-[var(--color-signal)]" aria-hidden>

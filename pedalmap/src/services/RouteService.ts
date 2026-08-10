@@ -19,6 +19,7 @@ export interface CalculateRouteInput {
   title?: string
   circularDistanceMeters?: number
   targetElevationGainMeters?: number
+  circularSeed?: number
   wantAlternatives?: boolean
 }
 
@@ -44,6 +45,7 @@ export class RouteService {
       language: 'es',
       circularDistanceMeters: input.circularDistanceMeters,
       targetElevationGainMeters: input.targetElevationGainMeters,
+      circularSeed: input.circularSeed,
       wantAlternatives: input.wantAlternatives,
     })
 
@@ -81,6 +83,8 @@ export class RouteService {
       stats: result.stats,
       circularDistanceMeters: input.circularDistanceMeters,
       targetElevationGainMeters: input.targetElevationGainMeters,
+      circularSeed: input.circularSeed,
+      instructions: result.rawInstructions?.filter(Boolean).slice(0, 40),
       alternatives,
     }
   }

@@ -100,32 +100,34 @@ export function AppShell() {
 
       <CookieBanner />
 
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-4 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
-        aria-label="Móvil"
-      >
-        {[
-          ['/', 'Inicio'],
-          ['/route-planner', 'Crear'],
-          ['/actividades', 'GPS'],
-          ['/perfil', 'Perfil'],
-        ].map(([to, label]) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              clsx(
-                'flex items-center justify-center rounded-lg text-center text-xs font-semibold',
-                isActive
-                  ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
-                  : 'text-[var(--color-stone)]',
-              )
-            }
-          >
-            {label}
-          </NavLink>
-        ))}
-      </nav>
+      {!isPlanner && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-4 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
+          aria-label="Móvil"
+        >
+          {[
+            ['/', 'Inicio'],
+            ['/route-planner', 'Crear'],
+            ['/actividades', 'GPS'],
+            ['/perfil', 'Perfil'],
+          ].map(([to, label]) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                clsx(
+                  'flex items-center justify-center rounded-lg text-center text-xs font-semibold',
+                  isActive
+                    ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
+                    : 'text-[var(--color-stone)]',
+                )
+              }
+            >
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }
