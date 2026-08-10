@@ -108,7 +108,8 @@ export function RouteWeatherPanel({
   return (
     <section className="space-y-3 p-2">
       <p className="text-xs text-[var(--color-stone)]">
-        Elige día/ventana u hora: el mapa colorea la línea y muestra flechas de dirección.
+        El mapa colorea la ruta al cargar el viento (verde cola · azul lateral · naranja cara) y dibuja
+        flechas hacia dónde sopla. Toca otra ventana u hora para actualizarlo.
       </p>
 
       {loading && <p className="text-sm text-[var(--color-stone)]">Calculando viento…</p>}

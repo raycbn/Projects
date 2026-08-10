@@ -45,6 +45,9 @@ export function BikeSelector({ value, onChange }: BikeSelectorProps) {
         <span className="font-semibold text-[var(--color-forest)]">Evitar:</span>{' '}
         {modality.avoidSurfaces.slice(0, 3).join(' · ')}
       </p>
+      <p className="mt-1 text-[11px] text-[var(--color-stone)]">
+        Solo devolvemos rutas ≥{modality.acceptScore}% aptas para {modality.label}.
+      </p>
     </fieldset>
   )
 }

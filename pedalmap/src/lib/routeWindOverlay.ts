@@ -142,10 +142,10 @@ export function buildRouteWindOverlay(
   const cum = cumulativeDistances(coords)
   const total = cum[cum.length - 1] || 1
   // Dense enough to read on a half-screen mobile map; cap for long routes.
-  const samples = Math.max(16, Math.min(40, opts.sampleCount ?? 28))
+  const samples = Math.max(18, Math.min(48, opts.sampleCount ?? 32))
   const windToward = (wind.windFromDeg + 180) % 360
-  // Short wind ticks (~280–450 m) so direction stays readable at city zoom.
-  const barbMeters = Math.max(280, Math.min(450, total / samples / 2.2))
+  // Short wind ticks so direction stays readable at city zoom.
+  const barbMeters = Math.max(220, Math.min(380, total / samples / 2.4))
   const features: Feature<Point | LineString>[] = []
 
   for (let s = 0; s < samples; s += 1) {

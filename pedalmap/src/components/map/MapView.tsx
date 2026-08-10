@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
-import type { FeatureCollection } from 'geojson'
+import type { Feature, FeatureCollection, LineString, Point } from 'geojson'
 import type { LatLng, RouteGeometry, Waypoint } from '@/domain/types'
 import { getMapStyleUrl } from '@/lib/mapTiles'
 
@@ -14,6 +14,17 @@ import { getMapStyleUrl } from '@/lib/mapTiles'
 setWorkerUrl(`${import.meta.env.BASE_URL}assets/maplibre-gl-worker.mjs`)
 
 const STYLE_URL = getMapStyleUrl()
+
+/** Discrete wind colors — match() on string props is more reliable than float interpolate. */
+const WIND_COLOR_EXPR: maplibregl.ExpressionSpecification = [
+  'match',
+  ['get', 'relative'],
+  'cola',
+  '#16a34a',
+  'cara',
+  '#ea580c',
+  /* lateral */ '#0284c7',
+]
 
 interface MapViewProps {
   waypoints: Waypoint[]
@@ -30,39 +41,47 @@ interface MapViewProps {
 }
 
 function ensureRouteLayers(map: Map) {
-  if (map.getSource('route')) return
+  if (!map.getSource('route')) {
+    map.addSource('route', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
+  }
 
-  map.addSource('route', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  })
-  map.addLayer({
-    id: 'route-line-casing',
-    type: 'line',
-    source: 'route',
-    paint: {
-      'line-color': '#04140e',
-      'line-width': 10,
-      'line-opacity': 0.55,
-    },
-  })
-  map.addLayer({
-    id: 'route-line',
-    type: 'line',
-    source: 'route',
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: {
-      'line-color': '#d6ff4b',
-      'line-width': 5,
-    },
-  })
+  if (!map.getLayer('route-line-casing')) {
+    map.addLayer({
+      id: 'route-line-casing',
+      type: 'line',
+      source: 'route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#04140e',
+        'line-width': 12,
+        'line-opacity': 0.55,
+      },
+    })
+  }
+
+  if (!map.getLayer('route-line')) {
+    map.addLayer({
+      id: 'route-line',
+      type: 'line',
+      source: 'route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#d6ff4b',
+        'line-width': 6,
+        'line-opacity': 1,
+      },
+    })
+  }
 }
 
 function createWindArrowImage(
   fill: string,
 ): { data: Uint8Array; width: number; height: number } {
-  const width = 96
-  const height = 96
+  const width = 128
+  const height = 128
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -72,21 +91,21 @@ function createWindArrowImage(
   }
   ctx.clearRect(0, 0, width, height)
   ctx.translate(width / 2, height / 2)
-  // Soft halo so the glyph stays readable on green/orange route segments
+  // Halo for contrast on any segment color
   ctx.beginPath()
-  ctx.arc(0, 0, 28, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(255,255,255,0.88)'
+  ctx.arc(0, 0, 36, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'
   ctx.fill()
-  // Point to the right (0° in MapLibre icon-rotate is east / right)
+  // Arrow tip points UP (north). With icon-rotation-alignment:map, rotate = bearing.
   ctx.beginPath()
-  ctx.moveTo(30, 0)
-  ctx.lineTo(-24, -18)
-  ctx.lineTo(-12, 0)
-  ctx.lineTo(-24, 18)
+  ctx.moveTo(0, -38)
+  ctx.lineTo(22, 28)
+  ctx.lineTo(0, 14)
+  ctx.lineTo(-22, 28)
   ctx.closePath()
   ctx.fillStyle = fill
   ctx.fill()
-  ctx.lineWidth = 4
+  ctx.lineWidth = 5
   ctx.strokeStyle = '#04140e'
   ctx.stroke()
   const imageData = ctx.getImageData(0, 0, width, height)
@@ -97,21 +116,41 @@ const WIND_ARROW_IMAGES: Record<string, string> = {
   'wind-arrow-cola': '#16a34a',
   'wind-arrow-lateral': '#0284c7',
   'wind-arrow-cara': '#ea580c',
-  'wind-arrow': '#0d3b2b',
 }
 
-function ensureWindArrowImage(map: Map) {
+function ensureWindArrowImages(map: Map) {
   for (const [id, fill] of Object.entries(WIND_ARROW_IMAGES)) {
-    if (map.hasImage(id)) continue
+    if (map.hasImage(id)) {
+      try {
+        map.removeImage(id)
+      } catch {
+        /* ignore */
+      }
+    }
     const img = createWindArrowImage(fill)
     map.addImage(id, img, { pixelRatio: 2 })
   }
 }
 
+function removeLayerIfExists(map: Map, id: string) {
+  if (map.getLayer(id)) map.removeLayer(id)
+}
+
+/**
+ * Wind visuals use dedicated sources so Point + LineString never share a bucket,
+ * and segment colors use discrete match() (not float interpolate).
+ */
 function ensureWindLayers(map: Map) {
-  ensureWindArrowImage(map)
-  if (!map.getSource('route-wind')) {
-    map.addSource('route-wind', {
+  ensureWindArrowImages(map)
+
+  if (!map.getSource('route-wind-lines')) {
+    map.addSource('route-wind-lines', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
+  }
+  if (!map.getSource('route-wind-points')) {
+    map.addSource('route-wind-points', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
     })
@@ -121,73 +160,38 @@ function ensureWindLayers(map: Map) {
     map.addLayer({
       id: 'route-wind-segments',
       type: 'line',
-      source: 'route-wind',
+      source: 'route-wind-lines',
       filter: ['==', ['get', 'kind'], 'segment'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-width': [
           'interpolate',
           ['linear'],
-          ['get', 'windSpeedKmh'],
-          0,
+          ['zoom'],
+          8,
           7,
-          10,
-          10,
-          25,
-          14,
-          45,
-          18,
+          12,
+          11,
+          15,
+          16,
         ],
-        'line-opacity': 0.95,
-        'line-color': [
-          'interpolate',
-          ['linear'],
-          ['get', 'relativeFactor'],
-          -1,
-          '#16a34a',
-          -0.35,
-          '#22c55e',
-          0,
-          '#38bdf8',
-          0.35,
-          '#f97316',
-          1,
-          '#dc2626',
-        ],
+        'line-opacity': 1,
+        'line-color': WIND_COLOR_EXPR,
       },
     })
   }
 
-  // Direction ticks (LineString) — always visible even if symbol icons fail to paint.
   if (!map.getLayer('route-wind-barbs')) {
     map.addLayer({
       id: 'route-wind-barbs',
       type: 'line',
-      source: 'route-wind',
+      source: 'route-wind-lines',
       filter: ['==', ['get', 'kind'], 'barb'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['get', 'windSpeedKmh'],
-          0,
-          3.5,
-          15,
-          5,
-          35,
-          7,
-        ],
-        'line-opacity': 0.95,
-        'line-color': [
-          'match',
-          ['get', 'relative'],
-          'cola',
-          '#15803d',
-          'cara',
-          '#c2410c',
-          '#0369a1',
-        ],
+        'line-width': 4.5,
+        'line-opacity': 1,
+        'line-color': WIND_COLOR_EXPR,
       },
     })
   }
@@ -196,7 +200,7 @@ function ensureWindLayers(map: Map) {
     map.addLayer({
       id: 'route-wind-arrows',
       type: 'symbol',
-      source: 'route-wind',
+      source: 'route-wind-points',
       filter: ['==', ['get', 'kind'], 'arrow'],
       layout: {
         'icon-image': [
@@ -211,21 +215,21 @@ function ensureWindLayers(map: Map) {
         'icon-size': [
           'interpolate',
           ['linear'],
-          ['get', 'windSpeedKmh'],
-          0,
-          0.95,
+          ['zoom'],
+          9,
+          0.55,
+          12,
+          0.75,
           15,
-          1.15,
-          35,
-          1.4,
+          0.95,
         ],
+        // Image tip points north → rotate by wind-toward bearing (from north, CW).
         'icon-rotate': ['get', 'windTowardDeg'],
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-padding': 0,
-        'symbol-z-order': 'source',
       },
       paint: {
         'icon-opacity': 1,
@@ -237,7 +241,7 @@ function ensureWindLayers(map: Map) {
     map.addLayer({
       id: 'route-wind-labels',
       type: 'symbol',
-      source: 'route-wind',
+      source: 'route-wind-points',
       filter: [
         'all',
         ['==', ['get', 'kind'], 'arrow'],
@@ -245,8 +249,8 @@ function ensureWindLayers(map: Map) {
       ],
       layout: {
         'text-field': ['get', 'legLabel'],
-        'text-size': 12,
-        'text-offset': [0, 1.6],
+        'text-size': 11,
+        'text-offset': [0, 1.85],
         'text-anchor': 'top',
         'text-allow-overlap': true,
         'text-ignore-placement': true,
@@ -260,7 +264,6 @@ function ensureWindLayers(map: Map) {
     })
   }
 
-  // Keep wind visuals above the base route line
   for (const id of [
     'route-wind-segments',
     'route-wind-barbs',
@@ -268,6 +271,24 @@ function ensureWindLayers(map: Map) {
     'route-wind-labels',
   ]) {
     if (map.getLayer(id)) map.moveLayer(id)
+  }
+}
+
+function setBaseRoutePaint(map: Map, windActive: boolean) {
+  if (map.getLayer('route-line')) {
+    if (windActive) {
+      // Hide lime base — wind segments become the visible route color
+      map.setPaintProperty('route-line', 'line-opacity', 0)
+      map.setPaintProperty('route-line', 'line-width', 2)
+    } else {
+      map.setPaintProperty('route-line', 'line-color', '#d6ff4b')
+      map.setPaintProperty('route-line', 'line-opacity', 1)
+      map.setPaintProperty('route-line', 'line-width', 6)
+    }
+  }
+  if (map.getLayer('route-line-casing')) {
+    map.setPaintProperty('route-line-casing', 'line-opacity', windActive ? 0.15 : 0.55)
+    map.setPaintProperty('route-line-casing', 'line-width', windActive ? 14 : 12)
   }
 }
 
@@ -304,24 +325,77 @@ function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boo
   return true
 }
 
+function splitWindOverlay(overlay: FeatureCollection | null | undefined): {
+  lines: FeatureCollection<LineString>
+  points: FeatureCollection<Point>
+  hasWind: boolean
+} {
+  const emptyLines: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] }
+  const emptyPoints: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] }
+  if (!overlay?.features?.length) {
+    return { lines: emptyLines, points: emptyPoints, hasWind: false }
+  }
+
+  const lines: FeatureCollection<LineString> = { type: 'FeatureCollection', features: [] }
+  const points: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] }
+
+  for (const f of overlay.features) {
+    if (!f.geometry) continue
+    if (f.geometry.type === 'LineString') {
+      lines.features.push(f as Feature<LineString>)
+    } else if (f.geometry.type === 'Point') {
+      points.features.push(f as Feature<Point>)
+    }
+  }
+
+  return {
+    lines,
+    points,
+    hasWind: lines.features.length > 0 || points.features.length > 0,
+  }
+}
+
 function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
   if (!map.isStyleLoaded()) return false
+  ensureRouteLayers(map)
   ensureWindLayers(map)
-  const source = map.getSource('route-wind') as maplibregl.GeoJSONSource | undefined
-  if (!source) return false
-  const data = overlay ?? { type: 'FeatureCollection' as const, features: [] }
-  source.setData(data)
 
-  const hasWind = data.features.length > 0
-  // Dim lime base route so colored wind segments dominate
-  if (map.getLayer('route-line')) {
-    map.setPaintProperty('route-line', 'line-opacity', hasWind ? 0.25 : 1)
-    map.setPaintProperty('route-line', 'line-width', hasWind ? 3 : 5)
+  const lineSource = map.getSource('route-wind-lines') as maplibregl.GeoJSONSource | undefined
+  const pointSource = map.getSource('route-wind-points') as maplibregl.GeoJSONSource | undefined
+  if (!lineSource || !pointSource) return false
+
+  const { lines, points, hasWind } = splitWindOverlay(overlay)
+  lineSource.setData(lines)
+  pointSource.setData(points)
+  setBaseRoutePaint(map, hasWind)
+
+  // Ensure wind stays on top after style/route updates
+  for (const id of [
+    'route-wind-segments',
+    'route-wind-barbs',
+    'route-wind-arrows',
+    'route-wind-labels',
+  ]) {
+    if (map.getLayer(id)) map.moveLayer(id)
   }
-  if (map.getLayer('route-line-casing')) {
-    map.setPaintProperty('route-line-casing', 'line-opacity', hasWind ? 0.2 : 0.55)
-  }
+
+  map.triggerRepaint()
   return true
+}
+
+/** Full rebuild of wind layers (recovers from style glitches / missing images). */
+function rebuildWindLayers(map: Map) {
+  for (const id of [
+    'route-wind-labels',
+    'route-wind-arrows',
+    'route-wind-barbs',
+    'route-wind-segments',
+  ]) {
+    removeLayerIfExists(map, id)
+  }
+  // Keep sources; only refresh images + layers
+  ensureWindArrowImages(map)
+  ensureWindLayers(map)
 }
 
 export function MapView({
@@ -374,7 +448,6 @@ export function MapView({
     const resize = () => map.resize()
 
     map.on('load', () => {
-      // Flex 50/50 layout: container often settles after first paint — resize twice.
       resize()
       requestAnimationFrame(() => {
         resize()
@@ -382,7 +455,11 @@ export function MapView({
       })
     })
     map.on('styledata', () => {
-      if (map.isStyleLoaded()) paintFromRef(Boolean(geometryRef.current))
+      if (map.isStyleLoaded()) {
+        // Style reload drops custom images — rebuild wind stack
+        rebuildWindLayers(map)
+        paintFromRef(Boolean(geometryRef.current))
+      }
     })
     map.on('error', (e: { error?: Error }) => {
       console.error('[maplibre]', e.error ?? e)
@@ -452,6 +529,10 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
+    // Rebuild images/layers once when overlay appears (icons can fail after style swaps)
+    if (windOverlay?.features?.length) {
+      rebuildWindLayers(map)
+    }
     applyWindOverlay(map, windOverlay)
   }, [windOverlay])
 
@@ -489,8 +570,7 @@ export function MapView({
           <p className="font-semibold">Viento en ruta</p>
           <p className="text-[var(--color-stone)]">{windCaption}</p>
           <p className="mt-1 text-[10px] text-[var(--color-stone)]">
-            Verde = cola · Azul = lateral · Naranja/rojo = cara · Flecha y raya = hacia dónde sopla ·
-            Grosor = intensidad
+            Verde = cola · Azul = lateral · Naranja = cara · Flecha = hacia dónde sopla
           </p>
         </div>
       )}

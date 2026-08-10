@@ -108,9 +108,18 @@ export const BIKE_MODALITY_PROFILES: Record<BikeType, BikeModalityProfile> = {
         avoidFeatures: ['steps', 'ferries', 'fords'],
         weightings: { green: 0.55 },
       }),
+      strategy('road-fast', 'cycling-road', {
+        preferenceMode: 'fastest',
+        avoidFeatures: ['steps', 'ferries', 'fords'],
+        weightings: { steepness_difficulty: 0 },
+      }),
       strategy('road-regular-paved', 'cycling-regular', {
         avoidFeatures: ['steps', 'ferries', 'fords'],
         weightings: { green: 0.35, steepness_difficulty: 0 },
+      }),
+      strategy('road-shortest-paved', 'cycling-road', {
+        preferenceMode: 'shortest',
+        avoidFeatures: ['steps', 'ferries', 'fords'],
       }),
     ],
     surfaceWeights: {
@@ -579,6 +588,10 @@ export function scoreSurfaceSuitability(
       score = Math.min(score, 88)
       notes.push(`Sin pavimentar ${Math.round(unpaved)}% (máx. recomendable ~8% en ${modality.label}).`)
     }
+    // Hard gate: more than 12% dirt/track is never “road ready”.
+    if (unpaved > 12 || trailPenalty > 15) {
+      score = Math.min(score, 82)
+    }
     if (surf >= 92 && trailPenalty < 8) {
       notes.push(`Pavimento/vías adecuadas ≈ ${Math.round(surf)}%.`)
     }
@@ -590,6 +603,9 @@ export function scoreSurfaceSuitability(
     if (unpaved > 10) {
       score = Math.min(score, 85)
       notes.push(`Hay ${Math.round(unpaved)}% sin pavimentar: poco urbano.`)
+    }
+    if (unpaved > 15 || bad > 20) {
+      score = Math.min(score, 80)
     }
     if (cycle >= 40) notes.push(`Buen peso de calle/carril bici (~${Math.round(cycle)}%).`)
   } else if (bikeType === 'gravel') {
