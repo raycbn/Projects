@@ -20,6 +20,19 @@ export default {
     }
 
     try {
+      if (path === '/' && request.method === 'GET') {
+        return withCors(
+          env,
+          request,
+          json({
+            ok: true,
+            service: 'pedalmap-api',
+            hint: 'Use GET /health, POST /v2/directions/{profile}/geojson, POST /stripe/checkout',
+            health: '/health',
+          }),
+        )
+      }
+
       if (path === '/health' && request.method === 'GET') {
         return withCors(
           env,

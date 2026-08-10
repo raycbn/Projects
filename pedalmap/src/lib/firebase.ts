@@ -4,9 +4,25 @@ import { getFirestore, type Firestore } from 'firebase/firestore'
 import { getFunctions, type Functions } from 'firebase/functions'
 import { getStorage, type FirebaseStorage } from 'firebase/storage'
 
+/**
+ * On Firebase Hosting, use the current hostname as authDomain so
+ * signInWithRedirect stays first-party (avoids mobile 3P storage failures
+ * between *.web.app and *.firebaseapp.com).
+ */
+function resolveAuthDomain(): string {
+  const configured = String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '')
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')) {
+      return host
+    }
+  }
+  return configured
+}
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  authDomain: resolveAuthDomain(),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,

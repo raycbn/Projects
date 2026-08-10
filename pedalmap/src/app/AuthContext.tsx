@@ -7,7 +7,7 @@ import {
 } from 'react'
 import type { User } from 'firebase/auth'
 import type { UserProfile } from '@/domain/types'
-import { authService } from '@/services/AuthService'
+import { authErrorMessage, authService } from '@/services/AuthService'
 import { isFirebaseConfigured } from '@/lib/firebase'
 
 interface AuthContextValue {
@@ -15,6 +15,8 @@ interface AuthContextValue {
   profile: UserProfile | null
   loading: boolean
   firebaseReady: boolean
+  authError: string | null
+  clearAuthError: () => void
   signInGoogle: () => Promise<void>
   signInEmail: (email: string, password: string) => Promise<void>
   registerEmail: (email: string, password: string, name?: string) => Promise<void>
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
   const firebaseReady = isFirebaseConfigured()
 
   useEffect(() => {
@@ -41,9 +44,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubProfile: (() => void) | undefined
 
     // Finish Google redirect before attaching the auth listener so the session is ready.
-    void authService.completeGoogleRedirect().catch((error) => {
-      console.error('[auth] google redirect', error)
-    })
+    void authService
+      .completeGoogleRedirect()
+      .catch((error) => {
+        console.error('[auth] google redirect', error)
+        if (!cancelled) {
+          setAuthError(authErrorMessage(error, 'No se pudo iniciar sesión con Google.'))
+        }
+      })
 
     const unsubAuth = authService.watch(async (next) => {
       if (cancelled) return
@@ -79,19 +87,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     loading,
     firebaseReady,
+    authError,
+    clearAuthError() {
+      setAuthError(null)
+    },
     async signInGoogle() {
+      setAuthError(null)
       await authService.signInGoogle()
     },
     async signInEmail(email, password) {
+      setAuthError(null)
       await authService.signInEmail(email, password)
     },
     async registerEmail(email, password, name) {
+      setAuthError(null)
       await authService.registerEmail(email, password, name)
     },
     async signInGuest() {
+      setAuthError(null)
       await authService.signInGuest()
     },
     async resetPassword(email) {
+      setAuthError(null)
       await authService.resetPassword(email)
     },
     async logout() {

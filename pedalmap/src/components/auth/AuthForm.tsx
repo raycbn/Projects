@@ -12,8 +12,16 @@ interface AuthFormProps {
 }
 
 export function AuthForm({ mode }: AuthFormProps) {
-  const { signInEmail, registerEmail, signInGoogle, signInGuest, resetPassword, firebaseReady } =
-    useAuth()
+  const {
+    signInEmail,
+    registerEmail,
+    signInGoogle,
+    signInGuest,
+    resetPassword,
+    firebaseReady,
+    authError,
+    clearAuthError,
+  } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -21,9 +29,12 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const visibleError = error || authError
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    clearAuthError()
     setMessage(null)
     if (!firebaseReady) {
       setError('Firebase no está configurado. Copia .env.example a .env y completa las claves.')
@@ -39,7 +50,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       }
     } catch (err) {
       console.error('[auth]', err)
-      setError('No hemos podido completar la operación. Revisa tus datos e inténtalo de nuevo.')
+      setError(authErrorMessage(err, 'No hemos podido completar la operación. Revisa tus datos e inténtalo de nuevo.'))
     } finally {
       setLoading(false)
     }
@@ -84,7 +95,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             onChange={(e) => setPassword(e.target.value)}
           />
         )}
-        {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
+        {visibleError && <p className="text-sm text-[var(--color-danger)]">{visibleError}</p>}
         {message && <p className="text-sm text-[var(--color-trail)]">{message}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? 'Un momento…' : mode === 'forgot' ? 'Enviar enlace' : 'Continuar'}
@@ -100,6 +111,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             disabled={loading}
             onClick={() => {
               setError(null)
+              clearAuthError()
               setLoading(true)
               void signInGoogle()
                 .catch((err) => {
@@ -118,6 +130,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             disabled={loading}
             onClick={() => {
               setError(null)
+              clearAuthError()
               setLoading(true)
               void signInGuest()
                 .catch((err) => {
