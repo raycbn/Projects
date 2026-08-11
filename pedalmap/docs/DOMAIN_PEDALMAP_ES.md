@@ -1,10 +1,15 @@
 # Dominio `pedalmap.es` (IONOS → Firebase Hosting)
 
+## Estado
+
+Dominio **en producción** (Hosting + SSL). Worker `APP_URL` / CORS ya apuntan aquí.
+
 ## Ya hecho en código / Worker
 
 - `APP_URL` = `https://pedalmap.es`
 - `ALLOWED_ORIGINS` incluye `https://pedalmap.es` y `https://www.pedalmap.es`
 - Redirects OAuth GPS vuelven a `https://pedalmap.es/actividades`
+- Auditoría: `docs/DOMAIN_AUDIT.md`
 
 El hosting en `pedalmap-79b3a.web.app` sigue válido como respaldo.
 
