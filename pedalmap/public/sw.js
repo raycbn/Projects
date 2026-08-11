@@ -2,7 +2,7 @@
  * NEVER intercept Firebase Auth helper routes (/__/auth, /__/firebase):
  * a cached or SPA fallback response there breaks Google redirect login.
  */
-const CACHE = 'pedalmap-shell-v16'
+const CACHE = 'pedalmap-shell-v17'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -26,6 +26,19 @@ self.addEventListener('fetch', (event) => {
   // Firebase Auth / Hosting reserved helpers — always network, never cache.
   if (url.pathname.startsWith('/__/')) return
 
+  // MapLibre worker must stay network-first (stale workers break the map).
+  if (
+    url.pathname.includes('maplibre-gl-worker') ||
+    url.pathname.endsWith('maplibre-gl-worker.mjs')
+  ) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => res)
+        .catch(() => caches.match(req).then((r) => r || Response.error())),
+    )
+    return
+  }
+
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -48,6 +61,13 @@ self.addEventListener('fetch', (event) => {
         hit ||
         fetch(req).then((res) => {
           if (res.ok && (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.svg'))) {
+            // Never put maplibre workers into the shell cache.
+            if (
+              url.pathname.includes('maplibre-gl-worker') ||
+              url.pathname.endsWith('maplibre-gl-worker.mjs')
+            ) {
+              return res
+            }
             const copy = res.clone()
             void caches.open(CACHE).then((c) => c.put(req, copy))
           }

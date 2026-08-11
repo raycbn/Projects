@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -22,9 +23,10 @@ import { track } from '@/lib/analytics'
 import { canCreateRoute, canUseAdvancedCircular, clampPreferencesForPlan } from '@/services/EntitlementService'
 import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
-import { loadCloudDraft, saveCloudDraft } from '@/services/DraftRepository'
+import { loadCloudDraft, saveCloudDraft, clearCloudDraft } from '@/services/DraftRepository'
 import { applySelectedOption } from '@/lib/routeOptions'
 import { isFirebaseConfigured } from '@/lib/firebase'
+import { clearReadyRoute } from '@/lib/readyRouteHandoff'
 
 const GUEST_CREATES_KEY = 'pedalmap_guest_creates'
 const LAST_DRAFT_KEY = 'pedalmap_last_draft'
@@ -55,7 +57,7 @@ interface PlannerContextValue {
   setEnd: (position: LatLng, name?: string) => void
   addVia: (position: LatLng, name?: string) => void
   removeWaypoint: (id: string) => void
-  updateWaypointPosition: (id: string, position: LatLng) => void
+  updateWaypointPosition: (id: string, position: LatLng, name?: string) => void
   moveWaypoint: (id: string, direction: -1 | 1) => void
   handleMapTap: (position: LatLng) => void
   useMyLocationAsStart: () => Promise<void>
@@ -70,6 +72,8 @@ interface PlannerContextValue {
   setHoverPoint: (p: LatLng | null) => void
   setDraftFromImport: (draft: RouteDraft) => void
   clearRoute: () => void
+  /** Switch to Trazar and edit without wiping the current draft. */
+  adjustOnMap: () => void
   paywallReason: string | null
   clearPaywall: () => void
   showPaywall: (reason: string) => void
@@ -116,15 +120,20 @@ function persistDraft(draft: RouteDraft | null, uid?: string | null) {
   try {
     if (!draft) {
       localStorage.removeItem(LAST_DRAFT_KEY)
-      return
+    } else {
+      localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(draft))
     }
-    localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(draft))
   } catch {
     /* ignore quota */
   }
-  if (uid && draft) {
+  if (!uid) return
+  if (draft) {
     void saveCloudDraft(uid, draft).catch((err) => {
       console.warn('[planner] cloud draft', err)
+    })
+  } else {
+    void clearCloudDraft(uid).catch((err) => {
+      console.warn('[planner] clear cloud draft', err)
     })
   }
 }
@@ -176,12 +185,13 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [hoverPoint, setHoverPoint] = useState<LatLng | null>(null)
   const [guestCreates, setGuestCreates] = useState(0)
   const [paywallReason, setPaywallReason] = useState<string | null>(null)
-  const [circularDistanceMeters, setCircularDistanceMeters] = useState(25000)
-  const [targetElevationGainMeters, setTargetElevationGainMeters] = useState(0)
+  const [circularDistanceMeters, setCircularDistanceMetersState] = useState(25000)
+  const [targetElevationGainMeters, setTargetElevationGainMetersState] = useState(0)
   const [circularSeed, setCircularSeed] = useState(0)
   const [wantAlternatives, setWantAlternatives] = useState(true)
   const [hydratedProfile, setHydratedProfile] = useState(false)
   const [hydratedStorage, setHydratedStorage] = useState(false)
+  const calculateGenRef = useRef(0)
 
   useEffect(() => {
     if (hydratedStorage) return
@@ -192,9 +202,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setWaypoints(last.waypoints ?? [])
       setBikeTypeState(last.bikeType || 'road')
       setRouteTypeState(last.type || 'a_to_b')
-      if (last.circularDistanceMeters) setCircularDistanceMeters(last.circularDistanceMeters)
+      if (last.circularDistanceMeters) setCircularDistanceMetersState(last.circularDistanceMeters)
       if (last.targetElevationGainMeters !== undefined) {
-        setTargetElevationGainMeters(last.targetElevationGainMeters)
+        setTargetElevationGainMetersState(last.targetElevationGainMeters)
       }
       setStatus('success')
     }
@@ -277,6 +287,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
       setStatus('calculating')
       setErrorMessage(null)
+      const gen = ++calculateGenRef.current
       try {
         const prefs = clampPreferencesForPlan(preferences, liveProfile)
         if (prefs.length !== preferences.length) {
@@ -301,6 +312,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               ? true
               : routeType === 'circular',
         })
+        if (gen !== calculateGenRef.current) return null
         setDraft(result)
         persistDraft(result, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
@@ -387,9 +399,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setCircularSeed(0)
         // Keep "varias opciones" for point-to-point modes; only clear for circular.
         if (next === 'circular') setWantAlternatives(false)
-        else if (next === 'a_to_b' || next === 'out_and_back' || next === 'map_trace') {
-          /* keep current wantAlternatives */
-        }
+        else setWantAlternatives(true)
         // Drop points that don't apply to the new mode to avoid stale A→B ends on Objetivo.
         setWaypoints((prev) => {
           if (next === 'circular') {
@@ -416,8 +426,20 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setEditDraft(null)
         if (status === 'success' || status === 'editing') setStatus('idle')
       },
-      setCircularDistanceMeters,
-      setTargetElevationGainMeters,
+      setCircularDistanceMeters(meters) {
+        setCircularDistanceMetersState(meters)
+        setDraft(null)
+        persistDraft(null, user && !user.isAnonymous ? user.uid : null)
+        setEditDraft(null)
+        if (status === 'success' || status === 'editing') setStatus('idle')
+      },
+      setTargetElevationGainMeters(meters) {
+        setTargetElevationGainMetersState(meters)
+        setDraft(null)
+        persistDraft(null, user && !user.isAnonymous ? user.uid : null)
+        setEditDraft(null)
+        if (status === 'success' || status === 'editing') setStatus('idle')
+      },
       setWantAlternatives,
       bumpCircularSeed() {
         setCircularSeed((s) => s + 1)
@@ -432,6 +454,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             { id: 'start', name: name ?? 'Inicio', position, order: 0, kind: 'start' },
             ...rest.map((w, i) => ({ ...w, order: i + 1 })),
           ]
+        })
+        setEditDraft((prev) => {
+          if (!prev) return prev
+          const rest = prev.waypoints.filter((w) => w.kind !== 'start')
+          return {
+            ...prev,
+            waypoints: [
+              { id: 'start', name: name ?? 'Inicio', position, order: 0, kind: 'start' as const },
+              ...rest.map((w, i) => ({ ...w, order: i + 1 })),
+            ],
+          }
         })
       },
       setEnd(position, name) {
@@ -449,12 +482,34 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             },
           ]
         })
+        setEditDraft((prev) => {
+          if (!prev) return prev
+          const rest = prev.waypoints.filter((w) => w.kind !== 'end')
+          const ordered = rest.map((w, i) => ({ ...w, order: i }))
+          return {
+            ...prev,
+            waypoints: [
+              ...ordered,
+              {
+                id: 'end',
+                name: name ?? 'Destino',
+                position,
+                order: ordered.length,
+                kind: 'end' as const,
+              },
+            ],
+          }
+        })
       },
       addVia(position, name) {
         setWaypoints((prev) => {
+          const vias = prev.filter((w) => w.kind === 'via')
+          if (vias.length >= 5) {
+            setErrorMessage('Máximo 5 waypoints. Elimina uno o arrastra los marcadores.')
+            return prev
+          }
           const start = prev.find((w) => w.kind === 'start')
           const end = prev.find((w) => w.kind === 'end')
-          const vias = prev.filter((w) => w.kind === 'via')
           const nextVia: Waypoint = {
             id: uid(),
             name: name ?? `Punto ${vias.length + 1}`,
@@ -470,6 +525,29 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           ].map((w, i) => ({ ...w, order: i }))
           return all
         })
+        setEditDraft((prev) => {
+          if (!prev) return prev
+          const vias = prev.waypoints.filter((w) => w.kind === 'via')
+          if (vias.length >= 5) return prev
+          const start = prev.waypoints.find((w) => w.kind === 'start')
+          const end = prev.waypoints.find((w) => w.kind === 'end')
+          const nextVia: Waypoint = {
+            id: uid(),
+            name: name ?? `Punto ${vias.length + 1}`,
+            position,
+            order: 0,
+            kind: 'via',
+          }
+          return {
+            ...prev,
+            waypoints: [
+              ...(start ? [start] : []),
+              ...vias,
+              nextVia,
+              ...(end ? [end] : []),
+            ].map((w, i) => ({ ...w, order: i })),
+          }
+        })
       },
       removeWaypoint(id) {
         setWaypoints((prev) =>
@@ -477,15 +555,26 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             .filter((w) => w.id !== id)
             .map((w, i) => ({ ...w, order: i })),
         )
+        setEditDraft((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            waypoints: prev.waypoints
+              .filter((w) => w.id !== id)
+              .map((w, i) => ({ ...w, order: i })),
+          }
+        })
       },
-      updateWaypointPosition(id, position) {
-        setWaypoints((prev) => prev.map((w) => (w.id === id ? { ...w, position } : w)))
+      updateWaypointPosition(id, position, name) {
+        const patch = (w: Waypoint): Waypoint =>
+          w.id === id
+            ? { ...w, position, ...(name !== undefined ? { name } : {}) }
+            : w
+        setWaypoints((prev) => prev.map(patch))
         if (editDraft) {
           setEditDraft({
             ...editDraft,
-            waypoints: editDraft.waypoints.map((w) =>
-              w.id === id ? { ...w, position } : w,
-            ),
+            waypoints: editDraft.waypoints.map(patch),
           })
         }
       },
@@ -691,6 +780,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       },
       clearRoute() {
         // Full plan reset: points + draft. Keeps mode, bike and preferences.
+        calculateGenRef.current += 1
         setWaypoints([])
         setDraft(null)
         persistDraft(null, user && !user.isAnonymous ? user.uid : null)
@@ -700,6 +790,19 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setStatus('idle')
         setErrorMessage(null)
         setPaywallReason(null)
+        clearReadyRoute()
+      },
+      adjustOnMap() {
+        if (!draft && !editDraft) return
+        setRouteTypeState('map_trace')
+        setWantAlternatives(true)
+        setErrorMessage(null)
+        const base = editDraft ?? draft
+        if (base) {
+          setEditDraft({ ...base })
+          setWaypoints(base.waypoints)
+          setStatus('editing')
+        }
       },
     }
   }, [

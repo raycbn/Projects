@@ -127,6 +127,9 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
           GPX estándar hacia apps gratuitas o freemium. En el móvil, “Enviar a app” abre el menú del
           sistema para cargarlo directo en tu GPS o app.
         </p>
+        <p className="mt-2 rounded-xl bg-[var(--color-mist)]/70 px-3 py-2 text-xs text-[var(--color-forest)]">
+          Free: planifica y guarda con límites. Descargar o enviar el GPX requiere Premium.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">

@@ -40,6 +40,9 @@ export function RideChooserSheet({
         <p className="mt-2 text-sm text-[var(--color-stone)]">
           Elige una opción. El resto queda en la ruta para después.
         </p>
+        <p className="mt-3 rounded-xl bg-[var(--color-mist)]/70 px-3 py-2 text-xs text-[var(--color-forest)]">
+          Free: navegar y grabar incluidos. Exportar GPX a Garmin/Wahoo es Premium.
+        </p>
         <div className="mt-5 space-y-2">
           <Button className="w-full" onClick={onNavigate}>
             Navegar en el mapa

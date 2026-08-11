@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { RouteSummary } from '@/components/route/RouteSummary'
 import { ElevationChart } from '@/components/route/ElevationChart'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,8 @@ import { formatDistance, formatElevation } from '@/lib/stats'
 import { routeRepository } from '@/services/RouteRepository'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { usePlanner } from '@/app/PlannerContext'
+import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 
 const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
@@ -32,6 +34,8 @@ function bikeLabel(bike: BikeType): string {
 
 export function SharedRoutePage() {
   const { shareSlug = '' } = useParams()
+  const navigate = useNavigate()
+  const { setDraftFromImport } = usePlanner()
   const [route, setRoute] = useState<SavedRoute | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -110,11 +114,36 @@ export function SharedRoutePage() {
         <ElevationChart profile={route.elevationProfile} />
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
-        <Link to="/route-planner">
-          <Button>Planificar otra ruta</Button>
-        </Link>
+        <Button
+          onClick={() => {
+            setDraftFromImport(route)
+            stashReadyRoute({
+              draft: route,
+              savedRouteId: route.id,
+              shareSlug: route.shareSlug ?? shareSlug,
+              source: 'import',
+            })
+            navigate('/route-planner')
+          }}
+        >
+          Abrir puntos en el planificador
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            stashReadyRoute({
+              draft: route,
+              savedRouteId: route.id,
+              shareSlug: route.shareSlug ?? shareSlug,
+              source: 'import',
+            })
+            navigate('/ruta')
+          }}
+        >
+          Ver ruta lista
+        </Button>
         <Link to="/">
-          <Button variant="secondary">Conocer PedalMap</Button>
+          <Button variant="ghost">Conocer PedalMap</Button>
         </Link>
       </div>
       <p className="mt-6 text-sm text-[var(--color-stone)]">

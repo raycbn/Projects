@@ -87,7 +87,8 @@ export function buildWhatsAppShareUrl(text: string): string {
 
 /**
  * After an async Firestore publish, the browser user-gesture is usually gone and
- * `navigator.share` can hang or no-op on mobile. Prefer WhatsApp deep link.
+ * `navigator.share` can hang or no-op on mobile. Prefer clipboard + WhatsApp popup
+ * without navigating this tab away.
  */
 export async function shareRouteCard(
   draft: RouteDraft,
@@ -100,25 +101,24 @@ export async function shareRouteCard(
   const text = buildRouteShareText(draft, url)
   const waUrl = buildWhatsAppShareUrl(text)
 
-  // 1) Open WhatsApp with the public route link (reliable after await).
+  // 1) Clipboard first so the user always keeps the link in PedalMap.
+  let copied = false
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      copied = true
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2) Open WhatsApp in a new tab/window — never location.assign (navigates away).
   let openedWhatsApp = false
   try {
     const popup = window.open(waUrl, '_blank', 'noopener,noreferrer')
     openedWhatsApp = Boolean(popup)
-    if (!openedWhatsApp) {
-      // Popup blocked (common in in-app browsers) — navigate this tab.
-      window.location.assign(waUrl)
-      openedWhatsApp = true
-    }
   } catch {
     openedWhatsApp = false
-  }
-
-  // 2) Best-effort clipboard so the user always has the link.
-  try {
-    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)
-  } catch {
-    // ignore
   }
 
   // 3) Optional card download in the background (don't block WhatsApp).
@@ -136,7 +136,8 @@ export async function shareRouteCard(
     .catch(() => undefined)
 
   if (openedWhatsApp) return 'whatsapp'
-  return 'copied'
+  if (copied) return 'copied'
+  return 'downloaded'
 }
 
 function bikeLabel(bike: BikeType): string {

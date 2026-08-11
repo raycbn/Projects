@@ -59,7 +59,7 @@ export function AppShell() {
                   {profile?.displayName || (user.isAnonymous ? 'Invitado' : 'Perfil')}
                 </Link>
                 <Button variant="ghost" size="sm" onClick={() => void logout()}>
-                  Salir
+                  Cerrar sesión
                 </Button>
               </>
             ) : (
@@ -106,12 +106,13 @@ export function AppShell() {
 
       {!hideTabbar && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-4 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-5 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
           aria-label="Móvil"
         >
           {[
             ['/', 'Inicio'],
             ['/route-planner', 'Crear'],
+            ['/my-routes', 'Mis rutas'],
             ['/actividades', 'GPS'],
             ['/perfil', 'Perfil'],
           ].map(([to, label]) => (
@@ -120,7 +121,7 @@ export function AppShell() {
               to={to}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center justify-center rounded-lg text-center text-xs font-semibold',
+                  'flex items-center justify-center rounded-lg text-center text-[11px] font-semibold leading-tight',
                   isActive
                     ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
                     : 'text-[var(--color-stone)]',

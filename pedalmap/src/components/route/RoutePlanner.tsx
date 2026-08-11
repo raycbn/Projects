@@ -16,6 +16,7 @@ import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRo
 import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 import { getBikeModality } from '@/lib/bikeSurfaceProfile'
+import { canCreateRoute, canUseAdvancedCircular } from '@/services/EntitlementService'
 import type { RouteType } from '@/domain/types'
 import clsx from 'clsx'
 
@@ -52,7 +53,6 @@ export function RoutePlanner() {
     hoverPoint,
     calculate,
     calculateAnotherVariant,
-    startEditing,
     cancelEditing,
     saveEdits,
     selectAlternative,
@@ -72,12 +72,15 @@ export function RoutePlanner() {
     useMyLocationAsStart,
     canCalculate,
     clearRoute,
+    adjustOnMap,
+    guestCreates,
   } = usePlanner()
   const { profile } = useAuth()
   const [locating, setLocating] = useState(false)
   const [mapExpanded, setMapExpanded] = useState(false)
   const [compareBusy, setCompareBusy] = useState(false)
   const [compareRows, setCompareRows] = useState<BikeCompareRow[] | null>(null)
+  const [compareError, setCompareError] = useState<string | null>(null)
   const [goingToReady, setGoingToReady] = useState(false)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
   const [traceSheetOpen, setTraceSheetOpen] = useState(true)
@@ -178,8 +181,18 @@ export function RoutePlanner() {
 
   async function handleCompare() {
     if (!canCalculate) return
+    if (routeType === 'circular' && !canUseAdvancedCircular(profile)) {
+      showPaywall('circular_premium')
+      return
+    }
+    const entitlement = canCreateRoute(profile, guestCreates)
+    if (!entitlement.ok) {
+      showPaywall(entitlement.reason ?? 'create_limit')
+      return
+    }
     setCompareBusy(true)
     setCompareRows(null)
+    setCompareError(null)
     try {
       const rows = await compareBikesForWaypoints({
         waypoints,
@@ -196,6 +209,11 @@ export function RoutePlanner() {
       track('route_created', { bike_type: 'compare', route_type: routeType })
     } catch (error) {
       console.error('[compare]', error)
+      setCompareError(
+        error instanceof Error && error.message
+          ? `No se pudo comparar: ${error.message}`
+          : 'No se pudo comparar Carretera / Gravel / MTB. Inténtalo de nuevo.',
+      )
     } finally {
       setCompareBusy(false)
     }
@@ -223,11 +241,13 @@ export function RoutePlanner() {
           ? `Calcular · ${bikeModality.label}`
           : 'Crear ruta'
 
-  const canReset = waypoints.length > 0 || Boolean(activeDraft) || Boolean(errorMessage)
+  const panelError = errorMessage || compareError
+  const canReset = waypoints.length > 0 || Boolean(activeDraft) || Boolean(panelError)
 
   function handleResetPlan() {
     clearRoute()
     setCompareRows(null)
+    setCompareError(null)
     setViaQueryOpen(false)
   }
 
@@ -295,15 +315,17 @@ export function RoutePlanner() {
 
         <div
           className={clsx(
-            'z-20 border-t border-[var(--color-fog)] bg-white/95 backdrop-blur transition-[max-height] safe-pb',
-            traceSheetOpen ? 'max-h-[48vh] overflow-y-auto' : 'max-h-14 overflow-hidden',
+            'z-20 border-t border-[var(--color-fog)] bg-white/95 backdrop-blur safe-pb',
+            traceSheetOpen ? 'max-h-[48vh] overflow-y-auto' : 'overflow-hidden',
           )}
         >
           <div className="flex items-center justify-between gap-2 border-b border-[var(--color-fog)] px-4 py-2">
             <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--color-forest)]">
               {status === 'calculating'
                 ? `Optimizando · ${bikeModality.label}`
-                : tapHint ?? 'Trazar en mapa'}
+                : status === 'editing'
+                  ? 'Ajustando ruta · recalcula al terminar'
+                  : tapHint ?? 'Trazar en mapa'}
             </p>
             <button
               type="button"
@@ -392,12 +414,12 @@ export function RoutePlanner() {
               Pedir varias opciones y elegir la mejor superficie (hasta 3)
             </label>
 
-            {errorMessage && (
+            {panelError && (
               <div
                 className="rounded-2xl bg-[#fff4f4] px-3 py-3 text-sm text-[var(--color-danger)]"
                 role="alert"
               >
-                {errorMessage}
+                {panelError}
               </div>
             )}
 
@@ -451,29 +473,54 @@ export function RoutePlanner() {
                   </div>
                 )}
 
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  disabled={status === 'editing' || status === 'calculating'}
-                  onClick={() => goToReady()}
-                >
-                  Ver ruta lista
-                </Button>
-                <Button variant="ghost" className="w-full" onClick={handleResetPlan}>
-                  Empezar otra ruta
-                </Button>
+                {status === 'editing' ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button className="flex-1" onClick={() => void saveEdits()}>
+                      Recalcular
+                    </Button>
+                    <Button variant="ghost" className="flex-1" onClick={cancelEditing}>
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      disabled={status === 'calculating'}
+                      onClick={() => goToReady()}
+                    >
+                      Ver ruta lista
+                    </Button>
+                    <Button variant="ghost" className="w-full" onClick={handleResetPlan}>
+                      Empezar otra ruta
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>
 
-          <div className={clsx('sticky bottom-0 border-t border-[var(--color-fog)] bg-white/95 p-3', !traceSheetOpen && 'hidden')}>
-            <Button
-              className="w-full !py-3 text-base"
-              disabled={ctaDisabled}
-              onClick={() => void handleCreate()}
-            >
-              {ctaLabel}
-            </Button>
+          {/* Slim CTA bar stays visible when the sheet is collapsed */}
+          <div className="sticky bottom-0 border-t border-[var(--color-fog)] bg-white/95 p-3">
+            {status === 'editing' ? (
+              <div className="flex gap-2">
+                <Button className="flex-1 !py-3" onClick={() => void saveEdits()}>
+                  Recalcular
+                </Button>
+                <Button variant="ghost" className="flex-1 !py-3" onClick={cancelEditing}>
+                  Cancelar
+                </Button>
+              </div>
+            ) : (
+              <Button
+                className="w-full !py-3 text-base"
+                disabled={ctaDisabled}
+                onClick={() => void handleCreate()}
+              >
+                {ctaLabel}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -532,7 +579,7 @@ export function RoutePlanner() {
                       placeholder="Punto intermedio"
                       valueLabel={w.name}
                       onSelect={(place) => {
-                        updateWaypointPosition(w.id, place.position)
+                        updateWaypointPosition(w.id, place.position, place.label)
                       }}
                     />
                   </div>
@@ -644,12 +691,12 @@ export function RoutePlanner() {
           </label>
         )}
 
-        {errorMessage && (
+        {panelError && (
           <div
             className="rounded-2xl bg-[#fff4f4] px-3 py-3 text-sm text-[var(--color-danger)]"
             role="alert"
           >
-            {errorMessage}
+            {panelError}
           </div>
         )}
 
@@ -762,10 +809,7 @@ export function RoutePlanner() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => {
-                    setRouteType('map_trace')
-                    startEditing()
-                  }}
+                  onClick={() => adjustOnMap()}
                 >
                   Ajustar en mapa
                 </Button>

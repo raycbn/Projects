@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: '¿Qué cambia según el tipo de bici?',
-    a: 'Carretera, urbana, gravel, MTB y e-bike usan Valhalla (tipo de bici + superficie en el cálculo). Circulares siguen con ORS. Verás un % de idoneidad de la mejor ruta encontrada.',
+    a: 'Carretera, urbana, gravel, MTB y e-bike usan Valhalla primero (tipo de bici + superficie en el cálculo), con ORS solo como respaldo. Verás un % de idoneidad de la mejor ruta encontrada.',
   },
   {
     q: '¿Cómo crear una ruta GPX?',
@@ -22,7 +22,7 @@ const faqs = [
   },
   {
     q: '¿Cómo crear una ruta circular u Objetivo?',
-    a: 'Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular con Valhalla (perfil de bici + superficie) buscando el mejor ajuste.',
+    a: 'Objetivo es Premium. Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular con Valhalla primero (perfil de bici + superficie), buscando el mejor ajuste.',
   },
   {
     q: '¿Free o Premium?',

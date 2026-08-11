@@ -6,6 +6,11 @@
 import { doc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore'
 import type { RouteDraft } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
+import {
+  coordsToStored,
+  geometryFromStored,
+  geometryToStored,
+} from '@/services/RouteRepository'
 
 const FIELD = 'plannerDraft'
 const IDB_NAME = 'pedalmap-drafts'
@@ -90,6 +95,20 @@ function sameRouteIdentity(a: RouteDraft, b: RouteDraft): boolean {
   return Math.abs(a0[0] - b0[0]) < 1e-4 && Math.abs(a0[1] - b0[1]) < 1e-4
 }
 
+/** Normalize cloud lean draft (may store {lng,lat} objects) back to [lng,lat] arrays. */
+function hydrateCloudDraft(raw: RouteDraft): RouteDraft {
+  const hydrateOpt = <T extends { geometry?: RouteDraft['geometry'] }>(opt: T): T => ({
+    ...opt,
+    geometry: geometryFromStored(opt.geometry),
+  })
+  return {
+    ...raw,
+    geometry: geometryFromStored(raw.geometry),
+    routeOptions: raw.routeOptions?.map(hydrateOpt),
+    alternatives: raw.alternatives?.map(hydrateOpt),
+  }
+}
+
 export async function saveCloudDraft(uid: string, draft: RouteDraft): Promise<void> {
   if (!isFirebaseConfigured()) return
   // Always keep full geometry on-device; cloud gets a lean preview only.
@@ -111,7 +130,7 @@ export async function loadCloudDraft(uid: string): Promise<RouteDraft | null> {
   if (!snap.exists()) return null
   const raw = snap.data()?.[FIELD]
   if (!raw || typeof raw !== 'object') return null
-  const cloud = raw as RouteDraft
+  const cloud = hydrateCloudDraft(raw as RouteDraft)
   const local = await loadFullLocal(uid)
   if (
     local?.geometry?.coordinates?.length &&
@@ -133,35 +152,42 @@ export async function clearCloudDraft(uid: string): Promise<void> {
   )
 }
 
-/** Preview-only downsample for Firestore size — never the sole source of truth on-device. */
-export function leanDraft(draft: RouteDraft): RouteDraft {
+/** Preview-only downsample for Firestore size — never the sole source of truth on-device.
+ *  Coordinates are stored as {lng,lat} objects (not nested arrays) for Firestore friendliness.
+ */
+export function leanDraft(draft: RouteDraft): Record<string, unknown> {
   const downsample = (coords: [number, number][]) => {
     if (coords.length <= 800) return coords
     const step = Math.ceil(coords.length / 600)
     return coords.filter((_, i) => i % step === 0 || i === coords.length - 1) as [number, number][]
   }
 
-  const geometryCoords = downsample(draft.geometry?.coordinates ?? [])
+  const leanGeom = (geometry: RouteDraft['geometry'] | undefined) => {
+    const coords = downsample(geometry?.coordinates ?? [])
+    return {
+      type: 'LineString' as const,
+      coordinates: coordsToStored(coords),
+    }
+  }
+
   const routeOptions = draft.routeOptions?.map((opt) => ({
     ...opt,
-    geometry: {
-      type: 'LineString' as const,
-      coordinates: downsample(opt.geometry.coordinates),
-    },
+    geometry: leanGeom(opt.geometry),
     elevationProfile: opt.elevationProfile?.filter((_, i) => i % 2 === 0) ?? [],
   }))
   const alternatives = draft.alternatives?.map((opt) => ({
     ...opt,
-    geometry: {
-      type: 'LineString' as const,
-      coordinates: downsample(opt.geometry.coordinates),
-    },
+    geometry: leanGeom(opt.geometry),
     elevationProfile: opt.elevationProfile?.filter((_, i) => i % 2 === 0) ?? [],
   }))
 
   return {
     ...draft,
-    geometry: { type: 'LineString', coordinates: geometryCoords },
+    // Cap main geometry similarly to RouteRepository persistence.
+    geometry: geometryToStored(
+      { type: 'LineString', coordinates: downsample(draft.geometry?.coordinates ?? []) },
+      800,
+    ),
     elevationProfile: draft.elevationProfile?.filter((_, i) => i % 2 === 0) ?? [],
     routeOptions,
     alternatives,

@@ -60,10 +60,11 @@ export function ReadyRoutePage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { user, profile, firebaseReady } = useAuth()
-  const { showPaywall, paywallReason, clearPaywall, selectRouteOption } = usePlanner()
+  const { showPaywall, paywallReason, clearPaywall } = usePlanner()
 
   const [packet, setPacket] = useState<ReadyRoutePacket | null>(() => peekReadyRoute())
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [routeLoading, setRouteLoading] = useState(Boolean(params.get('routeId')))
   const [rideOpen, setRideOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [windOpen, setWindOpen] = useState(true)
@@ -90,9 +91,13 @@ export function ReadyRoutePage() {
 
   // Abrir desde Mis rutas: routeId gana siempre (no mezclar con draft del planner).
   useEffect(() => {
-    if (!routeIdParam) return
+    if (!routeIdParam) {
+      setRouteLoading(false)
+      return
+    }
     if (!firebaseReady || !routeRepository.isConfigured()) return
     let cancelled = false
+    setRouteLoading(true)
     setLoadError(null)
     void routeRepository
       .getById(routeIdParam)
@@ -100,6 +105,7 @@ export function ReadyRoutePage() {
         if (cancelled) return
         if (!route) {
           setLoadError('No encontramos esa ruta guardada.')
+          setRouteLoading(false)
           return
         }
         const next: ReadyRoutePacket = {
@@ -110,10 +116,14 @@ export function ReadyRoutePage() {
         }
         stashReadyRoute(next)
         setPacket(next)
+        setRouteLoading(false)
       })
       .catch((err) => {
         console.error('[ready-route] load', err)
-        if (!cancelled) setLoadError('No se pudo cargar la ruta.')
+        if (!cancelled) {
+          setLoadError('No se pudo cargar la ruta.')
+          setRouteLoading(false)
+        }
       })
     return () => {
       cancelled = true
@@ -162,6 +172,13 @@ export function ReadyRoutePage() {
     if (!draft?.geometry) return null
     return buildSurfaceRouteOverlay(draft.geometry, draft.surfaceEdges)
   }, [draft])
+
+  // Clear wind selection when draft geometry identity changes (avoid stale overlay).
+  useEffect(() => {
+    setSelectedWindWindow(null)
+    setSelectedWindHour(null)
+    setBestLine(null)
+  }, [fitKey])
 
   // Show map "Cargando viento…" until the first forecast paints an overlay.
   useEffect(() => {
@@ -268,6 +285,11 @@ export function ReadyRoutePage() {
     } catch (error) {
       console.error('[ready-route] share', error)
       const msg = error instanceof Error ? error.message : ''
+      if (msg.includes('save_limit')) {
+        showPaywall('save_limit')
+        setMessage('Has alcanzado el límite de rutas guardadas en Free.')
+        return
+      }
       setMessage(
         msg
           ? `No se pudo publicar (${msg.replace(/^(save_failed:|worker_publish:)/, '')}).`
@@ -288,6 +310,19 @@ export function ReadyRoutePage() {
         <Link to="/my-routes" className="mt-8 inline-block">
           <Button>Mis rutas</Button>
         </Link>
+      </main>
+    )
+  }
+
+  // Avoid flashing a stale planner draft while ?routeId=… is loading.
+  const packetMismatch =
+    Boolean(routeIdParam) &&
+    (routeLoading || (Boolean(packet?.draft) && packet?.savedRouteId !== routeIdParam))
+
+  if (packetMismatch || (routeIdParam && !draft && !loadError)) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-16 pb-28 text-center">
+        <p className="animate-pulse-soft text-[var(--color-stone)]">Cargando ruta…</p>
       </main>
     )
   }
@@ -402,7 +437,6 @@ export function ReadyRoutePage() {
                       : 'w-full rounded-xl bg-[var(--color-mist)] px-3 py-2 text-left text-xs font-semibold ring-1 ring-[var(--color-fog)]'
                   }
                   onClick={() => {
-                    selectRouteOption(opt.id)
                     if (!packet?.draft?.routeOptions) return
                     const nextDraft = applySelectedOption(packet.draft, opt.id)
                     const next = { ...packet, draft: nextDraft }

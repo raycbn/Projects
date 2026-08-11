@@ -69,6 +69,12 @@ export function ProfilePage() {
               <br />
               <strong className="capitalize">{profile?.plan || 'free'}</strong>
             </p>
+            <Link
+              to="/my-routes"
+              className="inline-flex text-sm font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
+            >
+              Mis rutas
+            </Link>
           </div>
 
           <div className="space-y-4 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
