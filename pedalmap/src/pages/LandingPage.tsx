@@ -51,7 +51,7 @@ export function LandingPage() {
           aria-label="Ciclistas en carretera entre paisaje abierto"
         />
         <div className="relative mx-auto flex min-h-[88vh] max-w-6xl flex-col justify-end px-4 pb-16 pt-24 md:justify-center md:px-6">
-          <p className="animate-rise max-w-full font-display text-[clamp(2.15rem,9.2vw,4.5rem)] font-extrabold leading-[0.95] tracking-[-0.08em] text-white drop-shadow md:text-7xl md:tracking-[-0.04em]">
+          <p className="animate-rise max-w-full font-display text-[clamp(2rem,8.2vw,4.5rem)] font-extrabold leading-[0.95] tracking-[-0.14em] text-white drop-shadow md:text-7xl md:tracking-[-0.05em]">
             PEDALMAP
           </p>
           <h1
