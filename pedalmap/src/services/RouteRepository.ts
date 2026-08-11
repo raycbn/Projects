@@ -27,6 +27,53 @@ function toIso(value: Timestamp | string | undefined): string {
   return value.toDate().toISOString()
 }
 
+/** Firestore rejects `undefined` field values — strip recursively before writes. */
+export function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)) as T
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (nested === undefined) continue
+      out[key] = stripUndefinedDeep(nested)
+    }
+    return out as T
+  }
+  return value
+}
+
+/**
+ * Persist only what the shared/saved route page needs.
+ * Drop bulky alternative options (duplicate geometries) that often blow the 1 MiB doc limit.
+ */
+export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
+  const title = String(draft.title || 'Ruta').slice(0, 120)
+  return stripUndefinedDeep({
+    title,
+    description: draft.description,
+    type: draft.type,
+    bikeType: draft.bikeType,
+    preferences: draft.preferences ?? [],
+    waypoints: draft.waypoints ?? [],
+    geometry: draft.geometry,
+    elevationProfile: draft.elevationProfile ?? [],
+    stats: draft.stats,
+    circularDistanceMeters: draft.circularDistanceMeters,
+    targetElevationGainMeters: draft.targetElevationGainMeters,
+    circularSeed: draft.circularSeed,
+    instructions: draft.instructions,
+    surfaceEdges: draft.surfaceEdges,
+    selectedOptionId: draft.selectedOptionId,
+  })
+}
+
+function firestoreErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'unknown'
+  const e = error as { code?: string; message?: string }
+  return [e.code, e.message].filter(Boolean).join(' · ') || 'unknown'
+}
+
 export class RouteRepository {
   isConfigured(): boolean {
     return isFirebaseConfigured()
@@ -101,43 +148,50 @@ export class RouteRepository {
     const routeRef = doc(collection(db, 'routes'))
     const isPublic = options?.isPublic ?? false
     const nowIso = new Date().toISOString()
+    const payload = toPersistedDraft(draft)
 
-    await runTransaction(db, async (tx) => {
-      const userSnap = await tx.get(userRef)
-      const usage = (userSnap.data()?.usage as
-        | { routesCreatedThisMonth?: number; routesSaved?: number; monthKey?: string }
-        | undefined) ?? {
-        routesCreatedThisMonth: 0,
-        routesSaved: 0,
-        monthKey: monthKey(),
-      }
-      const plan = (userSnap.data()?.plan as 'free' | 'premium' | undefined) ?? 'free'
-      const saved = usage.routesSaved ?? 0
-      if (plan !== 'premium' && saved >= FREE_LIMITS.maxRoutesSaved) {
-        throw new Error('save_limit')
-      }
+    try {
+      await runTransaction(db, async (tx) => {
+        const userSnap = await tx.get(userRef)
+        const usage = (userSnap.data()?.usage as
+          | { routesCreatedThisMonth?: number; routesSaved?: number; monthKey?: string }
+          | undefined) ?? {
+          routesCreatedThisMonth: 0,
+          routesSaved: 0,
+          monthKey: monthKey(),
+        }
+        const plan = (userSnap.data()?.plan as 'free' | 'premium' | undefined) ?? 'free'
+        const saved = usage.routesSaved ?? 0
+        if (plan !== 'premium' && saved >= FREE_LIMITS.maxRoutesSaved) {
+          throw new Error('save_limit')
+        }
 
-      tx.set(routeRef, {
-        ...draft,
-        userId,
-        isPublic,
-        shareSlug,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      tx.set(
-        userRef,
-        {
-          usage: {
-            routesCreatedThisMonth: usage.routesCreatedThisMonth ?? 0,
-            routesSaved: saved + 1,
-            monthKey: usage.monthKey ?? monthKey(),
-          },
+        tx.set(routeRef, {
+          ...payload,
+          userId,
+          isPublic,
+          shareSlug,
+          createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      )
-    })
+        })
+        tx.set(
+          userRef,
+          {
+            usage: {
+              routesCreatedThisMonth: usage.routesCreatedThisMonth ?? 0,
+              routesSaved: saved + 1,
+              monthKey: usage.monthKey ?? monthKey(),
+            },
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        )
+      })
+    } catch (error) {
+      if (error instanceof Error && error.message === 'save_limit') throw error
+      console.error('[routes] save failed', firestoreErrorMessage(error), error)
+      throw new Error(`save_failed:${firestoreErrorMessage(error)}`)
+    }
 
     if (isPublic) {
       await setDoc(doc(db, 'routeShares', shareSlug), {
@@ -149,6 +203,7 @@ export class RouteRepository {
 
     return {
       ...draft,
+      title: String(payload.title || draft.title),
       id: routeRef.id,
       userId,
       isPublic,
@@ -231,12 +286,17 @@ export class RouteRepository {
       throw new Error('No tienes permiso para compartir esta ruta')
     }
     const shareSlug = (existing.data().shareSlug as string) || createShareSlug(existing.data().title)
-    await updateDoc(ref, { isPublic: true, shareSlug, updatedAt: serverTimestamp() })
-    await setDoc(doc(getDb(), 'routeShares', shareSlug), {
-      routeId,
-      userId,
-      createdAt: serverTimestamp(),
-    })
+    try {
+      await updateDoc(ref, { isPublic: true, shareSlug, updatedAt: serverTimestamp() })
+      await setDoc(doc(getDb(), 'routeShares', shareSlug), {
+        routeId,
+        userId,
+        createdAt: serverTimestamp(),
+      })
+    } catch (error) {
+      console.error('[routes] makePublic failed', firestoreErrorMessage(error), error)
+      throw new Error(`save_failed:${firestoreErrorMessage(error)}`)
+    }
     return shareSlug
   }
 

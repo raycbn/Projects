@@ -280,8 +280,14 @@ export function RoutePlanner() {
           setSaveMessage('Límite de rutas guardadas. Borra una o pasa a Premium para compartir.')
         } else if (msg === 'publish_timeout') {
           setSaveMessage('La publicación tardó demasiado. Revisa la conexión e inténtalo de nuevo.')
+        } else if (msg.startsWith('save_failed:')) {
+          setSaveMessage(`No se pudo publicar la ruta (${msg.replace('save_failed:', '')}).`)
         } else {
-          setSaveMessage('No se pudo publicar la ruta. Revisa la conexión e inténtalo de nuevo.')
+          setSaveMessage(
+            msg
+              ? `No se pudo publicar la ruta (${msg}).`
+              : 'No se pudo publicar la ruta. Revisa la conexión e inténtalo de nuevo.',
+          )
         }
         return
       }
