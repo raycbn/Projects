@@ -17,6 +17,7 @@ import {
   webPageJsonLd,
 } from '../src/lib/jsonLd'
 import { DEFAULT_OG_IMAGE, SITE_ORIGIN } from '../src/lib/site'
+import { markdownLinksToHtml } from '../src/lib/markdownInline'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
@@ -31,6 +32,7 @@ type PageSpec = {
   paragraphs: string[]
   jsonLd: object | object[]
   related?: Array<{ to: string; label: string }>
+  ctaHtml?: string
 }
 
 function escapeHtml(s: string): string {
@@ -82,12 +84,22 @@ function prerenderBody(page: PageSpec): string {
           .map((r) => `<li><a href="${escapeHtml(r.to)}">${escapeHtml(r.label)}</a></li>`)
           .join('')}</ul></nav>`
       : ''
-  const paras = page.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')
+  const paras = page.paragraphs
+    .map((p) => {
+      if (p.startsWith('## ')) {
+        return `<h2>${escapeHtml(p.slice(3))}</h2>`
+      }
+      return `<p>${markdownLinksToHtml(p)}</p>`
+    })
+    .join('')
+  const cta =
+    page.ctaHtml ??
+    `<p><a href="/route-planner">Abrir planificador</a> · <a href="/">Inicio</a> · <a href="/blog">Blog</a></p>`
   return `<main id="prerender-root" data-prerender="true">
   <p><strong>PedalMap</strong></p>
   <h1>${escapeHtml(page.heading)}</h1>
   ${paras}
-  <p><a href="/route-planner">Abrir planificador</a> · <a href="/">Inicio</a></p>
+  ${cta}
   ${related}
 </main>`
 }
@@ -185,8 +197,16 @@ const pages: PageSpec[] = [
     title: `${post.title} | PedalMap`,
     description: post.description,
     heading: post.title,
-    paragraphs: post.body,
+    paragraphs: [
+      post.lead,
+      ...post.blocks.map((b) => (b.type === 'h2' ? `## ${b.text}` : b.text)),
+    ],
     related: post.relatedPaths,
+    ctaHtml: `<p><a href="${post.primaryCta.to}">${escapeHtml(post.primaryCta.label)}</a>${
+      post.secondaryCtas
+        ?.map((c) => ` · <a href="${c.to}">${escapeHtml(c.label)}</a>`)
+        .join('') ?? ''
+    }</p>`,
     jsonLd: {
       '@context': 'https://schema.org',
       '@type': 'BlogPosting',
