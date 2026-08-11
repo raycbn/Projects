@@ -1,5 +1,11 @@
 import type { FreemiumLimits, RoutePreference, UserPlan, UserProfile } from '@/domain/types'
-import { FREE_LIMITS, PREMIUM_LIMITS } from '@/domain/types'
+import { FREE_LIMITS, FREE_TRIALS, PREMIUM_LIMITS } from '@/domain/types'
+import {
+  guestCircularUsedThisMonth,
+  guestGpxUsedThisWeek,
+  isoWeekKey,
+  utcMonthKey,
+} from '@/lib/freemium'
 
 export function getLimits(plan: UserPlan): FreemiumLimits {
   return plan === 'premium' ? PREMIUM_LIMITS : FREE_LIMITS
@@ -32,20 +38,45 @@ export function canCreateRoute(profile: UserProfile | null, guestCreates: number
   return { ok: true }
 }
 
+export function freeGpxRemaining(profile: UserProfile | null): number {
+  if (!profile) {
+    return Math.max(0, FREE_TRIALS.gpxPerWeek - guestGpxUsedThisWeek())
+  }
+  if (profile.plan === 'premium') return Number.POSITIVE_INFINITY
+  const week = isoWeekKey()
+  const used =
+    profile.usage.freeGpxWeekKey === week ? (profile.usage.freeGpxUsedThisWeek ?? 0) : 0
+  return Math.max(0, FREE_TRIALS.gpxPerWeek - used)
+}
+
+/** Premium unlimited, Free gets a soft weekly GPX taste. */
 export function canExportGpx(profile: UserProfile | null): boolean {
-  if (!profile) return false
-  return getLimits(profile.plan).gpxExport
+  return freeGpxRemaining(profile) > 0
+}
+
+export function freeCircularRemaining(profile: UserProfile | null): number {
+  if (!profile) {
+    return Math.max(0, FREE_TRIALS.circularPerMonth - guestCircularUsedThisMonth())
+  }
+  if (profile.plan === 'premium') return Number.POSITIVE_INFINITY
+  const key = utcMonthKey()
+  const used =
+    profile.usage.monthKey === key ? (profile.usage.freeCircularUsedThisMonth ?? 0) : 0
+  return Math.max(0, FREE_TRIALS.circularPerMonth - used)
+}
+
+/**
+ * Objetivo: Premium unlimited; Free/guest get 1 soft trial per month.
+ * Paywall reason stays `circular_premium` when the trial is spent.
+ */
+export function canUseAdvancedCircular(profile: UserProfile | null): boolean {
+  return freeCircularRemaining(profile) > 0
 }
 
 export function canUseAdvancedFilters(profile: UserProfile | null): boolean {
   // Guests (null profile) share Free limits — signing in must not reduce capability.
   if (!profile) return FREE_LIMITS.advancedFilters || FREE_LIMITS.maxActivePreferences > 0
   return getLimits(profile.plan).advancedFilters || getLimits(profile.plan).maxActivePreferences > 0
-}
-
-export function canUseAdvancedCircular(profile: UserProfile | null): boolean {
-  if (!profile) return FREE_LIMITS.advancedCircular
-  return getLimits(profile.plan).advancedCircular
 }
 
 export function maxActivePreferences(profile: UserProfile | null): number {

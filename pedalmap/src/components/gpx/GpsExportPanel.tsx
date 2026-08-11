@@ -3,9 +3,11 @@ import { Button } from '@/components/ui/Button'
 import type { RouteDraft } from '@/domain/types'
 import { exportRouteToGpx } from '@/lib/gpx'
 import { track } from '@/lib/analytics'
-import { canExportGpx } from '@/services/EntitlementService'
+import { canExportGpx, freeGpxRemaining } from '@/services/EntitlementService'
 import { fetchServerEntitlements } from '@/lib/planSync'
 import { useAuth } from '@/app/AuthContext'
+import { authService } from '@/services/AuthService'
+import { consumeGuestGpx } from '@/lib/freemium'
 
 interface GpsExportPanelProps {
   route: RouteDraft
@@ -75,28 +77,52 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
     return typeof navigator.share === 'function' && typeof navigator.canShare === 'function'
   }, [])
 
-  async function ensurePremium(): Promise<boolean> {
+  async function ensureExportAllowed(): Promise<boolean> {
+    // Soft Free trial is client-side; Premium is unlimited.
     if (!canExportGpx(profile)) {
       onPremiumRequired?.()
       return false
     }
-    const server = await fetchServerEntitlements()
-    if (server && !server.gpxExport) {
-      onPremiumRequired?.()
-      return false
+    // Server is source of truth for Premium; Free trial stays local even if server says no GPX.
+    if (profile?.plan === 'premium') {
+      const server = await fetchServerEntitlements()
+      if (server && !server.gpxExport) {
+        onPremiumRequired?.()
+        return false
+      }
     }
     return true
   }
 
+  async function noteFreeTrialUsed() {
+    if (profile?.plan === 'premium') return
+    if (profile) {
+      try {
+        await authService.recordFreeGpxExport(profile.uid)
+        track('free_trial_used', { kind: 'gpx' })
+      } catch (err) {
+        console.warn('[gpx] free trial', err)
+      }
+      return
+    }
+    consumeGuestGpx()
+    track('free_trial_used', { kind: 'gpx', guest: true })
+  }
+
   async function download() {
-    if (!(await ensurePremium())) return
+    if (!(await ensureExportAllowed())) return
     downloadGpx(route)
+    await noteFreeTrialUsed()
     track('gpx_exported', { distance_m: route.stats.distanceMeters, method: 'download' })
-    setMessage('GPX descargado. Ábrelo con OsmAnd, Organic Maps, Garmin Connect o Wahoo.')
+    setMessage(
+      profile?.plan === 'premium'
+        ? 'GPX descargado. Ábrelo con OsmAnd, Organic Maps, Garmin Connect o Wahoo.'
+        : 'GPX descargado · prueba Free de esta semana.',
+    )
   }
 
   async function shareToApps() {
-    if (!(await ensurePremium())) return
+    if (!(await ensureExportAllowed())) return
     const { file } = buildGpxFile(route)
     try {
       if (canShareFiles && navigator.canShare?.({ files: [file] })) {
@@ -105,6 +131,7 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
           title: route.title,
           text: 'Ruta PedalMap (GPX)',
         })
+        await noteFreeTrialUsed()
         track('gpx_exported', { distance_m: route.stats.distanceMeters, method: 'share' })
         setMessage('Elige OsmAnd, Organic Maps, Garmin, Wahoo u otra app GPS en el menú compartir.')
         return
@@ -117,24 +144,30 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
     }
   }
 
+  const trialHint =
+    profile?.plan === 'premium'
+      ? null
+      : freeGpxRemaining(profile) > 0
+        ? `Free: ${freeGpxRemaining(profile)} GPX esta semana.`
+        : 'Free: GPX de esta semana usado. Premium = ilimitado.'
+
   return (
-    <section className="space-y-3 rounded-2xl bg-white/85 p-3 ring-1 ring-[var(--color-fog)]">
+    <section className="space-y-3">
       <div>
         <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
-          Exportar a GPS / apps
+          Exportar a GPS
         </h2>
-        <p className="text-xs text-[var(--color-stone)]">
-          GPX estándar hacia apps gratuitas o freemium. En el móvil, “Enviar a app” abre el menú del
-          sistema para cargarlo directo en tu GPS o app.
+        <p className="mt-1 text-xs leading-relaxed text-[var(--color-stone)]">
+          GPX hacia OsmAnd, Organic Maps, Garmin o Wahoo.
         </p>
-        <p className="mt-2 rounded-xl bg-[var(--color-mist)]/70 px-3 py-2 text-xs text-[var(--color-forest)]">
-          Free: planifica y guarda con límites. Descargar o enviar el GPX requiere Premium.
-        </p>
+        {trialHint && (
+          <p className="mt-2 text-[11px] text-[var(--color-trail)]">{trialHint}</p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => void shareToApps()}>
-          Enviar a app GPS
+          Enviar a app
         </Button>
         <Button variant="ghost" onClick={() => void download()}>
           Descargar GPX
@@ -143,18 +176,15 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
 
       {message && <p className="text-xs text-[var(--color-trail)]">{message}</p>}
 
-      <ul className="space-y-2">
+      <ul className="space-y-1.5">
         {FREE_GPS_APPS.map((app) => (
-          <li
-            key={app.id}
-            className="flex items-start justify-between gap-2 rounded-xl bg-[color-mix(in_oklab,var(--color-mist)_50%,white)] px-3 py-2"
-          >
+          <li key={app.id} className="flex items-baseline justify-between gap-2 py-1">
             <div>
-              <p className="text-sm font-semibold text-[var(--color-forest)]">{app.name}</p>
+              <p className="text-sm font-medium text-[var(--color-forest)]">{app.name}</p>
               <p className="text-[11px] text-[var(--color-stone)]">{app.blurb}</p>
             </div>
             <a
-              className="shrink-0 text-xs font-semibold text-[var(--color-trail)] underline"
+              className="shrink-0 text-xs font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
               href={app.url}
               target="_blank"
               rel="noreferrer"
@@ -177,12 +207,18 @@ export function GPXExporter({ route, onPremiumRequired }: GpsExportPanelProps) {
       onPremiumRequired?.()
       return
     }
-    const server = await fetchServerEntitlements()
-    if (server && !server.gpxExport) {
-      onPremiumRequired?.()
-      return
+    if (profile?.plan === 'premium') {
+      const server = await fetchServerEntitlements()
+      if (server && !server.gpxExport) {
+        onPremiumRequired?.()
+        return
+      }
     }
     downloadGpx(route)
+    if (profile && profile.plan !== 'premium') {
+      void authService.recordFreeGpxExport(profile.uid).catch(() => undefined)
+      track('free_trial_used', { kind: 'gpx' })
+    }
     track('gpx_exported', { distance_m: route.stats.distanceMeters, method: 'download' })
   }
 

@@ -221,20 +221,40 @@ export function ReadyRoutePage() {
     setSaveBusy(true)
     setMessage(null)
     try {
+      const draftToSave: RouteDraft =
+        selectedWindWindow && draft
+          ? {
+              ...draft,
+              bestWindWindow: {
+                startHour: selectedWindWindow.startHour,
+                endHour: selectedWindWindow.endHour,
+                score: selectedWindWindow.score,
+                label: selectedWindWindow.label,
+                caption: formatWeatherWindowCaption(
+                  selectedWindWindow.startHour,
+                  selectedWindWindow.endHour,
+                ),
+              },
+            }
+          : draft
       if (packet?.savedRouteId) {
-        await routeRepository.update(packet.savedRouteId, user.uid, draft)
+        await routeRepository.update(packet.savedRouteId, user.uid, draftToSave)
         setMessage('Ruta actualizada en Mis rutas.')
       } else {
-        const saved = await routeRepository.save(user.uid, draft, { isPublic: false })
+        const saved = await routeRepository.save(user.uid, draftToSave, { isPublic: false })
         const next = {
-          draft,
+          draft: draftToSave,
           savedRouteId: saved.id,
           shareSlug: saved.shareSlug ?? null,
           source: 'saved' as const,
         }
         stashReadyRoute(next)
         setPacket(next)
-        setMessage('Ruta guardada en Mis rutas.')
+        setMessage(
+          draftToSave.bestWindWindow
+            ? `Guardada · mejor ventana ${draftToSave.bestWindWindow.caption}`
+            : 'Ruta guardada en Mis rutas.',
+        )
       }
       track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'ready_route' })
     } catch (error) {

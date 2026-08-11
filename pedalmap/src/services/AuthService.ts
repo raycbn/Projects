@@ -24,6 +24,7 @@ import { requestGoogleAccessToken } from '@/lib/googleIdentity'
 import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
 import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
+import { isoWeekKey, utcMonthKey } from '@/lib/freemium'
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
@@ -337,7 +338,7 @@ export class AuthService {
   async recordRouteCreated(uid: string): Promise<void> {
     const ref = doc(getDb(), 'users', uid)
     const snap = await getDoc(ref)
-    const key = `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}`
+    const key = utcMonthKey()
     const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
       routesCreatedThisMonth: 0,
       routesSaved: 0,
@@ -349,9 +350,12 @@ export class AuthService {
       ref,
       {
         usage: {
+          ...usage,
           routesCreatedThisMonth: created,
           routesSaved: usage.routesSaved ?? 0,
           monthKey: key,
+          // Month rollover resets soft Objetivo trial.
+          freeCircularUsedThisMonth: usage.monthKey === key ? (usage.freeCircularUsedThisMonth ?? 0) : 0,
         },
         updatedAt: serverTimestamp(),
       },
@@ -365,7 +369,7 @@ export class AuthService {
     const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
       routesCreatedThisMonth: 0,
       routesSaved: 0,
-      monthKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}`,
+      monthKey: utcMonthKey(),
     }
     await setDoc(
       ref,
@@ -386,7 +390,7 @@ export class AuthService {
     const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
       routesCreatedThisMonth: 0,
       routesSaved: 0,
-      monthKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, '0')}`,
+      monthKey: utcMonthKey(),
     }
     await setDoc(
       ref,
@@ -394,6 +398,58 @@ export class AuthService {
         usage: {
           ...usage,
           routesSaved: Math.max(0, (usage.routesSaved ?? 0) - 1),
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
+
+  /** Soft Free trial: count one weekly GPX export (Premium skips). */
+  async recordFreeGpxExport(uid: string): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    const snap = await getDoc(ref)
+    const week = isoWeekKey()
+    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
+      routesCreatedThisMonth: 0,
+      routesSaved: 0,
+      monthKey: utcMonthKey(),
+    }
+    const used = usage.freeGpxWeekKey === week ? (usage.freeGpxUsedThisWeek ?? 0) : 0
+    await setDoc(
+      ref,
+      {
+        usage: {
+          ...usage,
+          freeGpxWeekKey: week,
+          freeGpxUsedThisWeek: used + 1,
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
+
+  /** Soft Free trial: count one Objetivo create this month (Premium skips). */
+  async recordFreeCircularUsed(uid: string): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    const snap = await getDoc(ref)
+    const key = utcMonthKey()
+    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
+      routesCreatedThisMonth: 0,
+      routesSaved: 0,
+      monthKey: key,
+    }
+    const sameMonth = usage.monthKey === key
+    const used = sameMonth ? (usage.freeCircularUsedThisMonth ?? 0) : 0
+    await setDoc(
+      ref,
+      {
+        usage: {
+          ...usage,
+          monthKey: key,
+          routesCreatedThisMonth: sameMonth ? (usage.routesCreatedThisMonth ?? 0) : 0,
+          freeCircularUsedThisMonth: used + 1,
         },
         updatedAt: serverTimestamp(),
       },

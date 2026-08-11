@@ -17,8 +17,10 @@ describe('buildRouteShareText', () => {
     } as RouteDraft
     const text = buildRouteShareText(draft, 'https://pedalmap.es/route/daganzo-abc123')
     expect(text).toContain('https://pedalmap.es/route/daganzo-abc123')
+    expect(text).toContain('utm_source=share')
     expect(text).toContain('Daganzo loop')
-    expect(text).toMatch(/Ábrela en PedalMap/)
+    expect(text).toMatch(/Hecha con PedalMap/)
+    expect(text).toMatch(/Crea la tuya gratis/)
     expect(buildWhatsAppShareUrl(text)).toContain('wa.me')
     expect(buildWhatsAppShareUrl(text)).toContain(
       encodeURIComponent('https://pedalmap.es/route/daganzo-abc123'),

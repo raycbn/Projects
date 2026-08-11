@@ -157,6 +157,7 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     // Lean surface attrs so Abrir guardada keeps the paint overlay.
     surfaceEdges: surfaceEdges.length ? surfaceEdges : undefined,
     selectedOptionId: draft.selectedOptionId,
+    bestWindWindow: draft.bestWindWindow,
   })
 }
 
@@ -515,6 +516,10 @@ export class RouteRepository {
       elevationProfile: (data.elevationProfile as SavedRoute['elevationProfile']) ?? [],
       stats: data.stats as SavedRoute['stats'],
       circularDistanceMeters: data.circularDistanceMeters as number | undefined,
+      targetElevationGainMeters: data.targetElevationGainMeters as number | undefined,
+      instructions: data.instructions as SavedRoute['instructions'] | undefined,
+      surfaceEdges: data.surfaceEdges as SavedRoute['surfaceEdges'] | undefined,
+      bestWindWindow: data.bestWindWindow as SavedRoute['bestWindWindow'] | undefined,
       isPublic: Boolean(data.isPublic),
       shareSlug: data.shareSlug ? String(data.shareSlug) : undefined,
       createdAt: toIso(data.createdAt as Timestamp | string | undefined),

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { track } from '@/lib/analytics'
+import { FREE_TRIALS } from '@/domain/types'
 
 interface PremiumCardProps {
   reason?: string | null
@@ -10,70 +11,76 @@ interface PremiumCardProps {
 export function PremiumCard({ reason, onClose }: PremiumCardProps) {
   const title =
     reason === 'guest_limit'
-      ? 'Has usado el cupo de invitado en este dispositivo'
+      ? 'Cupo de invitado agotado en este dispositivo'
       : reason === 'circular_premium'
-        ? 'Las rutas circulares avanzadas son Premium'
+        ? 'Tu Objetivo gratis de este mes ya está usado'
         : reason === 'gpx_export'
-          ? 'La exportación GPX es Premium'
+          ? 'Tu GPX gratis de esta semana ya está usado'
           : reason === 'filter_limit'
             ? 'Free permite hasta 2 filtros a la vez'
-            : 'Has llegado al límite de rutas gratuitas'
+            : reason === 'save_limit'
+              ? 'Has llegado al límite de rutas guardadas'
+              : 'Has llegado a un límite Free'
+
+  const body =
+    reason === 'circular_premium'
+      ? `Free incluye ${FREE_TRIALS.circularPerMonth} Objetivo al mes para probar. Premium deja Objetivo ilimitado, además de GPX y guardados sin techo.`
+      : reason === 'gpx_export'
+        ? `Free incluye ${FREE_TRIALS.gpxPerWeek} GPX a la semana. Premium exporta sin límite a Garmin, Wahoo y apps.`
+        : reason === 'filter_limit'
+          ? 'Desactiva un filtro o pasa a Premium para combinar más de 2.'
+          : reason === 'guest_limit'
+            ? 'Entra o crea cuenta para seguir creando rutas Free este mes.'
+            : reason === 'save_limit'
+              ? 'Free guarda hasta 5 rutas. Premium las guarda todas.'
+              : 'Desbloquea PedalMap Premium cuando quieras planificar sin fricciones.'
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[color-mix(in_oklab,black_28%,transparent)] p-4 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="premium-title"
-      onClick={onClose}
     >
-      <div
-        className="w-full max-w-md animate-rise rounded-t-3xl bg-[var(--color-panel)] p-6 text-white shadow-2xl safe-pb sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
+      <div className="w-full max-w-md animate-rise rounded-[1.75rem] bg-[var(--color-panel)] p-6 text-white shadow-xl">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-signal)]/90">
           PedalMap Premium
         </p>
-        <h2 id="premium-title" className="mt-2 font-display text-2xl font-extrabold">
+        <h2 id="premium-title" className="mt-2 font-display text-2xl font-extrabold leading-tight">
           {title}
         </h2>
-        <p className="mt-2 text-sm text-white/75">
-          {reason === 'circular_premium'
-            ? 'Puedes seguir con A → B o Ida y vuelta en Free. Objetivo (km + desnivel) es Premium.'
-            : reason === 'filter_limit'
-              ? 'Desactiva un filtro o pasa a Premium para combinar más de 2.'
-              : reason === 'guest_limit'
-                ? 'Entra o crea cuenta para seguir creando rutas Free este mes.'
-                : 'Desbloquea lo que necesitas en el momento del valor.'}
-        </p>
-        <ul className="mt-4 space-y-2 text-sm">
-          {['Rutas ilimitadas', 'GPX a tu GPS', 'Objetivo avanzado'].map((item) => (
+        <p className="mt-3 text-sm leading-relaxed text-white/70">{body}</p>
+        <ul className="mt-5 space-y-2 text-sm text-white/80">
+          {[
+            'Rutas y guardados ilimitados',
+            'GPX ilimitado a tu GPS',
+            'Objetivo ilimitado',
+            'Más de 2 filtros a la vez',
+          ].map((item) => (
             <li key={item} className="flex gap-2">
               <span className="text-[var(--color-signal)]" aria-hidden>
-                ✓
+                ·
               </span>
               <span>{item}</span>
             </li>
           ))}
         </ul>
-        <div className="mt-6 space-y-2">
+        <div className="mt-6 flex flex-wrap gap-2">
           <Link
             to="/premium"
-            className="block"
             onClick={() => track('premium_clicked', { reason: reason ?? 'unknown' })}
           >
-            <Button className="w-full">Ver Premium</Button>
+            <Button>Ver Premium</Button>
           </Link>
           {onClose && (
-            <Button
-              variant="ghost"
-              className="w-full !border-white/20 !text-white"
-              onClick={onClose}
-            >
-              Ahora no
+            <Button variant="ghost" className="!text-white/90 !border-white/15" onClick={onClose}>
+              Seguir
             </Button>
           )}
         </div>
+        <p className="mt-4 text-[11px] leading-relaxed text-white/45">
+          Free ya incluye 1 GPX/semana y 1 Objetivo/mes. Premium quita los topes.
+        </p>
       </div>
     </div>
   )

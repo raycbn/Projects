@@ -21,6 +21,7 @@ import { RoutingError } from '@/domain/types'
 import { routeService } from '@/services/RouteService'
 import { track } from '@/lib/analytics'
 import { canCreateRoute, canUseAdvancedCircular, clampPreferencesForPlan } from '@/services/EntitlementService'
+import { consumeGuestCircular } from '@/lib/freemium'
 import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
 import { loadCloudDraft, saveCloudDraft, clearCloudDraft } from '@/services/DraftRepository'
@@ -268,10 +269,13 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       const liveProfile = profile ?? (await peekLiveProfile())
       const entitlement = canCreateRoute(liveProfile, guestCreates)
       if (!entitlement.ok) {
-        setPaywallReason(entitlement.reason ?? 'create_limit')
+        const reason = entitlement.reason ?? 'create_limit'
+        track('paywall_shown', { reason })
+        setPaywallReason(reason)
         return null
       }
       if (routeType === 'circular' && !canUseAdvancedCircular(liveProfile)) {
+        track('paywall_shown', { reason: 'circular_premium' })
         setPaywallReason('circular_premium')
         return null
       }
@@ -323,6 +327,20 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           const nextGuest = guestCreates + 1
           setGuestCreates(nextGuest)
           writeGuestCreates(nextGuest)
+        }
+        // Soft Free trial: count Objetivo when the user is not Premium.
+        if (routeType === 'circular') {
+          if (liveProfile?.plan === 'premium') {
+            /* unlimited */
+          } else if (user && !user.isAnonymous && liveProfile) {
+            void authService.recordFreeCircularUsed(user.uid).catch((err) => {
+              console.warn('[planner] free circular', err)
+            })
+            track('free_trial_used', { kind: 'circular' })
+          } else {
+            consumeGuestCircular()
+            track('free_trial_used', { kind: 'circular', guest: true })
+          }
         }
         track('route_created', {
           distance_km: Math.round(result.stats.distanceMeters / 1000),
@@ -457,7 +475,10 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       },
       setHoverPoint,
       clearPaywall: () => setPaywallReason(null),
-      showPaywall: (reason) => setPaywallReason(reason),
+      showPaywall: (reason) => {
+        track('paywall_shown', { reason })
+        setPaywallReason(reason)
+      },
       setStart(position, name) {
         setWaypoints((prev) => {
           const rest = prev.filter((w) => w.kind !== 'start')

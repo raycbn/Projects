@@ -127,6 +127,14 @@ export interface RouteDraft {
   selectedOptionId?: string
   /** @deprecated Prefer routeOptions; kept as non-selected extras for older clients. */
   alternatives?: RouteAlternative[]
+  /** Snapshot of the best ride window when the user saved (retention cue). */
+  bestWindWindow?: {
+    startHour: string
+    endHour: string
+    score: number
+    label: string
+    caption: string
+  }
 }
 
 export interface SavedRoute extends RouteDraft {
@@ -156,6 +164,11 @@ export interface UserProfile {
     routesCreatedThisMonth: number
     routesSaved: number
     monthKey: string
+    /** Soft Free trial: ISO week of last counted GPX export. */
+    freeGpxWeekKey?: string
+    freeGpxUsedThisWeek?: number
+    /** Soft Free trial: Objetivos used in the current monthKey. */
+    freeCircularUsedThisMonth?: number
   }
   createdAt: string
   updatedAt: string
@@ -175,11 +188,17 @@ export const FREE_LIMITS: FreemiumLimits = {
   maxRoutesSaved: 5,
   maxRoutesCreatedPerMonth: 15,
   gpxExport: false,
-  /** Objetivo circular (km + desnivel) es Premium; invitados = Free (sin Objetivo avanzado). */
+  /** Objetivo circular (km + desnivel) es Premium; Free incluye 1 prueba/mes. */
   advancedCircular: false,
   advancedFilters: false,
   maxActivePreferences: 2,
 }
+
+/** Soft Free trials — taste Premium without a hard wall. */
+export const FREE_TRIALS = {
+  gpxPerWeek: 1,
+  circularPerMonth: 1,
+} as const
 
 export const PREMIUM_LIMITS: FreemiumLimits = {
   maxRoutesSaved: Number.POSITIVE_INFINITY,

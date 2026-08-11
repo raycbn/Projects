@@ -98,7 +98,7 @@ export function MyRoutesPage() {
           }}
           onExport={(route) => {
             if (!canExportGpx(profile)) {
-              alert('La exportación GPX forma parte de Premium.')
+              alert('Tu GPX Free de esta semana ya está usado. Premium = ilimitado.')
               return
             }
             const xml = exportRouteToGpx(route)
@@ -109,6 +109,12 @@ export function MyRoutesPage() {
             a.download = `${route.shareSlug || route.id}.gpx`
             a.click()
             URL.revokeObjectURL(url)
+            if (profile && profile.plan !== 'premium') {
+              void import('@/services/AuthService').then(({ authService }) =>
+                authService.recordFreeGpxExport(profile.uid).catch(() => undefined),
+              )
+              track('free_trial_used', { kind: 'gpx' })
+            }
             track('gpx_exported')
           }}
         />

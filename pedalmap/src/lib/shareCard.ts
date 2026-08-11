@@ -61,8 +61,11 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
   ctx.font = '500 24px DM Sans, sans-serif'
   const footer =
     shareUrl?.replace(/^https?:\/\//, '') ||
-    (typeof window !== 'undefined' ? window.location.host : 'pedalmap.app')
-  ctx.fillText(truncate(footer, 48), 72, size - 72)
+    (typeof window !== 'undefined' ? window.location.host : 'pedalmap.es')
+  ctx.fillText(truncate(footer, 48), 72, size - 110)
+  ctx.fillStyle = 'rgba(214,255,75,0.85)'
+  ctx.font = '600 22px DM Sans, sans-serif'
+  ctx.fillText('Hecha con PedalMap · pedalmap.es', 72, size - 64)
 
   return await new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo generar la imagen'))), 'image/png')
@@ -70,13 +73,28 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
 }
 
 /** WhatsApp often drops `url` when files are attached — keep the link inside `text`. */
+export function withShareUtm(url: string): string {
+  try {
+    const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'https://pedalmap.es')
+    if (!u.searchParams.has('utm_source')) u.searchParams.set('utm_source', 'share')
+    if (!u.searchParams.has('utm_medium')) u.searchParams.set('utm_medium', 'whatsapp')
+    if (!u.searchParams.has('utm_campaign')) u.searchParams.set('utm_campaign', 'route_card')
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
 export function buildRouteShareText(draft: RouteDraft, url: string): string {
+  const shareUrl = withShareUtm(url)
   const lines = [
     draft.title || 'Ruta PedalMap',
     `${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)} · ${formatMinutes(draft.stats.estimatedDurationSeconds)} · ${bikeLabel(draft.bikeType)}`,
     '',
-    'Ábrela en PedalMap (mapa, desnivel y datos):',
-    url,
+    'Hecha con PedalMap · ábrela (mapa, desnivel y viento):',
+    shareUrl,
+    '',
+    'Crea la tuya gratis en pedalmap.es',
   ]
   return lines.join('\n')
 }

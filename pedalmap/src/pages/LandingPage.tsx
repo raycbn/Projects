@@ -14,7 +14,7 @@ const faqs = [
   },
   {
     q: '¿Cómo crear una ruta GPX?',
-    a: 'Tras calcular la ruta, en el panel de exportación puedes descargar o compartir el GPX (Premium). En Free puedes planificar y guardar con límites.',
+    a: 'Tras calcular la ruta, exporta GPX (1 gratis por semana en Free; ilimitado en Premium).',
   },
   {
     q: '¿Cómo calcular el desnivel?',
@@ -22,11 +22,11 @@ const faqs = [
   },
   {
     q: '¿Cómo crear una ruta circular u Objetivo?',
-    a: 'Objetivo es Premium. Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular con Valhalla primero (perfil de bici + superficie), buscando el mejor ajuste.',
+    a: 'Objetivo incluye 1 prueba Free al mes. Elige el modo Objetivo, indica el punto de partida, los km y el desnivel. Generamos una circular con Valhalla primero (perfil de bici + superficie). Premium = Objetivo ilimitado.',
   },
   {
     q: '¿Free o Premium?',
-    a: `Free: hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones/mes y ${FREE_LIMITS.maxActivePreferences} filtros a la vez. Premium: ilimitado, GPX y más.`,
+    a: `Free: hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones/mes, 1 GPX/semana, 1 Objetivo/mes y ${FREE_LIMITS.maxActivePreferences} filtros a la vez. Premium: sin techos.`,
   },
 ]
 

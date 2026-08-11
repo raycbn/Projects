@@ -6,11 +6,14 @@ import {
   canSaveRoute,
   canUseAdvancedCircular,
   clampPreferencesForPlan,
+  freeCircularRemaining,
+  freeGpxRemaining,
   maxActivePreferences,
 } from '@/services/EntitlementService'
 import type { UserProfile } from '@/domain/types'
 import { computeActivityStats } from '@/services/ActivityRepository'
-import { FREE_LIMITS } from '@/domain/types'
+import { FREE_LIMITS, FREE_TRIALS } from '@/domain/types'
+import { isoWeekKey, utcMonthKey } from '@/lib/freemium'
 
 function profile(partial: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -20,7 +23,7 @@ function profile(partial: Partial<UserProfile> = {}): UserProfile {
     photoURL: null,
     plan: 'free',
     bikePreferences: { bikeType: 'road', preferences: [] },
-    usage: { routesCreatedThisMonth: 0, routesSaved: 0, monthKey: '2026-08' },
+    usage: { routesCreatedThisMonth: 0, routesSaved: 0, monthKey: utcMonthKey() },
     createdAt: '',
     updatedAt: '',
     ...partial,
@@ -37,19 +40,41 @@ describe('entitlements', () => {
   it('blocks free save limit', () => {
     expect(
       canSaveRoute(
-        profile({ usage: { routesCreatedThisMonth: 0, routesSaved: 5, monthKey: '2026-08' } }),
+        profile({ usage: { routesCreatedThisMonth: 0, routesSaved: 5, monthKey: utcMonthKey() } }),
       ).ok,
     ).toBe(false)
   })
 
-  it('allows premium gpx export only', () => {
-    expect(canExportGpx(profile({ plan: 'free' }))).toBe(false)
+  it('allows free weekly GPX trial then blocks', () => {
+    const fresh = profile()
+    expect(canExportGpx(fresh)).toBe(true)
+    expect(freeGpxRemaining(fresh)).toBe(FREE_TRIALS.gpxPerWeek)
+    const used = profile({
+      usage: {
+        routesCreatedThisMonth: 0,
+        routesSaved: 0,
+        monthKey: utcMonthKey(),
+        freeGpxWeekKey: isoWeekKey(),
+        freeGpxUsedThisWeek: 1,
+      },
+    })
+    expect(canExportGpx(used)).toBe(false)
     expect(canExportGpx(profile({ plan: 'premium' }))).toBe(true)
   })
 
-  it('gates advanced circular for free signed-in users and guests', () => {
-    expect(canUseAdvancedCircular(null)).toBe(false)
-    expect(canUseAdvancedCircular(profile({ plan: 'free' }))).toBe(false)
+  it('allows one free Objetivo per month', () => {
+    expect(canUseAdvancedCircular(null)).toBe(true)
+    expect(canUseAdvancedCircular(profile())).toBe(true)
+    expect(freeCircularRemaining(profile())).toBe(FREE_TRIALS.circularPerMonth)
+    const used = profile({
+      usage: {
+        routesCreatedThisMonth: 1,
+        routesSaved: 0,
+        monthKey: utcMonthKey(),
+        freeCircularUsedThisMonth: 1,
+      },
+    })
+    expect(canUseAdvancedCircular(used)).toBe(false)
     expect(canUseAdvancedCircular(profile({ plan: 'premium' }))).toBe(true)
   })
 

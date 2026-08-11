@@ -40,7 +40,7 @@ export function RouteCard({
   }, [menuOpen])
 
   return (
-    <article className="flex flex-col gap-3 rounded-3xl bg-white/80 p-4 ring-1 ring-[var(--color-fog)] transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="flex flex-col gap-3 rounded-[1.5rem] bg-white/70 p-4 ring-1 ring-[var(--color-fog)]/70 transition hover:bg-white/90">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">{route.title}</h3>
@@ -50,6 +50,12 @@ export function RouteCard({
             {formatDuration(route.stats.estimatedDurationSeconds)} ·{' '}
             {difficultyLabel(route.stats.difficulty)}
           </p>
+          {route.bestWindWindow?.caption ? (
+            <p className="mt-1.5 text-xs text-[var(--color-trail)]">
+              Mejor salida · {route.bestWindWindow.caption}
+              {route.bestWindWindow.score != null ? ` · ${route.bestWindWindow.score}/100` : ''}
+            </p>
+          ) : null}
           {route.isPublic && (
             <p className="mt-1 text-xs font-medium text-[var(--color-trail)]">Pública</p>
           )}

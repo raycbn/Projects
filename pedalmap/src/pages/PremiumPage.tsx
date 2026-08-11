@@ -119,50 +119,67 @@ export function PremiumPage() {
       <h1 className="mt-2 font-display text-4xl font-extrabold text-[var(--color-forest)]">
         PedalMap Premium
       </h1>
-      <p className="mt-3 max-w-2xl text-[var(--color-stone)]">
-        Tres cosas claras: rutas sin techo, GPX a tu GPS y Objetivo avanzado.
+      <p className="mt-3 max-w-xl text-[var(--color-stone)] leading-relaxed">
+        Free ya deja probar: 1 GPX a la semana y 1 Objetivo al mes. Premium quita los topes.
       </p>
 
       {isPremium && (
-        <p className="mt-4 rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_28%,white)] px-4 py-3 text-sm font-semibold text-[var(--color-forest)]">
+        <p className="mt-4 text-sm font-medium text-[var(--color-forest)]">
           Tu cuenta es Premium{profile?.email ? ` (${profile.email})` : ''}.
         </p>
       )}
 
-      <div className="mt-8 max-w-lg rounded-3xl bg-[var(--color-panel)] p-6 text-white">
-        <h2 className="font-display text-2xl font-bold text-[var(--color-signal)]">Premium</h2>
-        <ul className="mt-4 space-y-2 text-sm text-white/85">
-          <li>Rutas ilimitadas</li>
-          <li>Exportación GPX a Garmin, Wahoo y apps</li>
-          <li>Modo Objetivo (circular km + desnivel)</li>
-        </ul>
-        <p className="mt-5 text-sm text-white/70">4,99 €/mes · 39,99 €/año</p>
-        <div className="mt-4 space-y-2">
-          <Button
-            className="w-full"
-            disabled={busy || isPremium}
-            onClick={() => void startCheckout('year')}
-          >
-            Anual 39,99 €
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full !border-white/40 !text-white"
-            disabled={busy || isPremium}
-            onClick={() => void startCheckout('month')}
-          >
-            Mensual 4,99 €
-          </Button>
-          {isPremium && (
+      <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="rounded-[1.75rem] bg-[color-mix(in_oklab,var(--color-mist)_55%,white)] p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-stone)]">
+            Free
+          </p>
+          <ul className="mt-4 space-y-2 text-sm text-[var(--color-forest)]/90">
+            <li>Hasta 5 rutas guardadas</li>
+            <li>15 creaciones / mes</li>
+            <li>1 GPX / semana · 1 Objetivo / mes</li>
+            <li>2 filtros a la vez</li>
+          </ul>
+        </div>
+
+        <div className="rounded-[1.75rem] bg-[var(--color-panel)] p-6 text-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
+            Premium
+          </p>
+          <ul className="mt-4 space-y-2 text-sm text-white/85">
+            <li>Rutas y guardados ilimitados</li>
+            <li>GPX ilimitado a Garmin / Wahoo / apps</li>
+            <li>Objetivo ilimitado</li>
+            <li>Filtros sin techo</li>
+          </ul>
+          <p className="mt-5 text-sm text-white/65">4,99 €/mes · 39,99 €/año</p>
+          <div className="mt-4 space-y-2">
+            <Button
+              className="w-full"
+              disabled={busy || isPremium}
+              onClick={() => void startCheckout('year')}
+            >
+              Anual 39,99 €
+            </Button>
             <Button
               variant="ghost"
-              className="w-full !border-white/40 !text-white"
-              disabled={busy}
-              onClick={() => void openPortal()}
+              className="w-full !border-white/30 !text-white"
+              disabled={busy || isPremium}
+              onClick={() => void startCheckout('month')}
             >
-              Gestionar suscripción
+              Mensual 4,99 €
             </Button>
-          )}
+            {isPremium && (
+              <Button
+                variant="ghost"
+                className="w-full !border-white/30 !text-white"
+                disabled={busy}
+                onClick={() => void openPortal()}
+              >
+                Gestionar suscripción
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
