@@ -15,6 +15,7 @@ import { formatDistance, formatElevation } from '@/lib/stats'
 import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
 import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
+import { getBikeModality } from '@/lib/bikeSurfaceProfile'
 import type { RouteType } from '@/domain/types'
 import clsx from 'clsx'
 
@@ -83,6 +84,7 @@ export function RoutePlanner() {
 
   const isTrace = routeType === 'map_trace'
   const activeDraft = editDraft ?? draft
+  const bikeModality = getBikeModality(bikeType)
 
   // Trazar = mapa protagonista; al salir del modo, colapsar.
   useEffect(() => {
@@ -200,12 +202,12 @@ export function RoutePlanner() {
   }
 
   function handlePickCompare(row: BikeCompareRow) {
-    setBikeType(row.bikeType)
     setCompareRows(null)
     const cleaned = {
       ...row.draft,
       title: row.draft.title.replace(/ · comparación$/i, ''),
     }
+    // setDraftFromImport also applies bikeType — avoid setBikeType (clears draft).
     setDraftFromImport(cleaned)
     stashReadyRoute({ draft: cleaned, source: 'calculate' })
     navigate('/ruta')
@@ -214,11 +216,11 @@ export function RoutePlanner() {
   const ctaDisabled = status === 'calculating' || goingToReady || !canCalculate
   const ctaLabel =
     status === 'calculating' || goingToReady
-      ? 'Calculando…'
+      ? `Optimizando · ${bikeModality.label}…`
       : activeDraft
-        ? 'Recalcular ruta'
+        ? `Recalcular · ${bikeModality.label}`
         : isTrace
-          ? 'Calcular ruta trazada'
+          ? `Calcular · ${bikeModality.label}`
           : 'Crear ruta'
 
   const modeChips = (
@@ -277,8 +279,8 @@ export function RoutePlanner() {
           </div>
 
           {status === 'calculating' && (
-            <p className="pointer-events-none absolute left-3 top-24 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
-              Encajando tu trazado en la red ciclista…
+            <p className="pointer-events-none absolute left-3 top-24 z-10 max-w-[min(92%,20rem)] rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
+              Buscando mejores caminos y superficie para {bikeModality.label}…
             </p>
           )}
         </div>
@@ -292,7 +294,7 @@ export function RoutePlanner() {
           <div className="flex items-center justify-between gap-2 border-b border-[var(--color-fog)] px-4 py-2">
             <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--color-forest)]">
               {status === 'calculating'
-                ? 'Calculando…'
+                ? `Optimizando · ${bikeModality.label}`
                 : tapHint ?? 'Trazar en mapa'}
             </p>
             <button
@@ -310,7 +312,9 @@ export function RoutePlanner() {
                 Trazar en mapa
               </h1>
               <p className="mt-0.5 text-sm text-[var(--color-stone)]">
-                Toca puntos como en Strava. PedalMap encaja la ruta por carreteras ciclables.
+                Toca puntos como en Strava. PedalMap busca la mejor red para{' '}
+                <strong className="text-[var(--color-forest)]">{bikeModality.label}</strong>
+                {' '}(superficie y tipo de vía), no solo la línea recta.
               </p>
             </div>
 
@@ -372,6 +376,13 @@ export function RoutePlanner() {
 
             <BikeSelector value={bikeType} onChange={setBikeType} />
 
+            <RoutePreferencesPanel
+              value={preferences}
+              onChange={setPreferences}
+              profile={profile}
+              onLimitReached={(reason) => showPaywall(reason)}
+            />
+
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -379,7 +390,7 @@ export function RoutePlanner() {
                 checked={wantAlternatives}
                 onChange={(e) => setWantAlternatives(e.target.checked)}
               />
-              Pedir varias opciones (hasta 3)
+              Pedir varias opciones y elegir la mejor superficie (hasta 3)
             </label>
 
             {errorMessage && (
@@ -393,12 +404,54 @@ export function RoutePlanner() {
 
             {activeDraft && (
               <div className="space-y-2">
+                {activeDraft.stats.surfaceStats?.suitability && (
+                  <p className="rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_22%,white)] px-3 py-2 text-xs font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-trail)]/25">
+                    Aptitud {bikeModality.label}:{' '}
+                    {activeDraft.stats.surfaceStats.suitability.label.replaceAll('_', ' ')} ·{' '}
+                    {Math.round(activeDraft.stats.surfaceStats.suitability.score)}/100
+                    {activeDraft.stats.surfaceStats.suitability.notes[0]
+                      ? ` · ${activeDraft.stats.surfaceStats.suitability.notes[0]}`
+                      : ''}
+                  </p>
+                )}
                 <RouteSummary stats={activeDraft.stats} />
                 {surfaceAlert && (
                   <p className="rounded-2xl bg-[#fff8f0] px-3 py-2 text-xs text-[#9a4b00]">
                     {surfaceAlert}
                   </p>
                 )}
+
+                {(draft?.routeOptions?.length ?? 0) > 1 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                      Mejores opciones para {bikeModality.label}
+                    </p>
+                    {draft!.routeOptions!.map((opt) => {
+                      const active =
+                        (draft!.selectedOptionId ?? draft!.routeOptions![0]?.id) === opt.id
+                      const score = opt.stats.surfaceStats?.suitability?.score
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className={clsx(
+                            'w-full rounded-xl px-3 py-2 text-left text-xs ring-1 transition',
+                            active
+                              ? 'bg-[var(--color-signal)] font-semibold ring-[var(--color-trail)]'
+                              : 'bg-[var(--color-mist)] font-semibold ring-[var(--color-fog)]',
+                          )}
+                          onClick={() => selectRouteOption(opt.id)}
+                        >
+                          {opt.label}
+                          {active ? ' · activa' : ''} · {formatDistance(opt.stats.distanceMeters)} ·{' '}
+                          {formatElevation(opt.stats.elevationGainMeters)}
+                          {score != null ? ` · aptitud ${Math.round(score)}` : ''}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
                 <Button
                   variant="secondary"
                   className="w-full"

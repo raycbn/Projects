@@ -168,8 +168,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PlannerStatus>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [routeType, setRouteTypeState] = useState<RouteType>('a_to_b')
-  const [bikeType, setBikeType] = useState<BikeType>('road')
-  const [preferences, setPreferences] = useState<RoutePreference[]>([])
+  const [bikeType, setBikeTypeState] = useState<BikeType>('road')
+  const [preferences, setPreferencesState] = useState<RoutePreference[]>([])
   const [waypoints, setWaypoints] = useState<Waypoint[]>([])
   const [draft, setDraft] = useState<RouteDraft | null>(null)
   const [editDraft, setEditDraft] = useState<RouteDraft | null>(null)
@@ -190,7 +190,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     if (last?.geometry?.coordinates?.length) {
       setDraft(last)
       setWaypoints(last.waypoints ?? [])
-      setBikeType(last.bikeType || 'road')
+      setBikeTypeState(last.bikeType || 'road')
       setRouteTypeState(last.type || 'a_to_b')
       if (last.circularDistanceMeters) setCircularDistanceMeters(last.circularDistanceMeters)
       if (last.targetElevationGainMeters !== undefined) {
@@ -203,8 +203,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!profile || hydratedProfile) return
-    setBikeType(profile.bikePreferences.bikeType || 'road')
-    setPreferences(profile.bikePreferences.preferences || [])
+    setBikeTypeState(profile.bikePreferences.bikeType || 'road')
+    setPreferencesState(profile.bikePreferences.preferences || [])
     setHydratedProfile(true)
     // Signed-in (incl. anonymous) uses Firestore usage — drop local guest counter.
     setGuestCreates(0)
@@ -233,7 +233,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       if (cancelled || !cloud?.geometry?.coordinates?.length) return
       setDraft(cloud)
       setWaypoints(cloud.waypoints ?? [])
-      setBikeType(cloud.bikeType || 'road')
+      setBikeTypeState(cloud.bikeType || 'road')
       setRouteTypeState(cloud.type || 'a_to_b')
       setStatus('success')
       persistDraft(cloud)
@@ -280,7 +280,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       try {
         const prefs = clampPreferencesForPlan(preferences, liveProfile)
         if (prefs.length !== preferences.length) {
-          setPreferences(prefs)
+          setPreferencesState(prefs)
           // Clamp silently — paywall already fired when the user toggled past the limit.
         }
         const result = await routeService.calculate({
@@ -400,8 +400,22 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           return prev
         })
       },
-      setBikeType,
-      setPreferences,
+      setBikeType(next) {
+        setBikeTypeState(next)
+        // Changing modality invalidates the previous geometry (different costing).
+        setDraft(null)
+        persistDraft(null, user && !user.isAnonymous ? user.uid : null)
+        setEditDraft(null)
+        setErrorMessage(null)
+        if (status === 'success' || status === 'editing') setStatus('idle')
+      },
+      setPreferences(next) {
+        setPreferencesState(next)
+        setDraft(null)
+        persistDraft(null, user && !user.isAnonymous ? user.uid : null)
+        setEditDraft(null)
+        if (status === 'success' || status === 'editing') setStatus('idle')
+      },
       setCircularDistanceMeters,
       setTargetElevationGainMeters,
       setWantAlternatives,
@@ -670,7 +684,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setDraft(next)
         persistDraft(next, user && !user.isAnonymous ? user.uid : null)
         setWaypoints(next.waypoints)
-        setBikeType(next.bikeType)
+        setBikeTypeState(next.bikeType)
         setRouteTypeState(next.type)
         setStatus('success')
         track('gpx_imported', { points: next.geometry.coordinates.length })
