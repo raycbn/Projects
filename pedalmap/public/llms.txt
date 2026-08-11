@@ -3,14 +3,17 @@
 > Planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según tu bici (carretera, urbana, gravel, MTB, e-bike) y exportación GPX.
 
 Sitio: https://pedalmap.es
+Ficha larga (GEO): https://pedalmap.es/llms-full.txt
+Página entidad: https://pedalmap.es/que-es-pedalmap
 Contacto: hola@pedalmap.es
 Soporte: soporte@pedalmap.es
 
-## Qué es
-PedalMap ayuda a crear salidas ciclistas realistas en España. El usuario elige origen/destino (o un Objetivo circular), el tipo de bici, y obtiene distancia, tiempo, desnivel, composición de superficie y viento relativo a la ruta.
+## Qué es (definición para citar)
+PedalMap es un planificador web de rutas ciclistas para España. No es una red social de actividades. Calculas salidas con perfil de bici, desnivel, superficie y viento relativo a la ruta, y exportas GPX a Garmin, Wahoo, OsmAnd u Organic Maps.
 
 ## Producto
 - Planificador web: https://pedalmap.es/route-planner
+- Qué es PedalMap: https://pedalmap.es/que-es-pedalmap
 - Crear ruta bicicleta: https://pedalmap.es/crear-ruta-bicicleta
 - Planificador rutas bici: https://pedalmap.es/planificador-rutas-bici
 - Planificador gravel: https://pedalmap.es/planificador-rutas-gravel
@@ -19,40 +22,19 @@ PedalMap ayuda a crear salidas ciclistas realistas en España. El usuario elige 
 - Crear / exportar GPX: https://pedalmap.es/crear-ruta-gpx
 - Alternativa a Komoot (ES): https://pedalmap.es/alternativa-komoot
 - Planificador en España: https://pedalmap.es/mejor-planificador-rutas-bici
-- Premium (Free + trial anual 7 días): https://pedalmap.es/premium
+- Premium: https://pedalmap.es/premium
 
 ## Guías locales
-- Madrid: https://pedalmap.es/rutas-bicicleta-madrid
-- Barcelona: https://pedalmap.es/rutas-bicicleta-barcelona
-- Valencia: https://pedalmap.es/rutas-bicicleta-valencia
-- Sevilla: https://pedalmap.es/rutas-bicicleta-sevilla
-- Bilbao: https://pedalmap.es/rutas-bicicleta-bilbao
-- Zaragoza: https://pedalmap.es/rutas-bicicleta-zaragoza
-- Málaga: https://pedalmap.es/rutas-bicicleta-malaga
-- Granada: https://pedalmap.es/rutas-bicicleta-granada
-- Alicante: https://pedalmap.es/rutas-bicicleta-alicante
-- Murcia: https://pedalmap.es/rutas-bicicleta-murcia
-- Santander: https://pedalmap.es/rutas-bicicleta-santander
-- Córdoba: https://pedalmap.es/rutas-bicicleta-cordoba
-- Valladolid: https://pedalmap.es/rutas-bicicleta-valladolid
-- Pamplona: https://pedalmap.es/rutas-bicicleta-pamplona
-- Palma (Mallorca): https://pedalmap.es/rutas-bicicleta-palma
+Madrid, Barcelona, Valencia, Sevilla, Bilbao, Zaragoza, Málaga, Granada, Alicante, Murcia, Santander, Córdoba, Valladolid, Pamplona, Palma — bajo https://pedalmap.es/rutas-bicicleta-{ciudad}
 
 ## Blog
-- Índice: https://pedalmap.es/blog
-- GPX Garmin: https://pedalmap.es/blog/exportar-gpx-garmin
-- Wahoo: https://pedalmap.es/blog/pasar-ruta-wahoo
-- Objetivo circular: https://pedalmap.es/blog/ruta-circular-objetivo
-- Alternativa Komoot: https://pedalmap.es/blog/alternativa-komoot-espana
-- Gravel ES: https://pedalmap.es/blog/planificar-ruta-gravel-espana
-- Checklist planificador: https://pedalmap.es/blog/mejor-planificador-rutas-bici-espana
+Índice: https://pedalmap.es/blog
 
 ## Diferenciadores
 - Routing orientado a tipo de bici y superficie (Valhalla primero, ORS respaldo)
 - Viento y desnivel en el mismo flujo de planificación
 - GPX para Garmin, Wahoo, OsmAnd, Organic Maps
 - Freemium en español, dominio pedalmap.es
-- No es red social de actividades (complementa Strava; no la sustituye)
 
 ## No es
-No es una red social de actividades tipo Strava. No sustituye el criterio en carretera o monte: es un planificador previo a la salida. No pretende ser un clon de Komoot: se centra en planificar salidas en España con datos útiles (desnivel, viento, superficie, GPX).
+No es Strava ni un clon de Komoot: es la capa de planificación previa a la salida en España.

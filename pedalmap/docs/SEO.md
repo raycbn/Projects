@@ -10,11 +10,12 @@ Salir en Google (España, ciclismo) **más allá de la marca** “PedalMap”, y
 - OG/Twitter + `/og-default.jpg`
 - JSON-LD: Organization + SoftwareApplication + FAQPage (landing) + WebPage/FAQ en guías + BlogPosting
 - `noindex` en privadas + `Disallow` en robots
-- Guías de intención: crear ruta, planificador, GPX, gravel, MTB, circular, alternativa Komoot, “mejor planificador ES”
+- Guías de intención: qué es PedalMap, crear ruta, planificador, GPX, gravel, MTB, circular, alternativa Komoot, “mejor planificador ES”
 - Hubs ciudad: Madrid (+ MTB/gravel), Barcelona (+ MTB/gravel), Valencia, Sevilla, Bilbao, Zaragoza, Málaga, Granada, Alicante, Murcia, Santander, Córdoba, Valladolid, Pamplona, Palma
 - Blog editorial (16+ posts) con CTAs al producto
 - Prerender en `npm run build` (`scripts/prerender.ts`)
-- `https://pedalmap.es/llms.txt` para GEO / agentes
+- GEO: `/llms.txt` + `/llms-full.txt` + bots IA en `robots.txt` + `docs/GEO.md`
+- Cola social 90 días: `/social/calendar-90d.json` + cron Worker Instagram
 - Enlaces internos: footer, Explorar (guías prácticas vs ciudades), “Sigue explorando”
 
 ## Operativa tuya (cuenta)
@@ -39,15 +40,25 @@ Salir en Google (España, ciclismo) **más allá de la marca** “PedalMap”, y
 3. Actualizar `sameAs` en Organization JSON-LD con IG/TikTok/Strava cuando existan
 4. Más hubs solo con texto útil (nunca pueblos vacíos)
 
-## Keywords (prioridad)
+## Publicidad orgánica y gratuita (prioridad)
+
+Ver `docs/ORGANIC_GROWTH.md` (calendario 90 días automatizado) y `docs/GEO.md` (aparecer en IAs).
+
+### Esta semana (tú)
+1. GSC: solicitar indexación de `/que-es-pedalmap` (sitemap ya enviado)
+2. Activar cola social: tokens IG **o** importar `/social/calendar-90d.csv` en Buffer
+3. Perfiles de marca con la misma definición de producto
+4. AlternativeTo / foros (menciones externas = GEO)
+
+### Keywords (calidad > volumen)
 
 | Intención | URL principal |
 |-----------|----------------|
+| qué es PedalMap / entidad | `/que-es-pedalmap` |
 | crear ruta bicicleta | `/crear-ruta-bicicleta` |
 | planificador rutas bici | `/planificador-rutas-bici` |
 | crear ruta GPX | `/crear-ruta-gpx` |
 | gravel / MTB | `/planificador-rutas-gravel`, `/planificador-rutas-mtb` |
 | ruta circular | `/ruta-circular-bicicleta` |
 | alternativa Komoot | `/alternativa-komoot` |
-| mejor planificador ES | `/mejor-planificador-rutas-bici` |
 | local | `/rutas-bicicleta-{ciudad}` |

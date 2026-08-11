@@ -83,8 +83,8 @@ El algoritmo premia: **guardados, comentarios, tiempo, perfiles visitados**.
 
 ## Siguiente paso práctico
 
-1. Tú: pasar a **Profesional** + Página Facebook + Meta Business Suite  
-2. Yo: te preparo **cola de 14 captions + ideas de carrusel** listas para programar  
-3. Cuando quieras API propia: me dices y cableamos publicación desde el Worker
+1. **Cola 90 días lista:** `/social/calendar-90d.json` + `.csv` (Buffer) o cron Worker (Instagram API)
+2. Tú: IG Profesional + tokens → secrets del Worker (ver `docs/ORGANIC_GROWTH.md`)
+3. GEO / IAs: `docs/GEO.md` + página `/que-es-pedalmap`
 
 Avisos legales: automatizamos **publicación**; el engagement lo construimos con contenido y respuesta humana, no con bots.

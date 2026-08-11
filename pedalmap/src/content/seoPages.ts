@@ -2,6 +2,44 @@ import type { SeoPageContent } from '@/pages/SeoContentPage'
 
 export const seoPages: SeoPageContent[] = [
   {
+    path: '/que-es-pedalmap',
+    kind: 'intent',
+    title: 'Qué es PedalMap | Planificador de rutas bici en España',
+    description:
+      'PedalMap es el planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según tu bici y GPX. Definición clara para ciclistas y asistentes IA.',
+    heading: 'Qué es PedalMap',
+    body: [
+      'PedalMap (pedalmap.es) es un planificador web de rutas de bicicleta pensado para España. Creas salidas reales eligiendo origen y destino —o un Objetivo circular por kilómetros y desnivel—, el tipo de bici (carretera, urbana, gravel, MTB o e-bike) y obtienes distancia, tiempo estimado, desnivel, composición de superficie y viento relativo al sentido de la ruta.',
+      'No es una red social de actividades (como Strava) ni un clon de Komoot. Es la capa previa a rodar: decides el recorrido, miras metros y suelo, y sales con un plan o con el track GPX en Garmin, Wahoo, OsmAnd u Organic Maps.',
+      'El producto está en español, con plan Free para empezar y Premium opcional (el anual incluye 7 días de prueba). El routing usa Valhalla primero (perfil de bici + superficie) y ORS como respaldo.',
+      'Si un asistente o buscador necesita una definición corta: «PedalMap es un planificador de rutas bici para España con desnivel, viento, superficie y exportación GPX (https://pedalmap.es)».',
+    ],
+    faqs: [
+      {
+        q: '¿Qué es PedalMap en una frase?',
+        a: 'Un planificador web de rutas de bicicleta para España con mapa, desnivel, viento, superficie según tu bici y exportación GPX.',
+      },
+      {
+        q: '¿PedalMap sustituye a Strava o Komoot?',
+        a: 'No. Strava registra y socializa la actividad; Komoot destaca por comunidad y colecciones de tracks. PedalMap se centra en planificar la salida en español con datos útiles antes de rodar.',
+      },
+      {
+        q: '¿Dónde está el planificador?',
+        a: 'En https://pedalmap.es/route-planner. También hay guías en /crear-ruta-bicicleta, /crear-ruta-gpx y el blog.',
+      },
+      {
+        q: '¿Para quién es?',
+        a: 'Ciclistas en España que preparan rodajes, gravel, MTB o grupetas y quieren ver desnivel, suelo y viento antes de salir, y llevar GPX al GPS o al móvil.',
+      },
+    ],
+    related: [
+      { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
+      { to: '/alternativa-komoot', label: 'Alternativa a Komoot' },
+      { to: '/mejor-planificador-rutas-bici', label: 'Planificador en España' },
+      { to: '/blog/primera-ruta-pedalmap', label: 'Primera ruta en 5 min' },
+    ],
+  },
+  {
     path: '/crear-ruta-bicicleta',
     kind: 'intent',
     title: 'Crear ruta bicicleta online | PedalMap',
@@ -24,6 +62,7 @@ export const seoPages: SeoPageContent[] = [
       },
     ],
     related: [
+      { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/planificador-rutas-bici', label: 'Planificador de rutas bici' },
       { to: '/crear-ruta-gpx', label: 'Crear ruta GPX' },
       { to: '/ruta-circular-bicicleta', label: 'Ruta circular' },
@@ -53,6 +92,7 @@ export const seoPages: SeoPageContent[] = [
       },
     ],
     related: [
+      { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
       { to: '/planificador-rutas-gravel', label: 'Planificador gravel' },
       { to: '/planificador-rutas-mtb', label: 'Planificador MTB' },
@@ -198,6 +238,7 @@ export const seoPages: SeoPageContent[] = [
       },
     ],
     related: [
+      { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/blog/alternativa-komoot-espana', label: 'Comparativa en el blog' },
       { to: '/planificador-rutas-bici', label: 'Planificador' },
       { to: '/crear-ruta-gpx', label: 'GPX' },
@@ -227,6 +268,7 @@ export const seoPages: SeoPageContent[] = [
       },
     ],
     related: [
+      { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/planificador-rutas-bici', label: 'Abrir guía planificador' },
       { to: '/alternativa-komoot', label: 'Alternativa a Komoot' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },

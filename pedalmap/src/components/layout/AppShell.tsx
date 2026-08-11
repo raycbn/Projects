@@ -86,6 +86,9 @@ export function AppShell() {
               <p className="mt-0.5 text-xs">Planifica con el suelo y el viento a tu favor.</p>
             </div>
             <nav className="flex flex-wrap gap-4" aria-label="Pie de página">
+              <Link className="hover:text-[var(--color-forest)]" to="/que-es-pedalmap">
+                Qué es
+              </Link>
               <Link className="hover:text-[var(--color-forest)]" to="/blog">
                 Blog
               </Link>

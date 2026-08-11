@@ -41,6 +41,8 @@ export interface Env {
   INSTAGRAM_GRAPH_HOST?: string
   /** Shared secret for ops publish endpoint (header X-PedalMap-Ops-Token). */
   INSTAGRAM_OPS_TOKEN?: string
+  /** UTC start date YYYY-MM-DD for the 90-day SEO social campaign. */
+  SOCIAL_CAMPAIGN_START?: string
 }
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'
@@ -73,7 +75,8 @@ export function corsHeaders(env: Env, request: Request): HeadersInit {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Stripe-Signature',
+    'Access-Control-Allow-Headers':
+      'Content-Type, Authorization, Stripe-Signature, X-PedalMap-Ops-Token',
     'Access-Control-Max-Age': '86400',
   }
 }

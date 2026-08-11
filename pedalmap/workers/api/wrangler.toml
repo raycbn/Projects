@@ -25,6 +25,7 @@ workers_dev = true
 #   GARMIN_CLIENT_ID / GARMIN_CLIENT_SECRET / GARMIN_WEBHOOK_TOKEN
 #   INSTAGRAM_ACCESS_TOKEN / INSTAGRAM_IG_USER_ID / INSTAGRAM_OPS_TOKEN
 #     (own PedalMap IG professional account — see docs/INSTAGRAM_SETUP_PASO_A_PASO.md)
+#   SOCIAL_CAMPAIGN_START (optional YYYY-MM-DD, default 2026-08-12) — 90-day SEO posts cron
 [vars]
 FIREBASE_PROJECT_ID = "pedalmap-79b3a"
 STRIPE_PRICE_MONTHLY = "price_1U3Jz2D9NwIvrlQEilHY4AXf"
@@ -33,7 +34,13 @@ APP_URL = "https://pedalmap.es"
 ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
 # Transactional From (Resend). Receiving still uses IONOS MX.
 MAIL_FROM = "PedalMap <aviso@pedalmap.es>"
+# 90-day Instagram SEO campaign (cron publishes 1 post/day when secrets exist)
+SOCIAL_CAMPAIGN_START = "2026-08-12"
 # PREMIUM_ALLOWLIST: Cloudflare secret (not committed). Includes brand + both
 # developer Auth emails. Rotate with:
 #   echo 'premium@pedalmap.es,dev1@…,dev2@…' | npx wrangler secret put PREMIUM_ALLOWLIST
 # Code default (if unset): premium@pedalmap.es
+
+# Daily SEO social publish ~10:00 Europe/Madrid (08:00 UTC winter / adjust if needed)
+[triggers]
+crons = ["0 8 * * *"]

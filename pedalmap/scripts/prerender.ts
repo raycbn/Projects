@@ -154,6 +154,7 @@ const pages: PageSpec[] = [
     ],
     jsonLd: [organizationJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(landingFaqs)],
     related: [
+      { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
       { to: '/rutas-bicicleta-madrid', label: 'Rutas Madrid' },
       { to: '/premium', label: 'Premium' },

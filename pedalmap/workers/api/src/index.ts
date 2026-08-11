@@ -29,6 +29,11 @@ import {
 import { handlePublishRoute } from './publishRoute'
 import { handleInstagramPublish, handleInstagramStatus } from './instagram'
 import {
+  handleInstagramScheduleRun,
+  handleInstagramScheduleStatus,
+  runScheduledSocialPost,
+} from './socialSchedule'
+import {
   assertRoutingCreateAllowed,
   bumpRoutesCreatedThisMonth,
 } from './firestore'
@@ -97,6 +102,15 @@ async function enforceRoutingRateLimit(
 }
 
 export default {
+  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    try {
+      const result = await runScheduledSocialPost(env)
+      console.log('[cron social]', JSON.stringify(result))
+    } catch (err) {
+      console.error('[cron social]', err instanceof Error ? err.message : err)
+    }
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     const path = url.pathname
@@ -428,6 +442,12 @@ export default {
       }
       if (path === '/ops/instagram/publish' && request.method === 'POST') {
         return withCors(env, request, await handleInstagramPublish(request, env))
+      }
+      if (path === '/ops/instagram/schedule' && request.method === 'GET') {
+        return withCors(env, request, await handleInstagramScheduleStatus(request, env))
+      }
+      if (path === '/ops/instagram/schedule/run' && request.method === 'POST') {
+        return withCors(env, request, await handleInstagramScheduleRun(request, env))
       }
 
       return withCors(env, request, json({ error: 'Not found', path }, 404))

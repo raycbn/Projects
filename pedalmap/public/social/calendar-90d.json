@@ -1,0 +1,1356 @@
+{
+  "startDate": "2026-08-12",
+  "days": 90,
+  "posts": [
+    {
+      "day": 1,
+      "date": "2026-08-12",
+      "theme": "crear-ruta",
+      "seoFocus": "crear ruta bicicleta",
+      "path": "/crear-ruta-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Crea tu próxima ruta en bici en minutos.\nMapa · desnivel · superficie · viento.\n\nEmpieza Free → https://pedalmap.es/crear-ruta-bicicleta\n#ciclismo #bici #rutas #pedalmap #españa",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 2,
+      "date": "2026-08-13",
+      "theme": "gpx-garmin",
+      "seoFocus": "crear ruta GPX Garmin",
+      "path": "/blog/exportar-gpx-garmin",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "GPX de PedalMap → Garmin Connect → Edge.\nPlanifica con desnivel real antes de salir.\n\nGuía: https://pedalmap.es/blog/exportar-gpx-garmin\n#garmin #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 3,
+      "date": "2026-08-14",
+      "theme": "wahoo",
+      "seoFocus": "pasar ruta Wahoo",
+      "path": "/blog/pasar-ruta-wahoo",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "¿Wahoo ELEMNT?\nMisma ruta PedalMap → GPX → app.\nSuelo + viento + metros antes del entreno.\n\nhttps://pedalmap.es/blog/pasar-ruta-wahoo\n#wahoo #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 4,
+      "date": "2026-08-15",
+      "theme": "circular",
+      "seoFocus": "ruta circular bicicleta",
+      "path": "/ruta-circular-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "¿Quieres ~60 km y 800 m+ sin destino fijo?\nModo Objetivo = ruta circular.\n1 Free/mes · ilimitado en Premium.\n\nhttps://pedalmap.es/ruta-circular-bicicleta\n#entreno #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 5,
+      "date": "2026-08-16",
+      "theme": "viento",
+      "seoFocus": "viento en la ruta bici",
+      "path": "/blog/viento-en-la-ruta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "El viento no se ve en Strava hasta que duele.\nMíralo relativo a tu ruta antes de salir.\n\nhttps://pedalmap.es/blog/viento-en-la-ruta\n#ciclismo #entreno #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 6,
+      "date": "2026-08-17",
+      "theme": "desnivel",
+      "seoFocus": "calcular desnivel ruta bici",
+      "path": "/blog/calcular-desnivel-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Los km mienten. El desnivel no.\nRevisa el perfil antes de comprometerte.\n\nhttps://pedalmap.es/blog/calcular-desnivel-ruta-bici\n#ciclismo #desnivel #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 7,
+      "date": "2026-08-18",
+      "theme": "ciudad-málaga",
+      "seoFocus": "rutas bicicleta Málaga",
+      "path": "/rutas-bicicleta-malaga",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Rutas de bicicleta en Málaga: traza, mira metros y lleva GPX.\n\nGuía: https://pedalmap.es/rutas-bicicleta-malaga\n#malaga #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 8,
+      "date": "2026-08-19",
+      "theme": "gravel",
+      "seoFocus": "planificador rutas gravel",
+      "path": "/planificador-rutas-gravel",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Gravel ≠ carretera ≠ MTB.\nMismo A→B, distinta bici = distinta ruta.\n\nhttps://pedalmap.es/planificador-rutas-gravel\n#gravel #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 9,
+      "date": "2026-08-20",
+      "theme": "mtb",
+      "seoFocus": "planificador rutas MTB",
+      "path": "/planificador-rutas-mtb",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "MTB con desnivel visible y track GPX.\nPlanifica la sierra antes de improvisar.\n\nhttps://pedalmap.es/planificador-rutas-mtb\n#mtb #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 10,
+      "date": "2026-08-21",
+      "theme": "komoot",
+      "seoFocus": "alternativa Komoot España",
+      "path": "/alternativa-komoot",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "¿Buscas alternativa a Komoot en España para planificar (no scrollear tracks)?\nPedalMap: desnivel · viento · GPX · Free.\n\nhttps://pedalmap.es/alternativa-komoot\n#komoot #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 11,
+      "date": "2026-08-22",
+      "theme": "perfil-bici",
+      "seoFocus": "perfil bici carretera gravel MTB",
+      "path": "/blog/elegir-perfil-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Carretera, gravel o MTB: el perfil cambia el track.\nElige bien antes de calcular.\n\nhttps://pedalmap.es/blog/elegir-perfil-bici\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 12,
+      "date": "2026-08-23",
+      "theme": "osmand",
+      "seoFocus": "GPX OsmAnd Organic Maps",
+      "path": "/blog/gpx-osmand-organic-maps",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "Sin Edge: GPX + OsmAnd / Organic Maps.\nMisma ruta PedalMap en el móvil.\n\nhttps://pedalmap.es/blog/gpx-osmand-organic-maps\n#osmand #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 13,
+      "date": "2026-08-24",
+      "theme": "primera-ruta",
+      "seoFocus": "crear ruta bicicleta online",
+      "path": "/blog/primera-ruta-pedalmap",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Primera ruta en PedalMap en 5 minutos.\nOrigen + destino + bici + calcular.\n\nhttps://pedalmap.es/blog/primera-ruta-pedalmap\n#tutorial #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 14,
+      "date": "2026-08-25",
+      "theme": "grupeta",
+      "seoFocus": "compartir ruta grupeta GPX",
+      "path": "/blog/compartir-ruta-grupeta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Grupeta sin “¿por dónde vamos?”\nRuta + desnivel + un GPX al chat.\n\nhttps://pedalmap.es/blog/compartir-ruta-grupeta\n#grupeta #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 15,
+      "date": "2026-08-26",
+      "theme": "premium",
+      "seoFocus": "PedalMap Free vs Premium",
+      "path": "/blog/free-vs-premium",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Free para probar. Premium cuando entrenas en serio.\nTrial 7 días en el plan anual.\n\nhttps://pedalmap.es/premium\n#pedalmap #ciclismo",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 16,
+      "date": "2026-08-27",
+      "theme": "evitar-trafico",
+      "seoFocus": "evitar carreteras ruta bici",
+      "path": "/blog/evitar-carreteras-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Menos nacional, más carril.\nAjusta preferencias y recalcula antes de salir.\n\nhttps://pedalmap.es/blog/evitar-carreteras-ruta-bici\n#seguridad #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 17,
+      "date": "2026-08-28",
+      "theme": "planificador-es",
+      "seoFocus": "mejor planificador rutas bici España",
+      "path": "/mejor-planificador-rutas-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Checklist de un buen planificador de rutas bici en España:\nperfil · desnivel · viento · GPX.\n\nhttps://pedalmap.es/mejor-planificador-rutas-bici\n#ciclismo #españa #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 18,
+      "date": "2026-08-29",
+      "theme": "engagement",
+      "seoFocus": "planificador rutas bici",
+      "path": "/route-planner",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "¿Garmin, Wahoo o móvil?\nComenta 1️⃣ 2️⃣ 3️⃣\nGuías GPX en el perfil 👆 · planificador: https://pedalmap.es/route-planner\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 19,
+      "date": "2026-08-30",
+      "theme": "crear-ruta",
+      "seoFocus": "crear ruta bicicleta",
+      "path": "/crear-ruta-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Crea tu próxima ruta en bici en minutos.\nMapa · desnivel · superficie · viento.\n\nEmpieza Free → https://pedalmap.es/crear-ruta-bicicleta\n#ciclismo #bici #rutas #pedalmap #españa",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 20,
+      "date": "2026-08-31",
+      "theme": "gpx-garmin",
+      "seoFocus": "crear ruta GPX Garmin",
+      "path": "/blog/exportar-gpx-garmin",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "GPX de PedalMap → Garmin Connect → Edge.\nPlanifica con desnivel real antes de salir.\n\nGuía: https://pedalmap.es/blog/exportar-gpx-garmin\n#garmin #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 21,
+      "date": "2026-09-01",
+      "theme": "wahoo",
+      "seoFocus": "pasar ruta Wahoo",
+      "path": "/blog/pasar-ruta-wahoo",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "¿Wahoo ELEMNT?\nMisma ruta PedalMap → GPX → app.\nSuelo + viento + metros antes del entreno.\n\nhttps://pedalmap.es/blog/pasar-ruta-wahoo\n#wahoo #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 22,
+      "date": "2026-09-02",
+      "theme": "circular",
+      "seoFocus": "ruta circular bicicleta",
+      "path": "/ruta-circular-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "¿Quieres ~60 km y 800 m+ sin destino fijo?\nModo Objetivo = ruta circular.\n1 Free/mes · ilimitado en Premium.\n\nhttps://pedalmap.es/ruta-circular-bicicleta\n#entreno #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 23,
+      "date": "2026-09-03",
+      "theme": "viento",
+      "seoFocus": "viento en la ruta bici",
+      "path": "/blog/viento-en-la-ruta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "El viento no se ve en Strava hasta que duele.\nMíralo relativo a tu ruta antes de salir.\n\nhttps://pedalmap.es/blog/viento-en-la-ruta\n#ciclismo #entreno #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 24,
+      "date": "2026-09-04",
+      "theme": "desnivel",
+      "seoFocus": "calcular desnivel ruta bici",
+      "path": "/blog/calcular-desnivel-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Los km mienten. El desnivel no.\nRevisa el perfil antes de comprometerte.\n\nhttps://pedalmap.es/blog/calcular-desnivel-ruta-bici\n#ciclismo #desnivel #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 25,
+      "date": "2026-09-05",
+      "theme": "ciudad-murcia",
+      "seoFocus": "rutas bicicleta Murcia",
+      "path": "/rutas-bicicleta-murcia",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Rutas de bicicleta en Murcia: traza, mira metros y lleva GPX.\n\nGuía: https://pedalmap.es/rutas-bicicleta-murcia\n#murcia #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 26,
+      "date": "2026-09-06",
+      "theme": "gravel",
+      "seoFocus": "planificador rutas gravel",
+      "path": "/planificador-rutas-gravel",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "Gravel ≠ carretera ≠ MTB.\nMismo A→B, distinta bici = distinta ruta.\n\nhttps://pedalmap.es/planificador-rutas-gravel\n#gravel #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 27,
+      "date": "2026-09-07",
+      "theme": "mtb",
+      "seoFocus": "planificador rutas MTB",
+      "path": "/planificador-rutas-mtb",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "MTB con desnivel visible y track GPX.\nPlanifica la sierra antes de improvisar.\n\nhttps://pedalmap.es/planificador-rutas-mtb\n#mtb #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 28,
+      "date": "2026-09-08",
+      "theme": "komoot",
+      "seoFocus": "alternativa Komoot España",
+      "path": "/alternativa-komoot",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "¿Buscas alternativa a Komoot en España para planificar (no scrollear tracks)?\nPedalMap: desnivel · viento · GPX · Free.\n\nhttps://pedalmap.es/alternativa-komoot\n#komoot #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 29,
+      "date": "2026-09-09",
+      "theme": "perfil-bici",
+      "seoFocus": "perfil bici carretera gravel MTB",
+      "path": "/blog/elegir-perfil-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Carretera, gravel o MTB: el perfil cambia el track.\nElige bien antes de calcular.\n\nhttps://pedalmap.es/blog/elegir-perfil-bici\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 30,
+      "date": "2026-09-10",
+      "theme": "osmand",
+      "seoFocus": "GPX OsmAnd Organic Maps",
+      "path": "/blog/gpx-osmand-organic-maps",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Sin Edge: GPX + OsmAnd / Organic Maps.\nMisma ruta PedalMap en el móvil.\n\nhttps://pedalmap.es/blog/gpx-osmand-organic-maps\n#osmand #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 31,
+      "date": "2026-09-11",
+      "theme": "primera-ruta",
+      "seoFocus": "crear ruta bicicleta online",
+      "path": "/blog/primera-ruta-pedalmap",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Primera ruta en PedalMap en 5 minutos.\nOrigen + destino + bici + calcular.\n\nhttps://pedalmap.es/blog/primera-ruta-pedalmap\n#tutorial #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 32,
+      "date": "2026-09-12",
+      "theme": "grupeta",
+      "seoFocus": "compartir ruta grupeta GPX",
+      "path": "/blog/compartir-ruta-grupeta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Grupeta sin “¿por dónde vamos?”\nRuta + desnivel + un GPX al chat.\n\nhttps://pedalmap.es/blog/compartir-ruta-grupeta\n#grupeta #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 33,
+      "date": "2026-09-13",
+      "theme": "premium",
+      "seoFocus": "PedalMap Free vs Premium",
+      "path": "/blog/free-vs-premium",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Free para probar. Premium cuando entrenas en serio.\nTrial 7 días en el plan anual.\n\nhttps://pedalmap.es/premium\n#pedalmap #ciclismo",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 34,
+      "date": "2026-09-14",
+      "theme": "evitar-trafico",
+      "seoFocus": "evitar carreteras ruta bici",
+      "path": "/blog/evitar-carreteras-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "Menos nacional, más carril.\nAjusta preferencias y recalcula antes de salir.\n\nhttps://pedalmap.es/blog/evitar-carreteras-ruta-bici\n#seguridad #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 35,
+      "date": "2026-09-15",
+      "theme": "planificador-es",
+      "seoFocus": "mejor planificador rutas bici España",
+      "path": "/mejor-planificador-rutas-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Checklist de un buen planificador de rutas bici en España:\nperfil · desnivel · viento · GPX.\n\nhttps://pedalmap.es/mejor-planificador-rutas-bici\n#ciclismo #españa #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 36,
+      "date": "2026-09-16",
+      "theme": "engagement",
+      "seoFocus": "planificador rutas bici",
+      "path": "/route-planner",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "¿Garmin, Wahoo o móvil?\nComenta 1️⃣ 2️⃣ 3️⃣\nGuías GPX en el perfil 👆 · planificador: https://pedalmap.es/route-planner\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 37,
+      "date": "2026-09-17",
+      "theme": "crear-ruta",
+      "seoFocus": "crear ruta bicicleta",
+      "path": "/crear-ruta-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Crea tu próxima ruta en bici en minutos.\nMapa · desnivel · superficie · viento.\n\nEmpieza Free → https://pedalmap.es/crear-ruta-bicicleta\n#ciclismo #bici #rutas #pedalmap #españa",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 38,
+      "date": "2026-09-18",
+      "theme": "gpx-garmin",
+      "seoFocus": "crear ruta GPX Garmin",
+      "path": "/blog/exportar-gpx-garmin",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "GPX de PedalMap → Garmin Connect → Edge.\nPlanifica con desnivel real antes de salir.\n\nGuía: https://pedalmap.es/blog/exportar-gpx-garmin\n#garmin #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 39,
+      "date": "2026-09-19",
+      "theme": "wahoo",
+      "seoFocus": "pasar ruta Wahoo",
+      "path": "/blog/pasar-ruta-wahoo",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "¿Wahoo ELEMNT?\nMisma ruta PedalMap → GPX → app.\nSuelo + viento + metros antes del entreno.\n\nhttps://pedalmap.es/blog/pasar-ruta-wahoo\n#wahoo #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 40,
+      "date": "2026-09-20",
+      "theme": "circular",
+      "seoFocus": "ruta circular bicicleta",
+      "path": "/ruta-circular-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "¿Quieres ~60 km y 800 m+ sin destino fijo?\nModo Objetivo = ruta circular.\n1 Free/mes · ilimitado en Premium.\n\nhttps://pedalmap.es/ruta-circular-bicicleta\n#entreno #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 41,
+      "date": "2026-09-21",
+      "theme": "viento",
+      "seoFocus": "viento en la ruta bici",
+      "path": "/blog/viento-en-la-ruta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "El viento no se ve en Strava hasta que duele.\nMíralo relativo a tu ruta antes de salir.\n\nhttps://pedalmap.es/blog/viento-en-la-ruta\n#ciclismo #entreno #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 42,
+      "date": "2026-09-22",
+      "theme": "desnivel",
+      "seoFocus": "calcular desnivel ruta bici",
+      "path": "/blog/calcular-desnivel-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "Los km mienten. El desnivel no.\nRevisa el perfil antes de comprometerte.\n\nhttps://pedalmap.es/blog/calcular-desnivel-ruta-bici\n#ciclismo #desnivel #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 43,
+      "date": "2026-09-23",
+      "theme": "ciudad-valladolid",
+      "seoFocus": "rutas bicicleta Valladolid",
+      "path": "/rutas-bicicleta-valladolid",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Rutas de bicicleta en Valladolid: traza, mira metros y lleva GPX.\n\nGuía: https://pedalmap.es/rutas-bicicleta-valladolid\n#valladolid #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 44,
+      "date": "2026-09-24",
+      "theme": "gravel",
+      "seoFocus": "planificador rutas gravel",
+      "path": "/planificador-rutas-gravel",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "Gravel ≠ carretera ≠ MTB.\nMismo A→B, distinta bici = distinta ruta.\n\nhttps://pedalmap.es/planificador-rutas-gravel\n#gravel #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 45,
+      "date": "2026-09-25",
+      "theme": "mtb",
+      "seoFocus": "planificador rutas MTB",
+      "path": "/planificador-rutas-mtb",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "MTB con desnivel visible y track GPX.\nPlanifica la sierra antes de improvisar.\n\nhttps://pedalmap.es/planificador-rutas-mtb\n#mtb #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 46,
+      "date": "2026-09-26",
+      "theme": "komoot",
+      "seoFocus": "alternativa Komoot España",
+      "path": "/alternativa-komoot",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "¿Buscas alternativa a Komoot en España para planificar (no scrollear tracks)?\nPedalMap: desnivel · viento · GPX · Free.\n\nhttps://pedalmap.es/alternativa-komoot\n#komoot #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 47,
+      "date": "2026-09-27",
+      "theme": "perfil-bici",
+      "seoFocus": "perfil bici carretera gravel MTB",
+      "path": "/blog/elegir-perfil-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Carretera, gravel o MTB: el perfil cambia el track.\nElige bien antes de calcular.\n\nhttps://pedalmap.es/blog/elegir-perfil-bici\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 48,
+      "date": "2026-09-28",
+      "theme": "osmand",
+      "seoFocus": "GPX OsmAnd Organic Maps",
+      "path": "/blog/gpx-osmand-organic-maps",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Sin Edge: GPX + OsmAnd / Organic Maps.\nMisma ruta PedalMap en el móvil.\n\nhttps://pedalmap.es/blog/gpx-osmand-organic-maps\n#osmand #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 49,
+      "date": "2026-09-29",
+      "theme": "primera-ruta",
+      "seoFocus": "crear ruta bicicleta online",
+      "path": "/blog/primera-ruta-pedalmap",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Primera ruta en PedalMap en 5 minutos.\nOrigen + destino + bici + calcular.\n\nhttps://pedalmap.es/blog/primera-ruta-pedalmap\n#tutorial #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 50,
+      "date": "2026-09-30",
+      "theme": "grupeta",
+      "seoFocus": "compartir ruta grupeta GPX",
+      "path": "/blog/compartir-ruta-grupeta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "Grupeta sin “¿por dónde vamos?”\nRuta + desnivel + un GPX al chat.\n\nhttps://pedalmap.es/blog/compartir-ruta-grupeta\n#grupeta #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 51,
+      "date": "2026-10-01",
+      "theme": "premium",
+      "seoFocus": "PedalMap Free vs Premium",
+      "path": "/blog/free-vs-premium",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Free para probar. Premium cuando entrenas en serio.\nTrial 7 días en el plan anual.\n\nhttps://pedalmap.es/premium\n#pedalmap #ciclismo",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 52,
+      "date": "2026-10-02",
+      "theme": "evitar-trafico",
+      "seoFocus": "evitar carreteras ruta bici",
+      "path": "/blog/evitar-carreteras-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "Menos nacional, más carril.\nAjusta preferencias y recalcula antes de salir.\n\nhttps://pedalmap.es/blog/evitar-carreteras-ruta-bici\n#seguridad #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 53,
+      "date": "2026-10-03",
+      "theme": "planificador-es",
+      "seoFocus": "mejor planificador rutas bici España",
+      "path": "/mejor-planificador-rutas-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Checklist de un buen planificador de rutas bici en España:\nperfil · desnivel · viento · GPX.\n\nhttps://pedalmap.es/mejor-planificador-rutas-bici\n#ciclismo #españa #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 54,
+      "date": "2026-10-04",
+      "theme": "engagement",
+      "seoFocus": "planificador rutas bici",
+      "path": "/route-planner",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "¿Garmin, Wahoo o móvil?\nComenta 1️⃣ 2️⃣ 3️⃣\nGuías GPX en el perfil 👆 · planificador: https://pedalmap.es/route-planner\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 55,
+      "date": "2026-10-05",
+      "theme": "crear-ruta",
+      "seoFocus": "crear ruta bicicleta",
+      "path": "/crear-ruta-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Crea tu próxima ruta en bici en minutos.\nMapa · desnivel · superficie · viento.\n\nEmpieza Free → https://pedalmap.es/crear-ruta-bicicleta\n#ciclismo #bici #rutas #pedalmap #españa",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 56,
+      "date": "2026-10-06",
+      "theme": "gpx-garmin",
+      "seoFocus": "crear ruta GPX Garmin",
+      "path": "/blog/exportar-gpx-garmin",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "GPX de PedalMap → Garmin Connect → Edge.\nPlanifica con desnivel real antes de salir.\n\nGuía: https://pedalmap.es/blog/exportar-gpx-garmin\n#garmin #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 57,
+      "date": "2026-10-07",
+      "theme": "wahoo",
+      "seoFocus": "pasar ruta Wahoo",
+      "path": "/blog/pasar-ruta-wahoo",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "¿Wahoo ELEMNT?\nMisma ruta PedalMap → GPX → app.\nSuelo + viento + metros antes del entreno.\n\nhttps://pedalmap.es/blog/pasar-ruta-wahoo\n#wahoo #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 58,
+      "date": "2026-10-08",
+      "theme": "circular",
+      "seoFocus": "ruta circular bicicleta",
+      "path": "/ruta-circular-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "¿Quieres ~60 km y 800 m+ sin destino fijo?\nModo Objetivo = ruta circular.\n1 Free/mes · ilimitado en Premium.\n\nhttps://pedalmap.es/ruta-circular-bicicleta\n#entreno #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 59,
+      "date": "2026-10-09",
+      "theme": "viento",
+      "seoFocus": "viento en la ruta bici",
+      "path": "/blog/viento-en-la-ruta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "El viento no se ve en Strava hasta que duele.\nMíralo relativo a tu ruta antes de salir.\n\nhttps://pedalmap.es/blog/viento-en-la-ruta\n#ciclismo #entreno #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 60,
+      "date": "2026-10-10",
+      "theme": "desnivel",
+      "seoFocus": "calcular desnivel ruta bici",
+      "path": "/blog/calcular-desnivel-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "Los km mienten. El desnivel no.\nRevisa el perfil antes de comprometerte.\n\nhttps://pedalmap.es/blog/calcular-desnivel-ruta-bici\n#ciclismo #desnivel #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 61,
+      "date": "2026-10-11",
+      "theme": "ciudad-madrid",
+      "seoFocus": "rutas bicicleta Madrid",
+      "path": "/rutas-bicicleta-madrid",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Rutas de bicicleta en Madrid: traza, mira metros y lleva GPX.\n\nGuía: https://pedalmap.es/rutas-bicicleta-madrid\n#madrid #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 62,
+      "date": "2026-10-12",
+      "theme": "gravel",
+      "seoFocus": "planificador rutas gravel",
+      "path": "/planificador-rutas-gravel",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Gravel ≠ carretera ≠ MTB.\nMismo A→B, distinta bici = distinta ruta.\n\nhttps://pedalmap.es/planificador-rutas-gravel\n#gravel #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 63,
+      "date": "2026-10-13",
+      "theme": "mtb",
+      "seoFocus": "planificador rutas MTB",
+      "path": "/planificador-rutas-mtb",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "MTB con desnivel visible y track GPX.\nPlanifica la sierra antes de improvisar.\n\nhttps://pedalmap.es/planificador-rutas-mtb\n#mtb #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 64,
+      "date": "2026-10-14",
+      "theme": "komoot",
+      "seoFocus": "alternativa Komoot España",
+      "path": "/alternativa-komoot",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "¿Buscas alternativa a Komoot en España para planificar (no scrollear tracks)?\nPedalMap: desnivel · viento · GPX · Free.\n\nhttps://pedalmap.es/alternativa-komoot\n#komoot #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 65,
+      "date": "2026-10-15",
+      "theme": "perfil-bici",
+      "seoFocus": "perfil bici carretera gravel MTB",
+      "path": "/blog/elegir-perfil-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Carretera, gravel o MTB: el perfil cambia el track.\nElige bien antes de calcular.\n\nhttps://pedalmap.es/blog/elegir-perfil-bici\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 66,
+      "date": "2026-10-16",
+      "theme": "osmand",
+      "seoFocus": "GPX OsmAnd Organic Maps",
+      "path": "/blog/gpx-osmand-organic-maps",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "Sin Edge: GPX + OsmAnd / Organic Maps.\nMisma ruta PedalMap en el móvil.\n\nhttps://pedalmap.es/blog/gpx-osmand-organic-maps\n#osmand #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 67,
+      "date": "2026-10-17",
+      "theme": "primera-ruta",
+      "seoFocus": "crear ruta bicicleta online",
+      "path": "/blog/primera-ruta-pedalmap",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Primera ruta en PedalMap en 5 minutos.\nOrigen + destino + bici + calcular.\n\nhttps://pedalmap.es/blog/primera-ruta-pedalmap\n#tutorial #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 68,
+      "date": "2026-10-18",
+      "theme": "grupeta",
+      "seoFocus": "compartir ruta grupeta GPX",
+      "path": "/blog/compartir-ruta-grupeta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "Grupeta sin “¿por dónde vamos?”\nRuta + desnivel + un GPX al chat.\n\nhttps://pedalmap.es/blog/compartir-ruta-grupeta\n#grupeta #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 69,
+      "date": "2026-10-19",
+      "theme": "premium",
+      "seoFocus": "PedalMap Free vs Premium",
+      "path": "/blog/free-vs-premium",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Free para probar. Premium cuando entrenas en serio.\nTrial 7 días en el plan anual.\n\nhttps://pedalmap.es/premium\n#pedalmap #ciclismo",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 70,
+      "date": "2026-10-20",
+      "theme": "evitar-trafico",
+      "seoFocus": "evitar carreteras ruta bici",
+      "path": "/blog/evitar-carreteras-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Menos nacional, más carril.\nAjusta preferencias y recalcula antes de salir.\n\nhttps://pedalmap.es/blog/evitar-carreteras-ruta-bici\n#seguridad #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 71,
+      "date": "2026-10-21",
+      "theme": "planificador-es",
+      "seoFocus": "mejor planificador rutas bici España",
+      "path": "/mejor-planificador-rutas-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Checklist de un buen planificador de rutas bici en España:\nperfil · desnivel · viento · GPX.\n\nhttps://pedalmap.es/mejor-planificador-rutas-bici\n#ciclismo #españa #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 72,
+      "date": "2026-10-22",
+      "theme": "engagement",
+      "seoFocus": "planificador rutas bici",
+      "path": "/route-planner",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "¿Garmin, Wahoo o móvil?\nComenta 1️⃣ 2️⃣ 3️⃣\nGuías GPX en el perfil 👆 · planificador: https://pedalmap.es/route-planner\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 73,
+      "date": "2026-10-23",
+      "theme": "crear-ruta",
+      "seoFocus": "crear ruta bicicleta",
+      "path": "/crear-ruta-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Crea tu próxima ruta en bici en minutos.\nMapa · desnivel · superficie · viento.\n\nEmpieza Free → https://pedalmap.es/crear-ruta-bicicleta\n#ciclismo #bici #rutas #pedalmap #españa",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 74,
+      "date": "2026-10-24",
+      "theme": "gpx-garmin",
+      "seoFocus": "crear ruta GPX Garmin",
+      "path": "/blog/exportar-gpx-garmin",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "GPX de PedalMap → Garmin Connect → Edge.\nPlanifica con desnivel real antes de salir.\n\nGuía: https://pedalmap.es/blog/exportar-gpx-garmin\n#garmin #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 75,
+      "date": "2026-10-25",
+      "theme": "wahoo",
+      "seoFocus": "pasar ruta Wahoo",
+      "path": "/blog/pasar-ruta-wahoo",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "¿Wahoo ELEMNT?\nMisma ruta PedalMap → GPX → app.\nSuelo + viento + metros antes del entreno.\n\nhttps://pedalmap.es/blog/pasar-ruta-wahoo\n#wahoo #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 76,
+      "date": "2026-10-26",
+      "theme": "circular",
+      "seoFocus": "ruta circular bicicleta",
+      "path": "/ruta-circular-bicicleta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "¿Quieres ~60 km y 800 m+ sin destino fijo?\nModo Objetivo = ruta circular.\n1 Free/mes · ilimitado en Premium.\n\nhttps://pedalmap.es/ruta-circular-bicicleta\n#entreno #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 77,
+      "date": "2026-10-27",
+      "theme": "viento",
+      "seoFocus": "viento en la ruta bici",
+      "path": "/blog/viento-en-la-ruta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "El viento no se ve en Strava hasta que duele.\nMíralo relativo a tu ruta antes de salir.\n\nhttps://pedalmap.es/blog/viento-en-la-ruta\n#ciclismo #entreno #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 78,
+      "date": "2026-10-28",
+      "theme": "desnivel",
+      "seoFocus": "calcular desnivel ruta bici",
+      "path": "/blog/calcular-desnivel-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Los km mienten. El desnivel no.\nRevisa el perfil antes de comprometerte.\n\nhttps://pedalmap.es/blog/calcular-desnivel-ruta-bici\n#ciclismo #desnivel #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 79,
+      "date": "2026-10-29",
+      "theme": "ciudad-sevilla",
+      "seoFocus": "rutas bicicleta Sevilla",
+      "path": "/rutas-bicicleta-sevilla",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Rutas de bicicleta en Sevilla: traza, mira metros y lleva GPX.\n\nGuía: https://pedalmap.es/rutas-bicicleta-sevilla\n#sevilla #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 80,
+      "date": "2026-10-30",
+      "theme": "gravel",
+      "seoFocus": "planificador rutas gravel",
+      "path": "/planificador-rutas-gravel",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Gravel ≠ carretera ≠ MTB.\nMismo A→B, distinta bici = distinta ruta.\n\nhttps://pedalmap.es/planificador-rutas-gravel\n#gravel #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 81,
+      "date": "2026-10-31",
+      "theme": "mtb",
+      "seoFocus": "planificador rutas MTB",
+      "path": "/planificador-rutas-mtb",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "MTB con desnivel visible y track GPX.\nPlanifica la sierra antes de improvisar.\n\nhttps://pedalmap.es/planificador-rutas-mtb\n#mtb #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 82,
+      "date": "2026-11-01",
+      "theme": "komoot",
+      "seoFocus": "alternativa Komoot España",
+      "path": "/alternativa-komoot",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "¿Buscas alternativa a Komoot en España para planificar (no scrollear tracks)?\nPedalMap: desnivel · viento · GPX · Free.\n\nhttps://pedalmap.es/alternativa-komoot\n#komoot #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 83,
+      "date": "2026-11-02",
+      "theme": "perfil-bici",
+      "seoFocus": "perfil bici carretera gravel MTB",
+      "path": "/blog/elegir-perfil-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-viento.jpg",
+      "imageFile": "pedalmap-post-viento.jpg",
+      "caption": "Carretera, gravel o MTB: el perfil cambia el track.\nElige bien antes de calcular.\n\nhttps://pedalmap.es/blog/elegir-perfil-bici\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 84,
+      "date": "2026-11-03",
+      "theme": "osmand",
+      "seoFocus": "GPX OsmAnd Organic Maps",
+      "path": "/blog/gpx-osmand-organic-maps",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-madrid.jpg",
+      "imageFile": "pedalmap-post-madrid.jpg",
+      "caption": "Sin Edge: GPX + OsmAnd / Organic Maps.\nMisma ruta PedalMap en el móvil.\n\nhttps://pedalmap.es/blog/gpx-osmand-organic-maps\n#osmand #gpx #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 85,
+      "date": "2026-11-04",
+      "theme": "primera-ruta",
+      "seoFocus": "crear ruta bicicleta online",
+      "path": "/blog/primera-ruta-pedalmap",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-premium.jpg",
+      "imageFile": "pedalmap-post-premium.jpg",
+      "caption": "Primera ruta en PedalMap en 5 minutos.\nOrigen + destino + bici + calcular.\n\nhttps://pedalmap.es/blog/primera-ruta-pedalmap\n#tutorial #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 86,
+      "date": "2026-11-05",
+      "theme": "grupeta",
+      "seoFocus": "compartir ruta grupeta GPX",
+      "path": "/blog/compartir-ruta-grupeta",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-gpx.jpg",
+      "imageFile": "pedalmap-reel-cover-gpx.jpg",
+      "caption": "Grupeta sin “¿por dónde vamos?”\nRuta + desnivel + un GPX al chat.\n\nhttps://pedalmap.es/blog/compartir-ruta-grupeta\n#grupeta #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 87,
+      "date": "2026-11-06",
+      "theme": "premium",
+      "seoFocus": "PedalMap Free vs Premium",
+      "path": "/blog/free-vs-premium",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-objetivo.jpg",
+      "imageFile": "pedalmap-reel-cover-objetivo.jpg",
+      "caption": "Free para probar. Premium cuando entrenas en serio.\nTrial 7 días en el plan anual.\n\nhttps://pedalmap.es/premium\n#pedalmap #ciclismo",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 88,
+      "date": "2026-11-07",
+      "theme": "evitar-trafico",
+      "seoFocus": "evitar carreteras ruta bici",
+      "path": "/blog/evitar-carreteras-ruta-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-reel-cover-primera-ruta.jpg",
+      "imageFile": "pedalmap-reel-cover-primera-ruta.jpg",
+      "caption": "Menos nacional, más carril.\nAjusta preferencias y recalcula antes de salir.\n\nhttps://pedalmap.es/blog/evitar-carreteras-ruta-bici\n#seguridad #ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 89,
+      "date": "2026-11-08",
+      "theme": "planificador-es",
+      "seoFocus": "mejor planificador rutas bici España",
+      "path": "/mejor-planificador-rutas-bici",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-crear-ruta.jpg",
+      "imageFile": "pedalmap-post-crear-ruta.jpg",
+      "caption": "Checklist de un buen planificador de rutas bici en España:\nperfil · desnivel · viento · GPX.\n\nhttps://pedalmap.es/mejor-planificador-rutas-bici\n#ciclismo #españa #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    },
+    {
+      "day": 90,
+      "date": "2026-11-09",
+      "theme": "engagement",
+      "seoFocus": "planificador rutas bici",
+      "path": "/route-planner",
+      "imageUrl": "https://pedalmap.es/social/pedalmap-post-gpx-garmin.jpg",
+      "imageFile": "pedalmap-post-gpx-garmin.jpg",
+      "caption": "¿Garmin, Wahoo o móvil?\nComenta 1️⃣ 2️⃣ 3️⃣\nGuías GPX en el perfil 👆 · planificador: https://pedalmap.es/route-planner\n#ciclismo #pedalmap",
+      "platforms": [
+        "instagram",
+        "tiktok",
+        "linkedin"
+      ]
+    }
+  ]
+}

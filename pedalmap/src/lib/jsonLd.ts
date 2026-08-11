@@ -7,13 +7,32 @@ export function organizationJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: SITE_NAME,
+    legalName: 'PedalMap',
     url: SITE_ORIGIN,
     logo: `${SITE_ORIGIN}/favicon.svg`,
     email: BRAND_EMAILS.hello,
-    sameAs: [],
+    description:
+      'PedalMap es un planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según el tipo de bici y exportación GPX.',
+    foundingDate: '2026',
+    sameAs: [] as string[],
+    knowsAbout: [
+      'planificación de rutas ciclistas',
+      'exportación GPX',
+      'ciclismo en España',
+      'gravel',
+      'MTB',
+      'Garmin',
+      'Wahoo',
+    ],
     areaServed: {
       '@type': 'Country',
       name: 'España',
+    },
+    contactPoint: {
+      '@type': 'ContactPoint',
+      email: BRAND_EMAILS.hello,
+      contactType: 'customer support',
+      availableLanguage: ['Spanish', 'es'],
     },
   }
 }
@@ -23,19 +42,37 @@ export function softwareApplicationJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: SITE_NAME,
+    alternateName: ['Pedal Map', 'pedalmap.es'],
     applicationCategory: 'LifestyleApplication',
+    applicationSubCategory: 'Bike route planner',
     operatingSystem: 'Web',
     url: SITE_ORIGIN,
     image: DEFAULT_OG_IMAGE,
     description:
-      'Planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según tu bici y exportación GPX.',
+      'Planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según tu bici (carretera, urbana, gravel, MTB, e-bike) y exportación GPX para Garmin, Wahoo, OsmAnd y Organic Maps.',
+    featureList: [
+      'Crear ruta bicicleta origen-destino',
+      'Ruta circular por kilómetros y desnivel (Objetivo)',
+      'Perfiles carretera, urbana, gravel, MTB y e-bike',
+      'Desnivel y perfil de elevación',
+      'Viento relativo al sentido de la ruta',
+      'Composición de superficie',
+      'Exportación GPX',
+    ],
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'EUR',
-      description: 'Plan Free para empezar; Premium opcional',
+      url: `${SITE_ORIGIN}/premium`,
+      description: 'Plan Free para empezar; Premium opcional con trial anual de 7 días',
     },
+    countriesSupported: 'ES',
     inLanguage: 'es-ES',
+    creator: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: SITE_ORIGIN,
+    },
   }
 }
 
