@@ -251,6 +251,29 @@ export function ActivityPage() {
       return
     }
     try {
+      // Ask for location up front so Android/iOS show the permission prompt
+      // before we create the Firestore activity.
+      await new Promise<void>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          () => resolve(),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+        )
+      })
+    } catch (err) {
+      const code = err && typeof err === 'object' && 'code' in err ? Number(err.code) : 0
+      if (code === 1) {
+        setMessage('Activa el permiso de ubicación para PedalMap en el navegador.')
+      } else if (code === 2) {
+        setMessage('No hay señal GPS. Sal al exterior o activa la ubicación del teléfono.')
+      } else if (code === 3) {
+        setMessage('Tiempo agotado buscando GPS. Inténtalo otra vez al aire libre.')
+      } else {
+        setMessage('No se pudo obtener la ubicación. Revisa el permiso de ubicación.')
+      }
+      return
+    }
+    try {
       const created = await activityRepository.create({
         userId: user.uid,
         title,
@@ -277,7 +300,14 @@ export function ActivityPage() {
       setMessage(null)
     } catch (error) {
       console.error('[activity] start', error)
-      setMessage('No se pudo iniciar la actividad.')
+      const raw = error instanceof Error ? error.message : String(error)
+      if (/permission|insufficient|PERMISSION_DENIED/i.test(raw)) {
+        setMessage('Sin permiso para guardar la actividad en la nube. Vuelve a iniciar sesión.')
+      } else if (/undefined|Unsupported field value/i.test(raw)) {
+        setMessage('Error al crear la actividad (datos inválidos). Prueba de nuevo.')
+      } else {
+        setMessage('No se pudo iniciar la actividad. Comprueba la conexión e inténtalo otra vez.')
+      }
     }
   }
 

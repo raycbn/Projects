@@ -86,11 +86,10 @@ export class ActivityRepository {
     routeId?: string
   }): Promise<Activity> {
     const startedAt = new Date().toISOString()
-    const payload = {
+    const payload: Record<string, unknown> = {
       userId: input.userId,
-      title: input.title,
+      title: input.title.slice(0, 120),
       bikeType: input.bikeType,
-      routeId: input.routeId,
       status: 'recording' as ActivityStatus,
       startedAt,
       track: [] as ActivityTrackPoint[],
@@ -99,6 +98,9 @@ export class ActivityRepository {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
+    // Firestore rejects `undefined` field values — only include routeId when present.
+    if (input.routeId) payload.routeId = input.routeId
+
     const ref = await addDoc(collection(getDb(), 'activities'), payload)
     return mapActivity(ref.id, { ...payload, createdAt: startedAt, updatedAt: startedAt })
   }
