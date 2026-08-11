@@ -407,7 +407,8 @@ export function MyActivitiesPage() {
             </div>
             <p className="text-xs text-[var(--color-stone)]">
               Flujo habitual: termina la salida en tu GPS → deja que suba a la nube → pulsa «Traer
-              salidas» (o vuelve aquí) y revisa el análisis en PedalMap.
+              salidas» (o vuelve aquí) y revisa el análisis en PedalMap. Si ves un error de permisos,
+              desactiva y vuelve a activar la sync aceptando ver actividades.
             </p>
           </div>
         )}

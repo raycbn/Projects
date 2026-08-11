@@ -18,12 +18,23 @@ const STRAVA_API = 'https://www.strava.com/api/v3'
 /** Must include activity:read* — plain `read` cannot list /athlete/activities. */
 const SCOPE = 'read,activity:read,activity:read_all,profile:read_all'
 
-function hasActivityReadScope(scope: string | null | undefined): boolean {
-  const parts = String(scope || '')
-    .split(',')
+function parseScopes(scope: string | null | undefined): string[] {
+  return String(scope || '')
+    .split(/[,\s+]+/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
+}
+
+function hasActivityReadScope(scope: string | null | undefined): boolean {
+  const parts = parseScopes(scope)
   return parts.includes('activity:read') || parts.includes('activity:read_all')
+}
+
+/** True when Strava told us the scopes and they clearly lack activity access. */
+function clearlyMissingActivityScope(scope: string | null | undefined): boolean {
+  const parts = parseScopes(scope)
+  if (parts.length === 0) return false
+  return !hasActivityReadScope(scope)
 }
 
 function stravaConfigured(env: Env): boolean {
@@ -150,7 +161,10 @@ export async function handleStravaOAuthCallback(
   if (!uid) {
     return Response.redirect(`${appUrl}/actividades?strava=error&reason=bad_state`, 302)
   }
-  if (!hasActivityReadScope(grantedScope)) {
+  // Only reject when Strava returned an explicit scope list without activity:read*.
+  // Empty/odd encodings used to false-negative and loop the user.
+  if (clearlyMissingActivityScope(grantedScope)) {
+    console.error('[strava] callback missing activity scope', { grantedScope })
     return Response.redirect(
       `${appUrl}/actividades?strava=error&reason=missing_activity_scope`,
       302,
@@ -182,7 +196,11 @@ export async function handleStravaOAuthCallback(
   }
 
   const effectiveScope = tokenJson.scope || grantedScope || SCOPE
-  if (!hasActivityReadScope(effectiveScope)) {
+  if (clearlyMissingActivityScope(effectiveScope)) {
+    console.error('[strava] token missing activity scope', {
+      tokenScope: tokenJson.scope,
+      grantedScope,
+    })
     return Response.redirect(
       `${appUrl}/actividades?strava=error&reason=missing_activity_scope`,
       302,
