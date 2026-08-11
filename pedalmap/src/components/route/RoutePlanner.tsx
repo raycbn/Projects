@@ -276,34 +276,35 @@ export function RoutePlanner() {
             {modeChips}
           </div>
 
-          {tapHint && status !== 'calculating' && (
-            <p className="pointer-events-none absolute bottom-[min(42%,14rem)] left-3 z-10 max-w-[min(92%,18rem)] rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:bottom-40">
-              {tapHint}
-            </p>
-          )}
-
           {status === 'calculating' && (
             <p className="pointer-events-none absolute left-3 top-24 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
               Encajando tu trazado en la red ciclista…
             </p>
           )}
-
-          <button
-            type="button"
-            className="absolute bottom-[min(38%,12.5rem)] right-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)] lg:bottom-36"
-            onClick={() => setTraceSheetOpen((v) => !v)}
-          >
-            {traceSheetOpen ? 'Ocultar panel' : 'Mostrar panel'}
-          </button>
         </div>
 
         <div
           className={clsx(
             'z-20 border-t border-[var(--color-fog)] bg-white/95 backdrop-blur transition-[max-height] safe-pb',
-            traceSheetOpen ? 'max-h-[48vh] overflow-y-auto' : 'max-h-0 overflow-hidden',
+            traceSheetOpen ? 'max-h-[48vh] overflow-y-auto' : 'max-h-14 overflow-hidden',
           )}
         >
-          <div className="space-y-3 px-4 py-3">
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--color-fog)] px-4 py-2">
+            <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--color-forest)]">
+              {status === 'calculating'
+                ? 'Calculando…'
+                : tapHint ?? 'Trazar en mapa'}
+            </p>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg bg-[var(--color-mist)] px-2.5 py-1.5 text-xs font-semibold text-[var(--color-forest)]"
+              onClick={() => setTraceSheetOpen((v) => !v)}
+            >
+              {traceSheetOpen ? 'Ocultar' : 'Mostrar'}
+            </button>
+          </div>
+
+          <div className={clsx('space-y-3 px-4 py-3', !traceSheetOpen && 'hidden')}>
             <div>
               <h1 className="font-display text-xl font-extrabold text-[var(--color-forest)]">
                 Trazar en mapa
@@ -410,7 +411,7 @@ export function RoutePlanner() {
             )}
           </div>
 
-          <div className="sticky bottom-0 border-t border-[var(--color-fog)] bg-white/95 p-3">
+          <div className={clsx('sticky bottom-0 border-t border-[var(--color-fog)] bg-white/95 p-3', !traceSheetOpen && 'hidden')}>
             <Button
               className="w-full !py-3 text-base"
               disabled={ctaDisabled}

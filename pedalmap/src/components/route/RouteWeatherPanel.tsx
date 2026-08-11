@@ -67,8 +67,8 @@ export function RouteWeatherPanel({
     const controller = new AbortController()
     setLoading(true)
     setError(null)
-    onSelectHour(null)
-    onSelectWindow(null)
+    // Don't clear the parent's selection until the new forecast arrives —
+    // clearing first blanks the map overlay during every refetch.
     void weatherService
       .forecastForRoute(route.geometry, { forecastDays: 7, signal: controller.signal })
       .then((data) => {

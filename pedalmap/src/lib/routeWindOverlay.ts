@@ -64,6 +64,37 @@ function pointAtDistance(
   return { position, travelBearing, index: i0 }
 }
 
+/**
+ * Dense polyline following the route between two distances (no chord shortcuts).
+ */
+function coordsAlongRoute(
+  coords: [number, number][],
+  cum: number[],
+  d0: number,
+  d1: number,
+): [number, number][] {
+  const start = pointAtDistance(coords, cum, d0)
+  const end = pointAtDistance(coords, cum, d1)
+  if (!start || !end) return []
+
+  const out: [number, number][] = [start.position]
+  const fromIdx = start.index + 1
+  const toIdx = end.index
+  for (let i = fromIdx; i <= toIdx; i += 1) {
+    const c = coords[i]
+    if (!c) continue
+    const prev = out[out.length - 1]
+    if (prev[0] === c[0] && prev[1] === c[1]) continue
+    // Only include vertices that sit within [d0, d1]
+    if (cum[i] >= d0 - 1e-6 && cum[i] <= d1 + 1e-6) out.push(c)
+  }
+  const last = out[out.length - 1]
+  if (!last || last[0] !== end.position[0] || last[1] !== end.position[1]) {
+    out.push(end.position)
+  }
+  return out.length >= 2 ? out : [start.position, end.position]
+}
+
 function resolveWind(opts: RouteWindOverlayOptions): {
   windFromDeg: number
   windSpeedKmh: number
@@ -103,31 +134,8 @@ function intensityBucket(speedKmh: number): 'flojo' | 'moderado' | 'fuerte' | 'm
   return 'muy_fuerte'
 }
 
-/** Offset a lon/lat by bearing (deg, from north) and distance (m). */
-function offsetByBearing(
-  position: [number, number],
-  bearingDeg: number,
-  meters: number,
-): [number, number] {
-  const R = 6371000
-  const br = (bearingDeg * Math.PI) / 180
-  const lat1 = (position[1] * Math.PI) / 180
-  const lng1 = (position[0] * Math.PI) / 180
-  const ang = meters / R
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(br),
-  )
-  const lng2 =
-    lng1 +
-    Math.atan2(
-      Math.sin(br) * Math.sin(ang) * Math.cos(lat1),
-      Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2),
-    )
-  return [(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI]
-}
-
 /**
- * Build map overlay: short colored line segments + arrow points for a chosen hour/window.
+ * Build map overlay: colored route segments (follow path) + wind arrows on the line.
  */
 export function buildRouteWindOverlay(
   geometry: RouteGeometry,
@@ -144,16 +152,13 @@ export function buildRouteWindOverlay(
   // Dense enough to read on a half-screen mobile map; cap for long routes.
   const samples = Math.max(18, Math.min(48, opts.sampleCount ?? 32))
   const windToward = (wind.windFromDeg + 180) % 360
-  // Short wind ticks so direction stays readable at city zoom.
-  const barbMeters = Math.max(220, Math.min(380, total / samples / 2.4))
   const features: Feature<Point | LineString>[] = []
 
   for (let s = 0; s < samples; s += 1) {
     const d0 = (total * s) / samples
     const d1 = (total * (s + 1)) / samples
     const p0 = pointAtDistance(coords, cum, d0)
-    const p1 = pointAtDistance(coords, cum, d1)
-    if (!p0 || !p1) continue
+    if (!p0) continue
 
     const midProgress = (s + 0.5) / samples
     const relative = windRelativeFactor(p0.travelBearing, wind.windFromDeg)
@@ -173,52 +178,25 @@ export function buildRouteWindOverlay(
       timeLabel: wind.timeLabel,
     }
 
-    features.push({
-      type: 'Feature',
-      properties: {
-        kind: 'segment',
-        ...shared,
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: [p0.position, p1.position],
-      },
-    })
+    const along = coordsAlongRoute(coords, cum, d0, d1)
+    if (along.length >= 2) {
+      features.push({
+        type: 'Feature',
+        properties: {
+          kind: 'segment',
+          ...shared,
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: along,
+        },
+      })
+    }
 
     const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
     if (!mid) continue
 
-    // Barb + chevron tip (pure LineStrings — visible without MapLibre symbol images).
-    const barbTip = offsetByBearing(mid.position, windToward, barbMeters)
-    features.push({
-      type: 'Feature',
-      properties: {
-        kind: 'barb',
-        ...shared,
-        windTowardDeg: Number(windToward.toFixed(1)),
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: [mid.position, barbTip],
-      },
-    })
-
-    const wing = Math.max(90, barbMeters * 0.42)
-    const left = offsetByBearing(barbTip, (windToward + 145) % 360, wing)
-    const right = offsetByBearing(barbTip, (windToward + 215) % 360, wing)
-    features.push({
-      type: 'Feature',
-      properties: {
-        kind: 'arrowhead',
-        ...shared,
-        windTowardDeg: Number(windToward.toFixed(1)),
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: [left, barbTip, right],
-      },
-    })
-
+    // Arrow sits ON the route (no wind-direction stick that shortcuts the map).
     features.push({
       type: 'Feature',
       properties: {
@@ -233,8 +211,7 @@ export function buildRouteWindOverlay(
       },
       geometry: {
         type: 'Point',
-        // Sit slightly toward the barb tip so the icon is not buried in the thick route stroke.
-        coordinates: offsetByBearing(mid.position, windToward, barbMeters * 0.55),
+        coordinates: mid.position,
       },
     })
   }

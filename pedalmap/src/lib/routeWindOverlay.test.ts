@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { LineString } from 'geojson'
 import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
 
 describe('buildRouteWindOverlay', () => {
@@ -38,17 +39,56 @@ describe('buildRouteWindOverlay', () => {
     })
     const segments = fc.features.filter((f) => f.properties?.kind === 'segment')
     const arrows = fc.features.filter((f) => f.properties?.kind === 'arrow')
-    const barbs = fc.features.filter((f) => f.properties?.kind === 'barb')
-    const heads = fc.features.filter((f) => f.properties?.kind === 'arrowhead')
     expect(segments.length).toBeGreaterThan(0)
     expect(arrows.length).toBeGreaterThan(0)
-    expect(barbs.length).toBe(arrows.length)
-    expect(heads.length).toBe(arrows.length)
     expect(segments.some((f) => f.properties?.leg === 'ida')).toBe(true)
     expect(segments.some((f) => f.properties?.leg === 'vuelta')).toBe(true)
     expect(typeof arrows[0]?.properties?.windTowardDeg).toBe('number')
-    expect(barbs[0]?.geometry.type).toBe('LineString')
-    expect(heads[0]?.geometry.type).toBe('LineString')
-    expect((heads[0]?.geometry as { coordinates: unknown[] }).coordinates).toHaveLength(3)
+  })
+
+  it('keeps wind segments on the route polyline (no straight chords)', () => {
+    // Hook-shaped route: a chord from start→end would skip the corner vertex.
+    const hooked = {
+      type: 'LineString' as const,
+      coordinates: [
+        [0, 0],
+        [0.01, 0],
+        [0.01, 0.01],
+        [0.02, 0.01],
+      ] as [number, number][],
+    }
+    const fc = buildRouteWindOverlay(hooked, {
+      routeType: 'a_to_b',
+      sampleCount: 2,
+      hour: {
+        time: '2026-08-10T09:00',
+        temperatureC: 20,
+        precipitationMm: 0,
+        windSpeedKmh: 18,
+        windDirectionDeg: 180,
+        windGustsKmh: 22,
+      },
+    })
+    const segments = fc.features.filter((f) => f.properties?.kind === 'segment')
+    expect(segments.length).toBeGreaterThan(0)
+    for (const seg of segments) {
+      expect(seg.geometry.type).toBe('LineString')
+      const coords = (seg.geometry as LineString).coordinates
+      expect(coords.length).toBeGreaterThanOrEqual(2)
+    }
+    // Full overlay should include the corner when covering the whole hook.
+    const allCoords = segments.flatMap((s) => (s.geometry as LineString).coordinates)
+    const hasCorner = allCoords.some(
+      ([lng, lat]) => Math.abs(lng - 0.01) < 1e-9 && Math.abs(lat - 0.01) < 1e-9,
+    )
+    expect(hasCorner).toBe(true)
+
+    const arrows = fc.features.filter((f) => f.properties?.kind === 'arrow')
+    for (const a of arrows) {
+      expect(a.geometry.type).toBe('Point')
+    }
+    // No off-route wind sticks.
+    expect(fc.features.every((f) => f.properties?.kind !== 'barb')).toBe(true)
+    expect(fc.features.every((f) => f.properties?.kind !== 'arrowhead')).toBe(true)
   })
 })

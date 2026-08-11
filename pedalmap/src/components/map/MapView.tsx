@@ -321,11 +321,11 @@ function ensureWindLayers(map: Map) {
           ['linear'],
           ['zoom'],
           8,
-          0.28,
+          0.4,
           11,
-          0.42,
-          14,
           0.58,
+          14,
+          0.78,
         ],
         'icon-rotate': ['to-number', ['get', 'windTowardDeg']],
         'icon-rotation-alignment': 'map',
@@ -698,8 +698,15 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    applyWindOverlay(map, windOverlay)
+    const ok = applyWindOverlay(map, windOverlay)
     setWindArrowLayersVisible(map, showWindArrows)
+    // If style was not ready, retry once after idle so the overlay is not dropped.
+    if (!ok && windOverlay?.features?.length) {
+      map.once('idle', () => {
+        applyWindOverlay(map, windRef.current)
+        setWindArrowLayersVisible(map, showWindArrowsRef.current)
+      })
+    }
   }, [windOverlay, showWindArrows])
 
   useEffect(() => {

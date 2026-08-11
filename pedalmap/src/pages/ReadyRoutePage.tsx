@@ -66,7 +66,7 @@ export function ReadyRoutePage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [rideOpen, setRideOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
-  const [windOpen, setWindOpen] = useState(false)
+  const [windOpen, setWindOpen] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -74,6 +74,7 @@ export function ReadyRoutePage() {
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
   const [bestLine, setBestLine] = useState<string | null>(null)
   const [showWindArrows, setShowWindArrows] = useState(true)
+  const [windLoading, setWindLoading] = useState(false)
   const exportRef = useRef<HTMLDetailsElement | null>(null)
 
   const routeIdParam = params.get('routeId')
@@ -161,6 +162,16 @@ export function ReadyRoutePage() {
     if (!draft?.geometry) return null
     return buildSurfaceRouteOverlay(draft.geometry, draft.surfaceEdges)
   }, [draft])
+
+  // Show map "Cargando viento…" until the first forecast paints an overlay.
+  useEffect(() => {
+    if (!draft?.geometry?.coordinates?.length) return
+    setWindLoading(true)
+  }, [draft?.geometry, draft?.selectedOptionId, draft?.stats.distanceMeters])
+
+  useEffect(() => {
+    if (windOverlay?.features?.length) setWindLoading(false)
+  }, [windOverlay])
 
   function stashForRide() {
     if (!draft) return
@@ -320,6 +331,11 @@ export function ReadyRoutePage() {
             interactive={false}
           />
         </Suspense>
+        {windLoading && !windOverlay?.features?.length ? (
+          <p className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]">
+            Cargando viento…
+          </p>
+        ) : null}
         {windOverlay?.features?.length ? (
           <button
             type="button"
@@ -420,6 +436,7 @@ export function ReadyRoutePage() {
               selectedWindow={selectedWindWindow}
               selectedHour={selectedWindHour}
               onForecast={(f) => {
+                setWindLoading(false)
                 const best = f?.windows?.[0]
                 if (!best) {
                   setBestLine(null)
