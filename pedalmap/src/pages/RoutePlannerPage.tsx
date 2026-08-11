@@ -17,7 +17,7 @@ export function RoutePlannerPage() {
 
   const [params] = useSearchParams()
   const { firebaseReady } = useAuth()
-  const { setDraftFromImport, startEditing } = usePlanner()
+  const { setDraftFromImport, startEditing, clearRoute } = usePlanner()
 
   // Support Mis rutas → Editar (?routeId=&edit=1)
   useEffect(() => {
@@ -43,6 +43,18 @@ export function RoutePlannerPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, firebaseReady])
+
+  // Support /ruta → Crear otra (?reset=1)
+  useEffect(() => {
+    if (params.get('reset') !== '1') return
+    clearRoute()
+    // Drop the query so a refresh does not wipe a new draft mid-edit.
+    const next = new URLSearchParams(params)
+    next.delete('reset')
+    const qs = next.toString()
+    window.history.replaceState({}, '', qs ? `?${qs}` : window.location.pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
 
   return <RoutePlanner />
 }

@@ -223,6 +223,14 @@ export function RoutePlanner() {
           ? `Calcular · ${bikeModality.label}`
           : 'Crear ruta'
 
+  const canReset = waypoints.length > 0 || Boolean(activeDraft) || Boolean(errorMessage)
+
+  function handleResetPlan() {
+    clearRoute()
+    setCompareRows(null)
+    setViaQueryOpen(false)
+  }
+
   const modeChips = (
     <div className="flex flex-wrap gap-2">
       {MODE_CHIPS.map(([id, label]) => (
@@ -327,18 +335,9 @@ export function RoutePlanner() {
               >
                 {locating ? 'Localizando…' : 'Estoy aquí'}
               </Button>
-              {waypoints.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    const ids = waypoints.map((w) => w.id)
-                    ids.forEach((id) => removeWaypoint(id))
-                    clearRoute()
-                    setCompareRows(null)
-                  }}
-                >
-                  Borrar puntos
+              {canReset && (
+                <Button size="sm" variant="ghost" onClick={handleResetPlan}>
+                  Empezar otra
                 </Button>
               )}
             </div>
@@ -460,6 +459,9 @@ export function RoutePlanner() {
                 >
                   Ver ruta lista
                 </Button>
+                <Button variant="ghost" className="w-full" onClick={handleResetPlan}>
+                  Empezar otra ruta
+                </Button>
               </div>
             )}
           </div>
@@ -495,14 +497,21 @@ export function RoutePlanner() {
 
         {modeChips}
 
-        <Button
-          variant="secondary"
-          className="w-full"
-          disabled={locating}
-          onClick={() => void handleLocate()}
-        >
-          {locating ? 'Localizando…' : 'Estoy aquí'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={locating}
+            onClick={() => void handleLocate()}
+          >
+            {locating ? 'Localizando…' : 'Estoy aquí'}
+          </Button>
+          {canReset && (
+            <Button variant="ghost" onClick={handleResetPlan}>
+              Empezar otra
+            </Button>
+          )}
+        </div>
 
         <SearchLocation
           label="Inicio"
@@ -733,6 +742,10 @@ export function RoutePlanner() {
               onClick={() => goToReady()}
             >
               Ver ruta lista
+            </Button>
+
+            <Button variant="ghost" className="w-full" onClick={handleResetPlan}>
+              Empezar otra ruta
             </Button>
 
             <div className="flex flex-wrap gap-2">

@@ -690,11 +690,16 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         track('gpx_imported', { points: next.geometry.coordinates.length })
       },
       clearRoute() {
+        // Full plan reset: points + draft. Keeps mode, bike and preferences.
+        setWaypoints([])
         setDraft(null)
         persistDraft(null, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
+        setHoverPoint(null)
+        setCircularSeed(0)
         setStatus('idle')
         setErrorMessage(null)
+        setPaywallReason(null)
       },
     }
   }, [

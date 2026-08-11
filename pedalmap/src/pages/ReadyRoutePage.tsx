@@ -477,6 +477,12 @@ export function ReadyRoutePage() {
 
         <div className="flex flex-wrap gap-3 text-sm">
           <Link
+            to="/route-planner?reset=1"
+            className="font-semibold text-[var(--color-forest)] underline-offset-2 hover:underline"
+          >
+            Empezar otra ruta
+          </Link>
+          <Link
             to={
               packet?.savedRouteId
                 ? `/route-planner?routeId=${packet.savedRouteId}&edit=1`
