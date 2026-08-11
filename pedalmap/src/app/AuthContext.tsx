@@ -26,6 +26,9 @@ interface AuthContextValue {
   resetPassword: (email: string) => Promise<void>
   logout: () => Promise<void>
   updateBikePreferences: (bikePreferences: UserProfile['bikePreferences']) => Promise<void>
+  updateNotifications: (
+    notifications: NonNullable<UserProfile['notifications']>,
+  ) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -141,6 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) throw new Error('Debes iniciar sesión')
       await authService.updateBikePreferences(user.uid, bikePreferences)
       setProfile((prev) => (prev ? { ...prev, bikePreferences } : prev))
+    },
+    async updateNotifications(notifications) {
+      if (!user) throw new Error('Debes iniciar sesión')
+      await authService.updateNotifications(user.uid, notifications)
+      setProfile((prev) => (prev ? { ...prev, notifications } : prev))
     },
   }
 

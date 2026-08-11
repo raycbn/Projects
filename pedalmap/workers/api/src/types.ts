@@ -30,6 +30,10 @@ export interface Env {
   GARMIN_CLIENT_ID?: string
   GARMIN_CLIENT_SECRET?: string
   GARMIN_WEBHOOK_TOKEN?: string
+  /** Optional Resend API key for transactional mail (alerts stub). */
+  RESEND_API_KEY?: string
+  /** Optional From header, e.g. `PedalMap <aviso@pedalmap.es>`. */
+  MAIL_FROM?: string
 }
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'

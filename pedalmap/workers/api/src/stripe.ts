@@ -52,16 +52,19 @@ export async function handleCheckout(request: Request, env: Env): Promise<Respon
   }
 
   const appUrl = resolveAppUrl(env, request)
+  // Annual plan: 7-day trial (webhook already treats `trialing` as premium).
+  const trialDays = interval === 'year' ? '7' : undefined
   const sessionRes = await stripeForm(env, 'checkout/sessions', {
     mode: 'subscription',
     customer: customerId,
     'line_items[0][price]': priceId,
     'line_items[0][quantity]': '1',
-    success_url: `${appUrl}/premium?checkout=success`,
+    success_url: `${appUrl}/premium?checkout=success${interval === 'year' ? '&trial=1' : ''}`,
     cancel_url: `${appUrl}/premium?checkout=cancel`,
     'metadata[firebaseUid]': identity.uid,
     'subscription_data[metadata][firebaseUid]': identity.uid,
     allow_promotion_codes: 'true',
+    ...(trialDays ? { 'subscription_data[trial_period_days]': trialDays } : {}),
   })
   const session = (await sessionRes.json()) as { url?: string; error?: { message?: string } }
   if (!sessionRes.ok || !session.url) {

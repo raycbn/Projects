@@ -4,6 +4,7 @@ import { handleOrsProxy } from './ors'
 import { handleValhallaProxy } from './valhalla'
 import { handleBikeRoute } from './bikeRoute'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
+import { handleWindAlertEmail } from './alerts'
 import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 import { handleMintCustomToken } from './customToken'
@@ -261,6 +262,19 @@ export default {
 
       if (path === '/stripe/webhook' && request.method === 'POST') {
         return handleWebhook(request, env)
+      }
+
+      if (path === '/alerts/email' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 10,
+          windowSec: 60,
+          prefix: 'alerts-email',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleWindAlertEmail(request, env, identity))
       }
 
       if (path === '/strava/oauth/start' && request.method === 'POST') {

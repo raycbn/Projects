@@ -11,6 +11,10 @@ interface RouteCardProps {
   onDuplicate?: (route: SavedRoute) => void
   onDelete?: (route: SavedRoute) => void
   onExport?: (route: SavedRoute) => void
+  /** Soft per-route wind-alert toggle (shown when master switch is on). */
+  showWindAlertToggle?: boolean
+  onToggleWindAlert?: (route: SavedRoute) => void
+  windAlertBusy?: boolean
 }
 
 export function RouteCard({
@@ -19,6 +23,9 @@ export function RouteCard({
   onDuplicate,
   onDelete,
   onExport,
+  showWindAlertToggle,
+  onToggleWindAlert,
+  windAlertBusy,
 }: RouteCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -131,15 +138,31 @@ export function RouteCard({
           )}
         </div>
       </div>
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <Link
           to={`/ruta?routeId=${route.id}`}
-          onClick={() => stashReadyRoute({ draft: route, savedRouteId: route.id, shareSlug: route.shareSlug })}
+          onClick={() =>
+            stashReadyRoute({ draft: route, savedRouteId: route.id, shareSlug: route.shareSlug })
+          }
         >
           <Button variant="secondary" className="!py-2">
             Abrir
           </Button>
         </Link>
+        {showWindAlertToggle && onToggleWindAlert && (
+          <button
+            type="button"
+            disabled={windAlertBusy}
+            className={`text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-50 ${
+              route.windAlertEnabled
+                ? 'text-[var(--color-trail)]'
+                : 'text-[var(--color-stone)]'
+            }`}
+            onClick={() => onToggleWindAlert(route)}
+          >
+            {route.windAlertEnabled ? 'Avisando' : 'Avisar'}
+          </button>
+        )}
       </div>
     </article>
   )

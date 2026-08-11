@@ -142,6 +142,8 @@ export interface SavedRoute extends RouteDraft {
   userId: string
   isPublic: boolean
   shareSlug?: string
+  /** Opt-in: watch this route for excellent wind windows (in-app / email stub). */
+  windAlertEnabled?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -153,6 +155,13 @@ export interface BikePreferences {
 
 export type UserPlan = 'free' | 'premium'
 
+export interface UserNotifications {
+  /** Master switch for best-window wind alerts. */
+  windAlertsEnabled?: boolean
+  /** Also try email (Worker stub until Resend is wired). */
+  windAlertsEmail?: boolean
+}
+
 export interface UserProfile {
   uid: string
   email: string | null
@@ -160,6 +169,7 @@ export interface UserProfile {
   photoURL: string | null
   plan: UserPlan
   bikePreferences: BikePreferences
+  notifications?: UserNotifications
   usage: {
     routesCreatedThisMonth: number
     routesSaved: number
@@ -198,7 +208,12 @@ export const FREE_LIMITS: FreemiumLimits = {
 export const FREE_TRIALS = {
   gpxPerWeek: 1,
   circularPerMonth: 1,
+  /** Free may watch this many saved routes for wind alerts. */
+  windAlertRoutes: 1,
 } as const
+
+/** Stripe Checkout trial on yearly plan only (Worker). */
+export const ANNUAL_TRIAL_DAYS = 7
 
 export const PREMIUM_LIMITS: FreemiumLimits = {
   maxRoutesSaved: Number.POSITIVE_INFINITY,

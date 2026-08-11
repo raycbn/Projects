@@ -420,6 +420,15 @@ export class RouteRepository {
     await updateDoc(ref, { ...payload, updatedAt: serverTimestamp() })
   }
 
+  async setWindAlertEnabled(routeId: string, userId: string, enabled: boolean): Promise<void> {
+    const ref = doc(getDb(), 'routes', routeId)
+    const existing = await getDoc(ref)
+    if (!existing.exists() || existing.data().userId !== userId) {
+      throw new Error('No tienes permiso para editar esta ruta')
+    }
+    await updateDoc(ref, { windAlertEnabled: enabled, updatedAt: serverTimestamp() })
+  }
+
   async duplicate(userId: string, route: SavedRoute): Promise<SavedRoute> {
     const draft: RouteDraft = {
       title: `${route.title} (copia)`,
@@ -520,6 +529,7 @@ export class RouteRepository {
       instructions: data.instructions as SavedRoute['instructions'] | undefined,
       surfaceEdges: data.surfaceEdges as SavedRoute['surfaceEdges'] | undefined,
       bestWindWindow: data.bestWindWindow as SavedRoute['bestWindWindow'] | undefined,
+      windAlertEnabled: Boolean(data.windAlertEnabled),
       isPublic: Boolean(data.isPublic),
       shareSlug: data.shareSlug ? String(data.shareSlug) : undefined,
       createdAt: toIso(data.createdAt as Timestamp | string | undefined),

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyPreferenceToggle,
   canCreateRoute,
+  canEnableWindAlertOnRoute,
   canExportGpx,
   canSaveRoute,
   canUseAdvancedCircular,
@@ -9,6 +10,8 @@ import {
   freeCircularRemaining,
   freeGpxRemaining,
   maxActivePreferences,
+  windAlertRouteLimit,
+  windAlertRoutesRemaining,
 } from '@/services/EntitlementService'
 import type { UserProfile } from '@/domain/types'
 import { computeActivityStats } from '@/services/ActivityRepository'
@@ -103,6 +106,30 @@ describe('entitlements', () => {
       profile({ plan: 'free' }),
     )
     expect(filtered).toHaveLength(2)
+  })
+
+  it('limits Free wind-alert routes and requires master switch', () => {
+    const free = profile({ notifications: { windAlertsEnabled: true } })
+    expect(windAlertRouteLimit(free)).toBe(FREE_TRIALS.windAlertRoutes)
+    expect(windAlertRouteLimit(profile({ plan: 'premium' }))).toBe(Number.POSITIVE_INFINITY)
+
+    const routes = [
+      { id: 'r1', windAlertEnabled: true },
+      { id: 'r2', windAlertEnabled: false },
+    ]
+    expect(windAlertRoutesRemaining(free, routes)).toBe(0)
+    expect(canEnableWindAlertOnRoute(free, routes, 'r2').ok).toBe(false)
+    expect(canEnableWindAlertOnRoute(free, routes, 'r2').reason).toBe('alert_route_limit')
+    expect(canEnableWindAlertOnRoute(free, routes, 'r1').ok).toBe(true)
+
+    const off = profile({ notifications: { windAlertsEnabled: false } })
+    expect(canEnableWindAlertOnRoute(off, [{ id: 'r1' }], 'r1').reason).toBe('alerts_off')
+
+    const premium = profile({
+      plan: 'premium',
+      notifications: { windAlertsEnabled: true },
+    })
+    expect(canEnableWindAlertOnRoute(premium, routes, 'r2').ok).toBe(true)
   })
 })
 

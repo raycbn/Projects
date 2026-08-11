@@ -15,6 +15,8 @@ export type AnalyticsEvent =
   | 'activity_started'
   | 'activity_finished'
   | 'free_trial_used'
+  | 'wind_alert_opt_in'
+  | 'wind_alert_shown'
   | 'community_follow'
   | 'consent_updated'
 

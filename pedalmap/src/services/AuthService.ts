@@ -334,6 +334,21 @@ export class AuthService {
     )
   }
 
+  async updateNotifications(
+    uid: string,
+    notifications: NonNullable<UserProfile['notifications']>,
+  ): Promise<void> {
+    const ref = doc(getDb(), 'users', uid)
+    await setDoc(
+      ref,
+      {
+        notifications,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
+
   /** Client-side usage counters (Spark — no Cloud Functions required). */
   async recordRouteCreated(uid: string): Promise<void> {
     const ref = doc(getDb(), 'users', uid)

@@ -133,3 +133,41 @@ export function filterPreferencesForPlan(
 ): RoutePreference[] {
   return clampPreferencesForPlan(preferences, profile)
 }
+
+/** How many saved routes Free/Premium may watch for wind alerts. */
+export function windAlertRouteLimit(profile: UserProfile | null): number {
+  if (!profile) return 0
+  if (profile.plan === 'premium') return Number.POSITIVE_INFINITY
+  return FREE_TRIALS.windAlertRoutes
+}
+
+export function windAlertRoutesRemaining(
+  profile: UserProfile | null,
+  routes: { windAlertEnabled?: boolean }[],
+): number {
+  const limit = windAlertRouteLimit(profile)
+  if (!Number.isFinite(limit)) return Number.POSITIVE_INFINITY
+  const used = routes.filter((r) => r.windAlertEnabled).length
+  return Math.max(0, limit - used)
+}
+
+/**
+ * Enable wind alert on a route. Turning off is always ok.
+ * Requires profile.notifications.windAlertsEnabled.
+ */
+export function canEnableWindAlertOnRoute(
+  profile: UserProfile | null,
+  routes: { id: string; windAlertEnabled?: boolean }[],
+  routeId: string,
+): { ok: boolean; reason?: string } {
+  if (!profile) return { ok: false, reason: 'auth_required' }
+  if (!profile.notifications?.windAlertsEnabled) {
+    return { ok: false, reason: 'alerts_off' }
+  }
+  const target = routes.find((r) => r.id === routeId)
+  if (target?.windAlertEnabled) return { ok: true }
+  if (windAlertRoutesRemaining(profile, routes) <= 0) {
+    return { ok: false, reason: 'alert_route_limit' }
+  }
+  return { ok: true }
+}

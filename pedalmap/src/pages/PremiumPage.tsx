@@ -6,12 +6,12 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 import { useAuth } from '@/app/AuthContext'
 import { stripeService } from '@/services/StripeService'
 import { fetchServerEntitlements, syncServerPlan } from '@/lib/planSync'
+import { ANNUAL_TRIAL_DAYS } from '@/domain/types'
 
 export function PremiumPage() {
   usePageMeta({
     title: 'PedalMap Premium',
-    description:
-      'Rutas ilimitadas, GPX a tu GPS y Objetivo avanzado. 4,99 €/mes o 39,99 €/año.',
+    description: `Rutas ilimitadas, GPX a tu GPS y Objetivo avanzado. Prueba ${ANNUAL_TRIAL_DAYS} días con el plan anual · 39,99 €/año o 4,99 €/mes.`,
     path: '/premium',
   })
 
@@ -21,13 +21,16 @@ export function PremiumPage() {
   const [syncingPlan, setSyncingPlan] = useState(false)
   const [message, setMessage] = useState<string | null>(() => {
     if (params.get('checkout') === 'success') {
-      return 'Checkout completado. Activando Premium…'
+      return params.get('trial') === '1'
+        ? `Checkout completado. Activando tu prueba de ${ANNUAL_TRIAL_DAYS} días…`
+        : 'Checkout completado. Activando Premium…'
     }
     if (params.get('checkout') === 'cancel') return 'Checkout cancelado.'
     return null
   })
   const stripeReady = stripeService.isConfigured()
   const isPremium = profile?.plan === 'premium'
+  const startedWithTrial = params.get('trial') === '1'
 
   // After Stripe success, poll Worker entitlements until plan flips (webhook lag).
   useEffect(() => {
@@ -42,9 +45,16 @@ export function PremiumPage() {
       const ent = await fetchServerEntitlements()
       if (cancelled) return
       if (ent?.plan === 'premium') {
-        setMessage('¡Premium activado! Ya puedes usar Objetivo, GPX y guardados ilimitados.')
+        setMessage(
+          startedWithTrial
+            ? `¡Prueba de ${ANNUAL_TRIAL_DAYS} días activa! Premium listo: Objetivo, GPX y guardados ilimitados.`
+            : '¡Premium activado! Ya puedes usar Objetivo, GPX y guardados ilimitados.',
+        )
         setSyncingPlan(false)
-        track('premium_activated', { source: 'checkout_poll' })
+        track('premium_activated', {
+          source: 'checkout_poll',
+          trial: startedWithTrial,
+        })
         return
       }
       if (tries >= 12) {
@@ -62,7 +72,7 @@ export function PremiumPage() {
     return () => {
       cancelled = true
     }
-  }, [params, user])
+  }, [params, user, startedWithTrial])
 
   async function startCheckout(interval: 'month' | 'year') {
     if (!user || user.isAnonymous) {
@@ -121,6 +131,7 @@ export function PremiumPage() {
       </h1>
       <p className="mt-3 max-w-xl text-[var(--color-stone)] leading-relaxed">
         Free ya deja probar: 1 GPX a la semana y 1 Objetivo al mes. Premium quita los topes.
+        El anual incluye {ANNUAL_TRIAL_DAYS} días de prueba.
       </p>
 
       {isPremium && (
@@ -139,6 +150,7 @@ export function PremiumPage() {
             <li>15 creaciones / mes</li>
             <li>1 GPX / semana · 1 Objetivo / mes</li>
             <li>2 filtros a la vez</li>
+            <li>1 ruta con aviso de viento</li>
           </ul>
         </div>
 
@@ -151,15 +163,19 @@ export function PremiumPage() {
             <li>GPX ilimitado a Garmin / Wahoo / apps</li>
             <li>Objetivo ilimitado</li>
             <li>Filtros sin techo</li>
+            <li>Avisos de viento en todas tus rutas</li>
           </ul>
-          <p className="mt-5 text-sm text-white/65">4,99 €/mes · 39,99 €/año</p>
+          <p className="mt-5 text-sm text-white/65">
+            {ANNUAL_TRIAL_DAYS} días gratis con el anual · luego 39,99 €/año
+          </p>
+          <p className="mt-1 text-xs text-white/45">o 4,99 €/mes sin prueba</p>
           <div className="mt-4 space-y-2">
             <Button
               className="w-full"
               disabled={busy || isPremium}
               onClick={() => void startCheckout('year')}
             >
-              Anual 39,99 €
+              Probar {ANNUAL_TRIAL_DAYS} días · Anual
             </Button>
             <Button
               variant="ghost"
@@ -185,7 +201,7 @@ export function PremiumPage() {
 
       {(message || syncingPlan) && (
         <p className="mt-6 rounded-2xl bg-[var(--color-mist)] px-4 py-3 text-sm text-[var(--color-forest)]">
-          {syncingPlan && !message?.includes('activado')
+          {syncingPlan && !message?.includes('activado') && !message?.includes('Prueba')
             ? 'Activando Premium…'
             : message}
         </p>

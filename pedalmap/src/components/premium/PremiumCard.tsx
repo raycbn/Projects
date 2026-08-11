@@ -56,6 +56,7 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             'GPX ilimitado a tu GPS',
             'Objetivo ilimitado',
             'Más de 2 filtros a la vez',
+            'Avisos de viento en todas tus rutas',
           ].map((item) => (
             <li key={item} className="flex gap-2">
               <span className="text-[var(--color-signal)]" aria-hidden>
@@ -65,6 +66,9 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             </li>
           ))}
         </ul>
+        <p className="mt-4 text-xs text-white/55">
+          Anual: 7 días de prueba antes de cobrar.
+        </p>
         <div className="mt-6 flex flex-wrap gap-2">
           <Link
             to="/premium"
