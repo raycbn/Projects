@@ -88,7 +88,7 @@ redirect_url: https://pedalmap-api.broken-dietician.workers.dev/gps/igpsport/oau
 callback_url: https://pedalmap-api.broken-dietician.workers.dev/gps/igpsport/webhook
 Company name: [TU RAZÓN SOCIAL / NOMBRE]
 Official website: https://pedalmap.es
-Application Logo: [adjuntar PNG 120x120]
+Application Logo: attach PNG 120x120 from `public/brand/logo-120.png` (or download https://pedalmap.es/brand/logo-120.png once deployed)
 ```
 
 ## Wahoo (checklist)
