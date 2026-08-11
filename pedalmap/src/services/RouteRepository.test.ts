@@ -34,7 +34,8 @@ describe('toPersistedDraft', () => {
     const payload = toPersistedDraft(draft)
     expect(payload.title).toBe('Test')
     expect('description' in payload).toBe(false)
-    expect('instructions' in payload).toBe(false)
+    // Instructions are capped (not dropped) so navigate/share stay useful offline.
+    expect(payload.instructions).toEqual([])
     expect('routeOptions' in payload).toBe(false)
     expect('alternatives' in payload).toBe(false)
     expect(stripUndefinedDeep({ a: 1, b: undefined })).toEqual({ a: 1 })

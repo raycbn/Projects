@@ -41,7 +41,8 @@ export class RouteService {
       waypoints: sorted.map((w) => w.position),
       bikeType: input.bikeType,
       preferences: input.preferences,
-      routeType: input.routeType,
+      // Trazar en mapa uses the same point-to-point engine as A → B.
+      routeType: input.routeType === 'map_trace' ? 'a_to_b' : input.routeType,
       language: 'es',
       circularDistanceMeters: input.circularDistanceMeters,
       targetElevationGainMeters: input.targetElevationGainMeters,
@@ -60,9 +61,13 @@ export class RouteService {
       input.title ||
       (input.routeType === 'circular'
         ? `Circular desde ${startName ?? 'inicio'}`
-        : startName && endName
-          ? `${startName} → ${endName}`
-          : 'Nueva ruta')
+        : input.routeType === 'map_trace'
+          ? startName && endName
+            ? `Trazado · ${startName} → ${endName}`
+            : 'Ruta trazada'
+          : startName && endName
+            ? `${startName} → ${endName}`
+            : 'Nueva ruta')
 
     const candidates = [
       {

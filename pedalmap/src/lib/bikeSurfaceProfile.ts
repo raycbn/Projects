@@ -693,7 +693,7 @@ function waytypeIdFromLabel(label: string): number | undefined {
 
 export function buildOrsOptionsFromStrategy(
   strategyIn: RoutingStrategy,
-  routeType: 'a_to_b' | 'out_and_back' | 'circular',
+  routeType: 'a_to_b' | 'out_and_back' | 'circular' | 'map_trace',
   circularDistanceMeters?: number,
   circularSeed?: number,
 ): Record<string, unknown> {
@@ -705,6 +705,7 @@ export function buildOrsOptionsFromStrategy(
     avoid_features: strategyIn.avoidFeatures,
     profile_params: Object.keys(profile_params).length ? profile_params : undefined,
   }
+  // map_trace uses the same point-to-point engine as a_to_b (no round_trip).
   if (routeType === 'circular' && circularDistanceMeters) {
     options.round_trip = {
       length: Math.round(circularDistanceMeters),

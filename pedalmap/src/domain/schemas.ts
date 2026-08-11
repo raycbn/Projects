@@ -7,7 +7,7 @@ export const latLngSchema = z.object({
 
 export const bikeTypeSchema = z.enum(['road', 'mtb', 'gravel', 'urban', 'ebike'])
 
-export const routeTypeSchema = z.enum(['a_to_b', 'circular', 'out_and_back'])
+export const routeTypeSchema = z.enum(['a_to_b', 'circular', 'out_and_back', 'map_trace'])
 
 export const routePreferenceSchema = z.enum([
   'prefer_bike_lanes',

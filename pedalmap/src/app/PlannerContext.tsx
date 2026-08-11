@@ -296,7 +296,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               : undefined,
           circularSeed: routeType === 'circular' ? seed : undefined,
           wantAlternatives:
-            wantAlternatives && (routeType === 'a_to_b' || routeType === 'out_and_back')
+            wantAlternatives &&
+            (routeType === 'a_to_b' || routeType === 'out_and_back' || routeType === 'map_trace')
               ? true
               : routeType === 'circular',
         })
@@ -384,8 +385,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setErrorMessage(null)
         setStatus('idle')
         setCircularSeed(0)
-        // Keep "varias opciones" when switching A→B ↔ ida-vuelta; only clear for circular.
+        // Keep "varias opciones" for point-to-point modes; only clear for circular.
         if (next === 'circular') setWantAlternatives(false)
+        else if (next === 'a_to_b' || next === 'out_and_back' || next === 'map_trace') {
+          /* keep current wantAlternatives */
+        }
         // Drop points that don't apply to the new mode to avoid stale A→B ends on Objetivo.
         setWaypoints((prev) => {
           if (next === 'circular') {
@@ -506,12 +510,30 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           })
           return
         }
-        // Both set → add via (capped)
         const vias = waypoints.filter((w) => w.kind === 'via')
         if (vias.length >= 5) {
           setErrorMessage('Máximo 5 waypoints. Elimina uno o arrastra los marcadores.')
           return
         }
+        // Trazar (Strava-style): each new tap extends the route — previous end becomes a via.
+        if (routeType === 'map_trace') {
+          setWaypoints((prev) => {
+            const start = prev.find((w) => w.kind === 'start')
+            const end = prev.find((w) => w.kind === 'end')
+            const currentVias = prev.filter((w) => w.kind === 'via')
+            const demoted: Waypoint | null = end
+              ? { ...end, id: uid(), kind: 'via', name: end.name ?? label }
+              : null
+            return [
+              ...(start ? [start] : []),
+              ...currentVias,
+              ...(demoted ? [demoted] : []),
+              { id: 'end', name: label, position, order: 0, kind: 'end' as const },
+            ].map((w, i) => ({ ...w, order: i }))
+          })
+          return
+        }
+        // A→B / ida-vuelta: insert via before the existing end.
         setWaypoints((prev) => {
           const start = prev.find((w) => w.kind === 'start')
           const end = prev.find((w) => w.kind === 'end')

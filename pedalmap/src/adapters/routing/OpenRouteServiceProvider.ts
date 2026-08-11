@@ -337,7 +337,9 @@ export class OpenRouteServiceProvider implements RoutingProvider {
           // Ask for alternate geometries so we can pick the one that best matches the bike.
           const tryBodies: Record<string, unknown>[] = [{ ...body }]
           if (
-            (request.routeType === 'a_to_b' || request.routeType === 'out_and_back') &&
+            (request.routeType === 'a_to_b' ||
+              request.routeType === 'out_and_back' ||
+              request.routeType === 'map_trace') &&
             request.wantAlternatives &&
             si === 0
           ) {

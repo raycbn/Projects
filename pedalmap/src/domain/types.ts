@@ -1,6 +1,6 @@
 export type BikeType = 'road' | 'mtb' | 'gravel' | 'urban' | 'ebike'
 
-export type RouteType = 'a_to_b' | 'circular' | 'out_and_back'
+export type RouteType = 'a_to_b' | 'circular' | 'out_and_back' | 'map_trace'
 
 export type Difficulty = 'easy' | 'moderate' | 'hard' | 'expert'
 
