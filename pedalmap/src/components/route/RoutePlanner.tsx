@@ -250,19 +250,11 @@ export function RoutePlanner() {
       }
 
       const publish = async (): Promise<string> => {
-        let routeId = lastSavedRouteId
-        if (routeId) {
-          return routeRepository.makePublic(routeId, user.uid)
-        }
-        const entitlement = canSaveRoute(profile)
-        if (!entitlement.ok) {
-          showPaywall(entitlement.reason ?? 'save_limit')
-          throw new Error('save_limit')
-        }
-        const saved = await routeRepository.save(user.uid, activeDraft, { isPublic: true })
-        setLastSavedRouteId(saved.id)
-        if (!saved.shareSlug) throw new Error('missing_slug')
-        return saved.shareSlug
+        const published = await routeRepository.publishForShare(user.uid, activeDraft, {
+          routeId: lastSavedRouteId,
+        })
+        setLastSavedRouteId(published.routeId)
+        return published.shareSlug
       }
 
       let slug: string
@@ -270,18 +262,24 @@ export function RoutePlanner() {
         slug = await Promise.race([
           publish(),
           new Promise<string>((_, reject) =>
-            window.setTimeout(() => reject(new Error('publish_timeout')), 20000),
+            window.setTimeout(() => reject(new Error('publish_timeout')), 25000),
           ),
         ])
       } catch (error) {
         console.error('[share-card] public link', error)
-        const msg = error instanceof Error ? error.message : ''
+        const msg =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'object' && error && 'message' in error
+              ? String((error as { message: unknown }).message || '')
+              : String(error || '')
         if (msg === 'save_limit') {
           setSaveMessage('Límite de rutas guardadas. Borra una o pasa a Premium para compartir.')
         } else if (msg === 'publish_timeout') {
           setSaveMessage('La publicación tardó demasiado. Revisa la conexión e inténtalo de nuevo.')
-        } else if (msg.startsWith('save_failed:')) {
-          setSaveMessage(`No se pudo publicar la ruta (${msg.replace('save_failed:', '')}).`)
+        } else if (msg.startsWith('save_failed:') || msg.startsWith('worker_publish:')) {
+          const detail = msg.replace(/^(save_failed:|worker_publish:)/, '')
+          setSaveMessage(`No se pudo publicar la ruta (${detail || 'error'}).`)
         } else {
           setSaveMessage(
             msg

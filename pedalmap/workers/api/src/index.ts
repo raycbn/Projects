@@ -25,6 +25,7 @@ import {
   handleGpsWebhook,
   isGpsProvider,
 } from './gps'
+import { handlePublishRoute } from './publishRoute'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
@@ -192,6 +193,19 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleEntitlements(env, identity))
+      }
+
+      if (path === '/routes/publish' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'routes-publish',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handlePublishRoute(request, env, identity))
       }
 
       if (path === '/stripe/checkout' && request.method === 'POST') {

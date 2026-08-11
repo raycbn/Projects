@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { stripUndefinedDeep, toPersistedDraft } from '@/services/RouteRepository'
+import {
+  stripUndefinedDeep,
+  toPersistedDraft,
+  toSharePublishPayload,
+} from '@/services/RouteRepository'
 import type { RouteDraft } from '@/domain/types'
 
 describe('toPersistedDraft', () => {
@@ -32,5 +36,30 @@ describe('toPersistedDraft', () => {
     expect('routeOptions' in payload).toBe(false)
     expect('alternatives' in payload).toBe(false)
     expect(stripUndefinedDeep({ a: 1, b: undefined })).toEqual({ a: 1 })
+  })
+
+  it('downsamples long geometries for share publish', () => {
+    const coords = Array.from({ length: 5000 }, (_, i) => [ -3.7 + i * 0.00001, 40.4 ] as [number, number])
+    const draft = {
+      title: 'Larga',
+      type: 'a_to_b',
+      bikeType: 'road',
+      preferences: [],
+      waypoints: [{ id: 'a', lng: -3.7, lat: 40.4 }],
+      geometry: { type: 'LineString', coordinates: coords },
+      elevationProfile: coords.map((_, i) => ({ distanceMeters: i, elevationMeters: 600 })),
+      stats: {
+        distanceMeters: 50000,
+        elevationGainMeters: 100,
+        elevationLossMeters: 90,
+        estimatedDurationSeconds: 7200,
+        difficulty: 'moderate',
+      },
+    } as unknown as RouteDraft
+
+    const share = toSharePublishPayload(draft)
+    const geometry = share.geometry as { coordinates: unknown[] }
+    expect(geometry.coordinates.length).toBeLessThanOrEqual(2500)
+    expect((share.elevationProfile as unknown[]).length).toBeLessThanOrEqual(400)
   })
 })

@@ -18,11 +18,14 @@ service cloud.firestore {
     }
 
     function isPremiumUser() {
-      return userData().plan == 'premium';
+      return ('plan' in userData()) && userData().plan == 'premium';
     }
 
     function routesSavedCount() {
-      return userData().usage.routesSaved;
+      // Missing usage must not explode the rule (deny-by-error).
+      return ('usage' in userData() && 'routesSaved' in userData().usage)
+        ? userData().usage.routesSaved
+        : 0;
     }
 
     /** Free may keep at most 5 saved routes (server-side). */

@@ -16,6 +16,7 @@ import type { RouteDraft, SavedRoute } from '@/domain/types'
 import { FREE_LIMITS } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 import { createShareSlug } from '@/lib/share'
+import { routingAuthHeaders } from '@/lib/routingAuth'
 
 function monthKey(date = new Date()): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
@@ -36,11 +37,40 @@ export function stripUndefinedDeep<T>(value: T): T {
     const out: Record<string, unknown> = {}
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
       if (nested === undefined) continue
+      if (typeof nested === 'number' && !Number.isFinite(nested)) continue
       out[key] = stripUndefinedDeep(nested)
     }
     return out as T
   }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return 0 as T
+  }
   return value
+}
+
+function downsampleCoords(
+  coords: [number, number][],
+  maxPoints: number,
+): [number, number][] {
+  if (coords.length <= maxPoints) return coords
+  const out: [number, number][] = []
+  const step = (coords.length - 1) / (maxPoints - 1)
+  for (let i = 0; i < maxPoints; i += 1) {
+    const idx = Math.min(coords.length - 1, Math.round(i * step))
+    out.push(coords[idx]!)
+  }
+  return out
+}
+
+function downsampleElevation<T>(points: T[], maxPoints: number): T[] {
+  if (points.length <= maxPoints) return points
+  const out: T[] = []
+  const step = (points.length - 1) / (maxPoints - 1)
+  for (let i = 0; i < maxPoints; i += 1) {
+    const idx = Math.min(points.length - 1, Math.round(i * step))
+    out.push(points[idx]!)
+  }
+  return out
 }
 
 /**
@@ -49,6 +79,7 @@ export function stripUndefinedDeep<T>(value: T): T {
  */
 export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
   const title = String(draft.title || 'Ruta').slice(0, 120)
+  const coords = (draft.geometry?.coordinates ?? []) as [number, number][]
   return stripUndefinedDeep({
     title,
     description: draft.description,
@@ -56,22 +87,66 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     bikeType: draft.bikeType,
     preferences: draft.preferences ?? [],
     waypoints: draft.waypoints ?? [],
-    geometry: draft.geometry,
-    elevationProfile: draft.elevationProfile ?? [],
+    geometry: {
+      type: 'LineString' as const,
+      coordinates: downsampleCoords(coords, 4000),
+    },
+    elevationProfile: downsampleElevation(draft.elevationProfile ?? [], 800),
     stats: draft.stats,
     circularDistanceMeters: draft.circularDistanceMeters,
     targetElevationGainMeters: draft.targetElevationGainMeters,
     circularSeed: draft.circularSeed,
-    instructions: draft.instructions,
-    surfaceEdges: draft.surfaceEdges,
+    // Omit instructions / surfaceEdges — large and unused on share/save list views.
     selectedOptionId: draft.selectedOptionId,
   })
 }
 
+/** Slim payload for Worker Admin publish (WhatsApp share). */
+export function toSharePublishPayload(
+  draft: RouteDraft,
+  options?: { routeId?: string | null },
+): Record<string, unknown> {
+  const persisted = toPersistedDraft(draft)
+  return stripUndefinedDeep({
+    ...persisted,
+    // Even slimmer for the API body.
+    elevationProfile: downsampleElevation(
+      (persisted.elevationProfile as unknown[]) ?? [],
+      400,
+    ),
+    geometry: {
+      type: 'LineString',
+      coordinates: downsampleCoords(
+        ((persisted.geometry as { coordinates?: [number, number][] })?.coordinates ??
+          []) as [number, number][],
+        2500,
+      ),
+    },
+    routeId: options?.routeId || undefined,
+  })
+}
+
 function firestoreErrorMessage(error: unknown): string {
-  if (!error || typeof error !== 'object') return 'unknown'
-  const e = error as { code?: string; message?: string }
-  return [e.code, e.message].filter(Boolean).join(' · ') || 'unknown'
+  if (!error) return 'unknown'
+  if (typeof error === 'string' && error.trim()) return error
+  if (typeof error === 'object') {
+    const e = error as { code?: string; message?: string; name?: string }
+    const parts = [e.code, e.message || e.name].filter((p) => typeof p === 'string' && p.trim())
+    if (parts.length) return parts.join(' · ')
+  }
+  if (error instanceof Error && error.message) return error.message
+  try {
+    return JSON.stringify(error).slice(0, 200)
+  } catch {
+    return 'unknown'
+  }
+}
+
+function apiBase(): string | undefined {
+  const proxy =
+    import.meta.env.VITE_PEDALMAP_API_URL || import.meta.env.VITE_ROUTING_PROXY_URL
+  if (typeof proxy !== 'string' || !proxy.trim()) return undefined
+  return proxy.trim().replace(/\/+$/, '')
 }
 
 export class RouteRepository {
@@ -110,10 +185,20 @@ export class RouteRepository {
     try {
       const shareSnap = await getDoc(doc(getDb(), 'routeShares', shareSlug))
       if (shareSnap.exists()) {
-        const routeId = String(shareSnap.data().routeId || '')
+        const data = shareSnap.data() as Record<string, unknown>
+        const routeId = String(data.routeId || '')
         if (routeId) {
           const route = await this.getById(routeId)
           if (route?.isPublic) return route
+        }
+        // Embedded snapshot (Worker publish) — enough to render /route/:slug.
+        if (data.geometry && data.stats && data.waypoints) {
+          return this.mapDoc(routeId || shareSlug, {
+            ...data,
+            userId: String(data.userId || 'public'),
+            isPublic: true,
+            shareSlug,
+          })
         }
       }
     } catch (err) {
@@ -135,6 +220,57 @@ export class RouteRepository {
       console.warn('[routes] shareSlug query', err)
       return null
     }
+  }
+
+  /**
+   * Publish a public share link via Worker Admin (bypasses client rule quirks).
+   * Falls back to direct Firestore if the Worker is unavailable.
+   */
+  async publishForShare(
+    userId: string,
+    draft: RouteDraft,
+    options?: { routeId?: string | null },
+  ): Promise<{ shareSlug: string; routeId: string }> {
+    const payload = toSharePublishPayload(draft, { routeId: options?.routeId })
+    const base = apiBase()
+    if (base) {
+      try {
+        const res = await fetch(`${base}/routes/publish`, {
+          method: 'POST',
+          headers: await routingAuthHeaders(),
+          body: JSON.stringify(payload),
+        })
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          shareSlug?: string
+          routeId?: string
+          error?: string
+          code?: string
+        }
+        if (res.ok && body.shareSlug && body.routeId) {
+          return { shareSlug: body.shareSlug, routeId: body.routeId }
+        }
+        const detail = body.error || body.code || `http_${res.status}`
+        console.warn('[routes] worker publish failed', detail)
+        // Auth / validation errors should not silently fall back.
+        if (res.status === 401 || res.status === 400) {
+          throw new Error(`save_failed:${detail}`)
+        }
+        throw new Error(`worker_publish:${detail}`)
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('save_failed:')) throw error
+        console.warn('[routes] worker publish error, falling back to client', error)
+      }
+    }
+
+    // Client fallback (older deploys / Worker down).
+    if (options?.routeId) {
+      const shareSlug = await this.makePublic(options.routeId, userId)
+      return { shareSlug, routeId: options.routeId }
+    }
+    const saved = await this.save(userId, draft, { isPublic: true })
+    if (!saved.shareSlug) throw new Error('missing_slug')
+    return { shareSlug: saved.shareSlug, routeId: saved.id }
   }
 
   /**
@@ -194,11 +330,16 @@ export class RouteRepository {
     }
 
     if (isPublic) {
-      await setDoc(doc(db, 'routeShares', shareSlug), {
-        routeId: routeRef.id,
-        userId,
-        createdAt: serverTimestamp(),
-      })
+      try {
+        await setDoc(doc(db, 'routeShares', shareSlug), {
+          routeId: routeRef.id,
+          userId,
+          createdAt: serverTimestamp(),
+        })
+      } catch (error) {
+        console.error('[routes] routeShares write failed', firestoreErrorMessage(error), error)
+        throw new Error(`save_failed:${firestoreErrorMessage(error)}`)
+      }
     }
 
     return {

@@ -557,6 +557,188 @@ export async function findActivityByExternalId(
   return json.fields?.activityId?.stringValue || null
 }
 
+/** Encode JSON-ish values for Firestore REST (skips undefined / non-finite numbers). */
+export function toFirestoreValue(v: unknown): Record<string, unknown> {
+  if (v === null || v === undefined) return { nullValue: null }
+  if (typeof v === 'string') return { stringValue: v }
+  if (typeof v === 'boolean') return { booleanValue: v }
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return { nullValue: null }
+    return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
+  }
+  if (Array.isArray(v)) {
+    return { arrayValue: { values: v.map((x) => toFirestoreValue(x)) } }
+  }
+  if (typeof v === 'object') {
+    const fields: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (val === undefined) continue
+      if (typeof val === 'number' && !Number.isFinite(val)) continue
+      fields[k] = toFirestoreValue(val)
+    }
+    return { mapValue: { fields } }
+  }
+  return { stringValue: String(v) }
+}
+
+function createShareSlug(title: string): string {
+  const base =
+    title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'ruta'
+  const suffix = Math.random().toString(36).slice(2, 8)
+  return `${base}-${suffix}`
+}
+
+export type PublishShareInput = {
+  title: string
+  description?: string
+  type: string
+  bikeType: string
+  preferences?: unknown[]
+  waypoints: unknown[]
+  geometry: unknown
+  elevationProfile?: unknown[]
+  stats: Record<string, unknown>
+  circularDistanceMeters?: number
+  shareSlug?: string
+  /** When set, mark this existing route public instead of creating a new one. */
+  routeId?: string
+}
+
+/**
+ * Admin publish for WhatsApp / public link sharing.
+ * Bypasses client security-rule edge cases (missing usage, stale free plan, etc.).
+ */
+export async function publishPublicRouteShare(
+  env: Env,
+  uid: string,
+  input: PublishShareInput,
+): Promise<{ routeId: string; shareSlug: string }> {
+  const sa = parseServiceAccount(env)
+  if (!sa) throw new Error('FIREBASE_SERVICE_ACCOUNT required to publish shared routes')
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const title = String(input.title || 'Ruta').slice(0, 120)
+  const shareSlug = (input.shareSlug || createShareSlug(title)).slice(0, 80)
+
+  const routeFields: Record<string, unknown> = {
+    userId: { stringValue: uid },
+    title: { stringValue: title },
+    type: { stringValue: String(input.type || 'a_to_b') },
+    bikeType: { stringValue: String(input.bikeType || 'road') },
+    preferences: toFirestoreValue(input.preferences ?? []),
+    waypoints: toFirestoreValue(input.waypoints ?? []),
+    geometry: toFirestoreValue(input.geometry),
+    elevationProfile: toFirestoreValue(input.elevationProfile ?? []),
+    stats: toFirestoreValue(input.stats ?? {}),
+    isPublic: { booleanValue: true },
+    shareSlug: { stringValue: shareSlug },
+    updatedAt: { timestampValue: now },
+  }
+  if (input.description) routeFields.description = { stringValue: String(input.description).slice(0, 500) }
+  if (
+    typeof input.circularDistanceMeters === 'number' &&
+    Number.isFinite(input.circularDistanceMeters)
+  ) {
+    routeFields.circularDistanceMeters = { doubleValue: input.circularDistanceMeters }
+  }
+
+  let routeId = input.routeId?.trim() || ''
+
+  if (routeId) {
+    const mask = [
+      'isPublic',
+      'shareSlug',
+      'title',
+      'type',
+      'bikeType',
+      'preferences',
+      'waypoints',
+      'geometry',
+      'elevationProfile',
+      'stats',
+      'updatedAt',
+      'description',
+      'circularDistanceMeters',
+    ]
+      .map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`)
+      .join('&')
+    const patchUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routes/${routeId}?${mask}`
+    const patchRes = await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fields: routeFields }),
+    })
+    if (!patchRes.ok) {
+      const t = await patchRes.text()
+      throw new Error(`route patch failed: ${patchRes.status} ${t.slice(0, 400)}`)
+    }
+  } else {
+    const createUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routes`
+    const createRes = await fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fields: {
+          ...routeFields,
+          createdAt: { timestampValue: now },
+        },
+      }),
+    })
+    if (!createRes.ok) {
+      const t = await createRes.text()
+      throw new Error(`route create failed: ${createRes.status} ${t.slice(0, 400)}`)
+    }
+    const created = (await createRes.json()) as { name?: string }
+    routeId = created.name?.split('/').pop() || ''
+    if (!routeId) throw new Error('route create missing id')
+  }
+
+  // Public lookup + embedded snapshot (works even if routes/{id} read is flaky).
+  const shareUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routeShares/${encodeURIComponent(shareSlug)}?updateMask.fieldPaths=routeId&updateMask.fieldPaths=userId&updateMask.fieldPaths=createdAt&updateMask.fieldPaths=title&updateMask.fieldPaths=type&updateMask.fieldPaths=bikeType&updateMask.fieldPaths=preferences&updateMask.fieldPaths=waypoints&updateMask.fieldPaths=geometry&updateMask.fieldPaths=elevationProfile&updateMask.fieldPaths=stats&updateMask.fieldPaths=isPublic`
+  const shareRes = await fetch(shareUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        routeId: { stringValue: routeId },
+        userId: { stringValue: uid },
+        createdAt: { timestampValue: now },
+        title: { stringValue: title },
+        type: { stringValue: String(input.type || 'a_to_b') },
+        bikeType: { stringValue: String(input.bikeType || 'road') },
+        preferences: toFirestoreValue(input.preferences ?? []),
+        waypoints: toFirestoreValue(input.waypoints ?? []),
+        geometry: toFirestoreValue(input.geometry),
+        elevationProfile: toFirestoreValue(input.elevationProfile ?? []),
+        stats: toFirestoreValue(input.stats ?? {}),
+        isPublic: { booleanValue: true },
+      },
+    }),
+  })
+  if (!shareRes.ok) {
+    const t = await shareRes.text()
+    throw new Error(`routeShares write failed: ${shareRes.status} ${t.slice(0, 400)}`)
+  }
+
+  return { routeId, shareSlug }
+}
+
 export async function writeImportedActivity(
   env: Env,
   uid: string,
@@ -578,26 +760,6 @@ export async function writeImportedActivity(
   const now = new Date().toISOString()
   const monthKey = `${new Date(input.startedAt).getUTCFullYear()}-${String(new Date(input.startedAt).getUTCMonth() + 1).padStart(2, '0')}`
 
-  const toValue = (v: unknown): Record<string, unknown> => {
-    if (v === null || v === undefined) return { nullValue: null }
-    if (typeof v === 'string') return { stringValue: v }
-    if (typeof v === 'boolean') return { booleanValue: v }
-    if (typeof v === 'number') {
-      return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
-    }
-    if (Array.isArray(v)) {
-      return { arrayValue: { values: v.map((x) => toValue(x)) } }
-    }
-    if (typeof v === 'object') {
-      const fields: Record<string, unknown> = {}
-      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-        if (val !== undefined) fields[k] = toValue(val)
-      }
-      return { mapValue: { fields } }
-    }
-    return { stringValue: String(v) }
-  }
-
   const createUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/activities`
   const createRes = await fetch(createUrl, {
     method: 'POST',
@@ -615,8 +777,8 @@ export async function writeImportedActivity(
         status: { stringValue: 'finished' },
         startedAt: { stringValue: input.startedAt },
         ...(input.finishedAt ? { finishedAt: { stringValue: input.finishedAt } } : {}),
-        track: toValue(input.track),
-        stats: toValue(input.stats),
+        track: toFirestoreValue(input.track),
+        stats: toFirestoreValue(input.stats),
         monthKey: { stringValue: monthKey },
         createdAt: { timestampValue: now },
         updatedAt: { timestampValue: now },
