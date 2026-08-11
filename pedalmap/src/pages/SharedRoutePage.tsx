@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { RouteSummary } from '@/components/route/RouteSummary'
 import { ElevationChart } from '@/components/route/ElevationChart'
-import type { SavedRoute } from '@/domain/types'
+import { Button } from '@/components/ui/Button'
+import type { BikeType, SavedRoute } from '@/domain/types'
+import { formatDistance, formatElevation } from '@/lib/stats'
 import { routeRepository } from '@/services/RouteRepository'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { usePageMeta } from '@/hooks/usePageMeta'
@@ -10,6 +12,23 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
 )
+
+function bikeLabel(bike: BikeType): string {
+  switch (bike) {
+    case 'road':
+      return 'Carretera'
+    case 'mtb':
+      return 'MTB'
+    case 'gravel':
+      return 'Gravel'
+    case 'urban':
+      return 'Urbana'
+    case 'ebike':
+      return 'E-bike'
+    default:
+      return bike
+  }
+}
 
 export function SharedRoutePage() {
   const { shareSlug = '' } = useParams()
@@ -19,7 +38,7 @@ export function SharedRoutePage() {
   usePageMeta({
     title: route ? `${route.title} | PedalMap` : 'Ruta compartida | PedalMap',
     description: route
-      ? `${route.title}: ruta ciclista compartida con distancia y desnivel.`
+      ? `${route.title}: ${formatDistance(route.stats.distanceMeters)}, ${formatElevation(route.stats.elevationGainMeters)} · PedalMap`
       : 'Visualiza una ruta ciclista compartida en PedalMap.',
     path: `/route/${shareSlug}`,
   })
@@ -46,6 +65,9 @@ export function SharedRoutePage() {
       <main className="mx-auto max-w-3xl px-4 py-12">
         <h1 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">Ruta no disponible</h1>
         <p className="mt-3 text-[var(--color-stone)]">{error}</p>
+        <Link to="/route-planner" className="mt-6 inline-block">
+          <Button>Abrir planificador</Button>
+        </Link>
       </main>
     )
   }
@@ -60,10 +82,19 @@ export function SharedRoutePage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
-      <h1 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">{route.title}</h1>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
+        Ruta compartida · {bikeLabel(route.bikeType)}
+      </p>
+      <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
+        {route.title}
+      </h1>
       {route.description && (
         <p className="mt-2 text-[var(--color-stone)]">{route.description}</p>
       )}
+      <p className="mt-2 text-sm text-[var(--color-stone)]">
+        {formatDistance(route.stats.distanceMeters)} ·{' '}
+        {formatElevation(route.stats.elevationGainMeters)} · {bikeLabel(route.bikeType)}
+      </p>
       <div className="mt-6 h-[50vh] overflow-hidden rounded-3xl ring-1 ring-[var(--color-fog)]">
         <Suspense fallback={<div className="flex h-full items-center justify-center">Cargando mapa…</div>}>
           <MapView
@@ -78,8 +109,17 @@ export function SharedRoutePage() {
         <RouteSummary stats={route.stats} />
         <ElevationChart profile={route.elevationProfile} />
       </div>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Link to="/route-planner">
+          <Button>Planificar otra ruta</Button>
+        </Link>
+        <Link to="/">
+          <Button variant="secondary">Conocer PedalMap</Button>
+        </Link>
+      </div>
       <p className="mt-6 text-sm text-[var(--color-stone)]">
-        Vista pública de solo lectura. Para editar o recalcular, abre el planificador con tu cuenta.
+        Vista pública con mapa, desnivel y superficies. Para editar o recalcular, abre el planificador
+        con tu cuenta.
       </p>
     </main>
   )

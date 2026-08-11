@@ -70,30 +70,65 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
   })
 }
 
-export async function shareRouteCard(draft: RouteDraft, url?: string): Promise<'shared' | 'copied' | 'downloaded'> {
-  const blob = await renderRouteShareCard(draft, url)
-  const file = new File([blob], 'pedalmap-ruta.png', { type: 'image/png' })
-  const text = `${draft.title} · ${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)}${url ? `\n${url}` : ''}`
+/** WhatsApp often drops `url` when files are attached — keep the link inside `text`. */
+export function buildRouteShareText(draft: RouteDraft, url: string): string {
+  const lines = [
+    draft.title || 'Ruta PedalMap',
+    `${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)} · ${formatMinutes(draft.stats.estimatedDurationSeconds)} · ${bikeLabel(draft.bikeType)}`,
+    '',
+    'Ábrela en PedalMap (mapa, desnivel y datos):',
+    url,
+  ]
+  return lines.join('\n')
+}
 
-  if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({
-      files: [file],
-      title: draft.title,
-      text,
-      url,
-    })
-    return 'shared'
+export async function shareRouteCard(
+  draft: RouteDraft,
+  url: string,
+): Promise<'shared' | 'copied' | 'downloaded'> {
+  if (!url.includes('/route/')) {
+    throw new Error('Se necesita un enlace público /route/… para compartir la ruta')
   }
 
-  // Fallback: download image + copy link
+  const text = buildRouteShareText(draft, url)
+  const blob = await renderRouteShareCard(draft, url)
+  const file = new File([blob], 'pedalmap-ruta.png', { type: 'image/png' })
+
+  // Prefer sharing the public link (recipient opens full route). Attach card when the
+  // browser allows files — text still carries the /route/ URL for WhatsApp.
+  if (typeof navigator.share === 'function') {
+    try {
+      if (navigator.canShare?.({ files: [file], text, title: draft.title, url })) {
+        await navigator.share({
+          files: [file],
+          title: draft.title,
+          text,
+          url,
+        })
+        return 'shared'
+      }
+    } catch (error) {
+      // User abort should bubble; other share errors fall through to link-only.
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
+    }
+
+    try {
+      await navigator.share({ title: draft.title, text, url })
+      return 'shared'
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
+    }
+  }
+
+  // Fallback: download image + copy the public route link
   const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = objectUrl
   a.download = 'pedalmap-ruta.png'
   a.click()
   URL.revokeObjectURL(objectUrl)
-  if (url && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(url)
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
     return 'copied'
   }
   return 'downloaded'

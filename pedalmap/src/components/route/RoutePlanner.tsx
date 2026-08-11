@@ -243,46 +243,59 @@ export function RoutePlanner() {
     if (!activeDraft) return
     setShareBusy(true)
     try {
-      let url = `${window.location.origin}/route-planner`
-      if (user && !user.isAnonymous && firebaseReady && routeRepository.isConfigured()) {
-        try {
-          let routeId = lastSavedRouteId
-          let slug: string | undefined
-          if (routeId) {
-            slug = await routeRepository.makePublic(routeId, user.uid)
-          } else {
-            const entitlement = canSaveRoute(profile)
-            if (!entitlement.ok) {
-              showPaywall(entitlement.reason ?? 'save_limit')
-              setSaveMessage('Guarda una ruta (o libera hueco Free) para obtener enlace público.')
-              return
-            }
-            const saved = await routeRepository.save(user.uid, activeDraft, { isPublic: true })
-            setLastSavedRouteId(saved.id)
-            routeId = saved.id
-            slug = saved.shareSlug
-          }
-          if (slug) url = `${window.location.origin}/route/${slug}`
-        } catch (error) {
-          console.warn('[share-card] public link', error)
-          setSaveMessage('No se pudo crear el enlace público; se comparte la tarjeta igual.')
-        }
-      } else {
-        setSaveMessage('Inicia sesión para compartir con enlace público /route/…')
+      if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
+        setSaveMessage('Inicia sesión con una cuenta real para compartir la ruta completa (/route/…).')
+        return
       }
 
+      let slug: string | undefined
+      try {
+        let routeId = lastSavedRouteId
+        if (routeId) {
+          slug = await routeRepository.makePublic(routeId, user.uid)
+        } else {
+          const entitlement = canSaveRoute(profile)
+          if (!entitlement.ok) {
+            showPaywall(entitlement.reason ?? 'save_limit')
+            setSaveMessage('Guarda la ruta (o libera hueco Free) para obtener el enlace público.')
+            return
+          }
+          const saved = await routeRepository.save(user.uid, activeDraft, { isPublic: true })
+          setLastSavedRouteId(saved.id)
+          slug = saved.shareSlug
+        }
+      } catch (error) {
+        console.error('[share-card] public link', error)
+        setSaveMessage(
+          error instanceof Error && error.message === 'save_limit'
+            ? 'Límite de rutas guardadas. Borra una o pasa a Premium para compartir.'
+            : 'No se pudo publicar la ruta. Revisa la conexión e inténtalo de nuevo.',
+        )
+        return
+      }
+
+      if (!slug) {
+        setSaveMessage('No se pudo crear el enlace público de la ruta.')
+        return
+      }
+
+      const url = `${window.location.origin}/route/${slug}`
       const result = await shareRouteCard(activeDraft, url)
       setSaveMessage(
         result === 'shared'
-          ? `Tarjeta compartida${url.includes('/route/') ? ' con enlace público.' : '.'}`
+          ? 'Ruta compartida con enlace para ver mapa y datos en PedalMap.'
           : result === 'copied'
-            ? `Imagen lista · enlace copiado: ${url}`
-            : 'Tarjeta descargada.',
+            ? `Imagen lista · mensaje copiado con el enlace: ${url}`
+            : `Tarjeta descargada. Enlace: ${url}`,
       )
-      track('route_shared', { via: 'share_card', public: url.includes('/route/') })
+      track('route_shared', { via: 'share_card', public: true })
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setSaveMessage(null)
+        return
+      }
       console.error('[share-card]', error)
-      setSaveMessage('No se pudo generar la tarjeta.')
+      setSaveMessage('No se pudo compartir la ruta.')
     } finally {
       setShareBusy(false)
     }
@@ -734,7 +747,7 @@ export function RoutePlanner() {
                   disabled={shareBusy}
                   onClick={() => void handleShareCard()}
                 >
-                  {shareBusy ? 'Generando tarjeta…' : 'Compartir tarjeta (WhatsApp)'}
+                  {shareBusy ? 'Preparando enlace…' : 'Compartir ruta (WhatsApp)'}
                 </Button>
               </div>
 

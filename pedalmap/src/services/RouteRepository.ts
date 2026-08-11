@@ -59,15 +59,35 @@ export class RouteRepository {
   }
 
   async getByShareSlug(shareSlug: string): Promise<SavedRoute | null> {
-    const q = query(
-      collection(getDb(), 'routes'),
-      where('shareSlug', '==', shareSlug),
-      where('isPublic', '==', true),
-    )
-    const snap = await getDocs(q)
-    const first = snap.docs[0]
-    if (!first) return null
-    return this.mapDoc(first.id, first.data())
+    // Prefer routeShares lookup — no composite index required; public-readable.
+    try {
+      const shareSnap = await getDoc(doc(getDb(), 'routeShares', shareSlug))
+      if (shareSnap.exists()) {
+        const routeId = String(shareSnap.data().routeId || '')
+        if (routeId) {
+          const route = await this.getById(routeId)
+          if (route?.isPublic) return route
+        }
+      }
+    } catch (err) {
+      console.warn('[routes] routeShares lookup', err)
+    }
+
+    // Fallback for older shares / missing routeShares doc.
+    try {
+      const q = query(
+        collection(getDb(), 'routes'),
+        where('shareSlug', '==', shareSlug),
+        where('isPublic', '==', true),
+      )
+      const snap = await getDocs(q)
+      const first = snap.docs[0]
+      if (!first) return null
+      return this.mapDoc(first.id, first.data())
+    } catch (err) {
+      console.warn('[routes] shareSlug query', err)
+      return null
+    }
   }
 
   /**
