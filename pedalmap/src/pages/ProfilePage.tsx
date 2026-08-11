@@ -83,14 +83,20 @@ export function ProfilePage() {
 
           <div className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
             <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
-              Conectar Wahoo
+              Conectar GPS
             </h2>
             <p className="text-sm text-[var(--color-stone)]">
-              Vincula tu cuenta Wahoo para que las salidas se carguen solas en PedalMap.
+              Wahoo por API oficial, o iGPSPORT / Garmin / otros trayendo las salidas a PedalMap.
+              El análisis se queda aquí.
             </p>
-            <Link to="/actividades#wahoo">
-              <Button variant="secondary">Ir a conectar Wahoo</Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/actividades#wahoo">
+                <Button variant="secondary">Wahoo</Button>
+              </Link>
+              <Link to="/actividades#gps-cloud">
+                <Button variant="secondary">Otros GPS → PedalMap</Button>
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-4 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">

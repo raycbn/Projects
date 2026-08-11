@@ -12,7 +12,9 @@ function apiBase(): string {
 
 async function authHeader(): Promise<HeadersInit> {
   const user = getFirebaseAuth().currentUser
-  if (!user || user.isAnonymous) throw new Error('Inicia sesión con una cuenta real para Strava')
+  if (!user || user.isAnonymous) {
+    throw new Error('Inicia sesión con una cuenta real para sincronizar el GPS')
+  }
   const token = await user.getIdToken()
   return {
     Authorization: `Bearer ${token}`,
@@ -53,7 +55,7 @@ export class StravaService {
       athleteId?: number | null
       error?: string
     }
-    if (!res.ok) throw new Error(data.error || 'No se pudo consultar Strava')
+    if (!res.ok) throw new Error(data.error || 'No se pudo consultar la sincronización GPS')
     return {
       configured: Boolean(data.configured),
       connected: Boolean(data.connected),
@@ -69,7 +71,7 @@ export class StravaService {
     })
     const data = (await res.json()) as { url?: string; error?: string; code?: string }
     if (!res.ok || !data.url) {
-      throw new Error(data.error || 'No se pudo iniciar OAuth Strava')
+      throw new Error(data.error || 'No se pudo iniciar la autorización de sincronización')
     }
     track('strava_connect_started')
     return { url: data.url }
@@ -83,7 +85,7 @@ export class StravaService {
     })
     if (!res.ok) {
       const data = (await res.json()) as { error?: string }
-      throw new Error(data.error || 'No se pudo desconectar Strava')
+      throw new Error(data.error || 'No se pudo desactivar la sincronización')
     }
     track('strava_disconnected')
   }
@@ -93,7 +95,7 @@ export class StravaService {
       headers: await authHeader(),
     })
     const data = (await res.json()) as { activities?: StravaActivitySummary[]; error?: string }
-    if (!res.ok) throw new Error(data.error || 'No se pudieron listar actividades Strava')
+    if (!res.ok) throw new Error(data.error || 'No se pudieron listar las salidas a importar')
     return data.activities ?? []
   }
 
@@ -115,6 +117,41 @@ export class StravaService {
     track('strava_activity_imported', { strava_id: stravaActivityId })
     const { userId: _ignored, ...rest } = data.activity
     return rest
+  }
+
+  /**
+   * Pull recent bike rides into PedalMap activities.
+   * Destination is always PedalMap — Strava is only the transport.
+   */
+  async syncRecentToPedalMap(
+    userId: string,
+    importFinished: (
+      userId: string,
+      input: Omit<Activity, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
+    ) => Promise<{ created: boolean }>,
+    limit = 12,
+  ): Promise<{ imported: number; skipped: number }> {
+    const list = await this.listRecent(Math.min(30, Math.max(limit, 8)))
+    const bike = /ride|virtual|ebike|gravel|mountain|cycl/i
+    let imported = 0
+    let skipped = 0
+    for (const item of list) {
+      if (!bike.test(item.type || '')) {
+        skipped += 1
+        continue
+      }
+      try {
+        const payload = await this.fetchImportPayload(item.id)
+        const result = await importFinished(userId, payload)
+        if (result.created) imported += 1
+        else skipped += 1
+      } catch (error) {
+        console.warn('[strava] import skip', item.id, error)
+        skipped += 1
+      }
+    }
+    track('strava_sync_completed', { imported, skipped })
+    return { imported, skipped }
   }
 }
 

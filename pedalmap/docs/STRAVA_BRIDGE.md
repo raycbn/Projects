@@ -1,14 +1,14 @@
-# Strava bridge (iGPSPORT / Garmin / Wahoo → Strava → PedalMap)
+# GPS cloud bridge (iGPSPORT / Garmin / … → nube → PedalMap)
 
-Flujo gratuito recomendado:
+Flujo gratuito mientras las APIs oficiales (iGPSPORT, Garmin, …) están bloqueadas o en espera:
 
 ```
-ciclocomputador (iGPSPORT, Garmin, Wahoo, …)
+ciclocomputador (iGPSPORT, Garmin, Magene, Bryton, …)
         │
         ▼
-   App del fabricante  ──sync──►  STRAVA
+   App del fabricante  ──sync──►  nube compatible (Strava API)
                                       │
-                                 OAuth 2 (Worker)
+                                 OAuth 2 (Worker)  ← hop breve
                                       │
                                       ▼
                                  PedalMap (/actividades)
@@ -18,19 +18,19 @@ ciclocomputador (iGPSPORT, Garmin, Wahoo, …)
                          (GPS, altitud, FC, cadencia, W, velocidad)
 ```
 
-## Por qué Strava
+## Principio de producto
 
-- Casi todos los GPS de bici sincronizan **gratis** con Strava.
-- PedalMap no necesita SDK propietarios ni pagar APIs de cada marca.
-- OAuth + lectura de actividades/streams está en el plan gratuito de Strava API (límites de rate apply).
+- **Destino = PedalMap.** El usuario no “se va a vivir a Strava”.
+- En la UI hablamos de **sincronización → PedalMap**, no de “usar Strava”.
+- Strava es solo el **transporte** OAuth/API (casi todos los GPS ya suben ahí gratis).
+- Tras autorizar, el Worker redirige siempre a `/actividades?strava=connected` y la app **importa sola**.
 
 ## Setup (tú)
 
 1. [Strava API Applications](https://www.strava.com/settings/api) → Create App  
    - **Authorization Callback Domain**: el host del Worker, p.ej. `pedalmap-api.broken-dietician.workers.dev`  
      (sin `https://`; Strava solo pide el dominio)  
-   - El callback real que usa el código es:  
-     `https://<worker>/strava/oauth/callback`
+   - Callback real: `https://<worker>/strava/oauth/callback`
 
 2. En `pedalmap/workers/api`:
    ```bash
@@ -45,14 +45,14 @@ ciclocomputador (iGPSPORT, Garmin, Wahoo, …)
    firebase deploy --only firestore:rules,firestore:indexes --project pedalmap-79b3a
    ```
 
-4. En la app: **Mis actividades** → **Conectar Strava** → **Ver salidas** → **Importar**.
+4. En la app: **Mis actividades** → **iGPSPORT, Garmin y otros GPS** → **Activar sincronización → PedalMap** → vuelve e importa.
 
 ## Endpoints Worker
 
 | Método | Ruta | Auth |
 |--------|------|------|
 | POST | `/strava/oauth/start` | Firebase Bearer |
-| GET | `/strava/oauth/callback` | state HMAC (redirect Strava) |
+| GET | `/strava/oauth/callback` | state HMAC (redirect) |
 | GET | `/strava/status` | Firebase Bearer |
 | POST | `/strava/disconnect` | Firebase Bearer |
 | GET | `/strava/activities` | Firebase Bearer |

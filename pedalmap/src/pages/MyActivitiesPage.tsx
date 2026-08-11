@@ -9,6 +9,7 @@ import {
   type GpsProviderId,
   type GpsProviderStatus,
 } from '@/services/GpsSyncService'
+import { stravaService } from '@/services/StravaService'
 import type { Activity } from '@/domain/types'
 import {
   formatDistance,
@@ -21,7 +22,7 @@ export function MyActivitiesPage() {
   usePageMeta({
     title: 'Mis actividades | PedalMap',
     description:
-      'Historial GPS nativo + sync oficial (iGPSPORT, Wahoo, Garmin) con análisis Free.',
+      'Historial GPS nativo + sync de ciclocomputador con análisis Free en PedalMap.',
     path: '/actividades',
   })
 
@@ -33,6 +34,9 @@ export function MyActivitiesPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [providers, setProviders] = useState<GpsProviderStatus[]>([])
   const [busyProvider, setBusyProvider] = useState<GpsProviderId | null>(null)
+  const [cloudConfigured, setCloudConfigured] = useState(false)
+  const [cloudConnected, setCloudConnected] = useState(false)
+  const [cloudBusy, setCloudBusy] = useState(false)
 
   async function reload() {
     if (!user || user.isAnonymous || !activityRepository.isConfigured()) return
@@ -40,18 +44,69 @@ export function MyActivitiesPage() {
     setItems(list)
   }
 
+  async function refreshCloudStatus() {
+    if (!stravaService.isApiReady()) {
+      setCloudConfigured(false)
+      setCloudConnected(false)
+      return
+    }
+    try {
+      const st = await stravaService.status()
+      setCloudConfigured(st.configured)
+      setCloudConnected(st.connected)
+    } catch (err) {
+      console.warn('[activities] cloud status', err)
+    }
+  }
+
+  async function pullCloudRides(announce = true) {
+    if (!user || user.isAnonymous) return
+    setCloudBusy(true)
+    if (announce) setMessage('Trayendo salidas a PedalMap…')
+    try {
+      const result = await stravaService.syncRecentToPedalMap(user.uid, (uid, input) =>
+        activityRepository.importFinished(uid, input),
+      )
+      await reload()
+      setMessage(
+        result.imported > 0
+          ? `${result.imported} salidas nuevas en PedalMap` +
+              (result.skipped ? ` · ${result.skipped} ya estaban o no eran de bici` : '') +
+              '. Ábrelas aquí abajo.'
+          : result.skipped
+            ? 'No había salidas nuevas de bici que importar. Cuando termines la próxima, pulsa «Traer salidas».'
+            : 'No se encontraron salidas recientes. Termina una ruta en tu GPS y vuelve a sincronizar.',
+      )
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'No se pudieron traer las salidas')
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
   useEffect(() => {
-    const flag = params.get('gps')
+    const gpsFlag = params.get('gps')
     const provider = params.get('provider')
-    if (flag === 'connected') {
+    if (gpsFlag === 'connected') {
       setMessage(
         provider
           ? `${provider} conectado. Las nuevas salidas se cargarán solas en PedalMap.`
           : 'GPS conectado. Las nuevas salidas se cargarán solas en PedalMap.',
       )
     }
-    if (flag === 'error') {
+    if (gpsFlag === 'error') {
       setMessage(`No se pudo conectar el GPS (${params.get('reason') || 'error'}).`)
+    }
+
+    const stravaFlag = params.get('strava')
+    if (stravaFlag === 'connected') {
+      setCloudConnected(true)
+      setMessage('Sincronización activa. Trayendo tus salidas a PedalMap…')
+    }
+    if (stravaFlag === 'error') {
+      setMessage(
+        `No se pudo activar la sincronización (${params.get('reason') || 'error'}).`,
+      )
     }
   }, [params])
 
@@ -69,6 +124,10 @@ export function MyActivitiesPage() {
           const st = await gpsSyncService.status()
           if (!cancelled) setProviders(st)
         }
+        if (!cancelled) await refreshCloudStatus()
+        if (!cancelled && params.get('strava') === 'connected') {
+          await pullCloudRides(false)
+        }
       } catch (err) {
         console.error('[activities]', err)
         if (!cancelled) setError('No se pudieron cargar las actividades.')
@@ -80,6 +139,7 @@ export function MyActivitiesPage() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot load + oauth return
   }, [user, firebaseReady])
 
   async function connect(provider: GpsProviderId) {
@@ -123,6 +183,74 @@ export function MyActivitiesPage() {
     }
   }
 
+  async function connectCloudBridge() {
+    setCloudBusy(true)
+    setMessage(
+      'Abriendo autorización… en unos segundos vuelves a PedalMap y las salidas se importan aquí.',
+    )
+    try {
+      const { url } = await stravaService.startConnect()
+      // Brief OAuth hop only — callback always returns to /actividades?strava=connected.
+      window.location.assign(url)
+    } catch (err) {
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo activar la sincronización con la nube del GPS.',
+      )
+      setCloudBusy(false)
+    }
+  }
+
+  async function disconnectCloudBridge() {
+    setCloudBusy(true)
+    try {
+      await stravaService.disconnect()
+      setCloudConnected(false)
+      setMessage('Sincronización desactivada. Tus actividades en PedalMap se quedan.')
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'No se pudo desactivar')
+    } finally {
+      setCloudBusy(false)
+    }
+  }
+
+  const list: GpsProviderStatus[] =
+    providers.length > 0
+      ? providers
+      : [
+          {
+            id: 'wahoo',
+            label: 'Wahoo',
+            configured: true,
+            connected: false,
+            externalUserId: null,
+          },
+          {
+            id: 'igpsport',
+            label: 'iGPSPORT',
+            configured: false,
+            connected: false,
+            externalUserId: null,
+          },
+          {
+            id: 'garmin',
+            label: 'Garmin',
+            configured: false,
+            connected: false,
+            externalUserId: null,
+          },
+        ]
+  const wahoo =
+    list.find((p) => p.id === 'wahoo') ??
+    ({
+      id: 'wahoo' as const,
+      label: 'Wahoo',
+      configured: true,
+      connected: false,
+      externalUserId: null,
+    } satisfies GpsProviderStatus)
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
       <div className="flex items-end justify-between gap-4">
@@ -134,8 +262,7 @@ export function MyActivitiesPage() {
             Mis actividades
           </h1>
           <p className="mt-2 max-w-xl text-sm text-[var(--color-stone)]">
-            Graba en PedalMap o conecta tu ciclocomputador: al terminar la salida se carga sola, con
-            más análisis Free que el básico de terceros.
+            Graba en PedalMap o trae salidas de tu ciclocomputador. El análisis Free se queda aquí.
           </p>
         </div>
         <Link to="/actividad">
@@ -151,152 +278,126 @@ export function MyActivitiesPage() {
           Conectar tu GPS
         </h2>
         <p className="mt-1 text-sm text-[var(--color-stone)]">
-          Wahoo ya está listo: al terminar una salida en el ELEMNT / app Wahoo, PedalMap la recibe
-          sola. iGPSPORT y Garmin llegarán cuando aprueben la API.
+          Wahoo tiene API oficial. El resto de marcas puede llegar vía sincronización a PedalMap
+          (abajo).
         </p>
         {!user || user.isAnonymous ? (
           <p className="mt-3 text-sm text-[var(--color-stone)]">
             <Link to="/login" className="font-semibold text-[var(--color-trail)]">
               Inicia sesión
             </Link>{' '}
-            con una cuenta real para vincular Wahoo.
+            con una cuenta real para vincular el GPS.
           </p>
         ) : (
-          (() => {
-            const list: GpsProviderStatus[] =
-              providers.length > 0
-                ? providers
-                : [
-                    {
-                      id: 'wahoo',
-                      label: 'Wahoo',
-                      configured: true,
-                      connected: false,
-                      externalUserId: null,
-                    },
-                    {
-                      id: 'igpsport',
-                      label: 'iGPSPORT',
-                      configured: false,
-                      connected: false,
-                      externalUserId: null,
-                    },
-                    {
-                      id: 'garmin',
-                      label: 'Garmin',
-                      configured: false,
-                      connected: false,
-                      externalUserId: null,
-                    },
-                  ]
-            const wahoo =
-              list.find((p) => p.id === 'wahoo') ??
-              ({
-                id: 'wahoo' as const,
-                label: 'Wahoo',
-                configured: true,
-                connected: false,
-                externalUserId: null,
-              } satisfies GpsProviderStatus)
-            const others = list.filter((p) => p.id !== 'wahoo')
-
-            return (
-              <div className="mt-4 space-y-3">
-                <div className="rounded-2xl bg-[var(--color-forest)] px-4 py-4 text-white">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-display text-xl font-bold">Wahoo</p>
-                      <p className="mt-1 text-sm text-white/80">
-                        {wahoo.connected
-                          ? 'Conectado · las nuevas salidas se cargan solas'
-                          : 'API oficial activa · conecta tu cuenta Wahoo'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {wahoo.connected ? (
-                        <>
-                          <Button
-                            size="sm"
-                            className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
-                            disabled={busyProvider === 'wahoo'}
-                            onClick={() => void syncNow('wahoo')}
-                          >
-                            Sincronizar ahora
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="!border-white/40 !text-white"
-                            disabled={busyProvider === 'wahoo'}
-                            onClick={() => void disconnect('wahoo')}
-                          >
-                            Quitar
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
-                          disabled={busyProvider === 'wahoo'}
-                          onClick={() => void connect('wahoo')}
-                        >
-                          {busyProvider === 'wahoo' ? 'Abriendo…' : 'Conectar Wahoo'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-2xl bg-[var(--color-forest)] px-4 py-4 text-white">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-display text-xl font-bold">Wahoo</p>
+                  <p className="mt-1 text-sm text-white/80">
+                    {wahoo.connected
+                      ? 'Conectado · las nuevas salidas se cargan solas'
+                      : 'API oficial · conecta y olvídate de exportar a mano'}
+                  </p>
                 </div>
-
-                <ul className="space-y-2">
-                  {others.map((p) => (
-                    <li
-                      key={p.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/90 px-3 py-2 ring-1 ring-[var(--color-fog)]"
+                <div className="flex flex-wrap gap-2">
+                  {wahoo.connected ? (
+                    <>
+                      <Button
+                        size="sm"
+                        className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
+                        disabled={busyProvider === 'wahoo'}
+                        onClick={() => void syncNow('wahoo')}
+                      >
+                        Sincronizar ahora
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="!border-white/40 !text-white"
+                        disabled={busyProvider === 'wahoo'}
+                        onClick={() => void disconnect('wahoo')}
+                      >
+                        Quitar
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
+                      disabled={busyProvider === 'wahoo'}
+                      onClick={() => void connect('wahoo')}
                     >
-                      <div>
-                        <p className="font-semibold text-[var(--color-forest)]">{p.label}</p>
-                        <p className="text-xs text-[var(--color-stone)]">
-                          {!p.configured
-                            ? 'Próximamente (pendiente de API)'
-                            : p.connected
-                              ? 'Conectado · auto-upload activo'
-                              : 'Listo para conectar'}
-                        </p>
-                      </div>
-                      {p.configured && !p.connected && (
-                        <Button
-                          size="sm"
-                          disabled={busyProvider === p.id}
-                          onClick={() => void connect(p.id)}
-                        >
-                          Conectar
-                        </Button>
-                      )}
-                      {p.configured && p.connected && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            disabled={busyProvider === p.id}
-                            onClick={() => void syncNow(p.id)}
-                          >
-                            Sincronizar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={busyProvider === p.id}
-                            onClick={() => void disconnect(p.id)}
-                          >
-                            Quitar
-                          </Button>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                      {busyProvider === 'wahoo' ? 'Abriendo…' : 'Conectar Wahoo'}
+                    </Button>
+                  )}
+                </div>
               </div>
-            )
-          })()
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section
+        id="gps-cloud"
+        className="mt-4 scroll-mt-24 rounded-2xl bg-white/90 p-4 ring-1 ring-[var(--color-fog)]"
+      >
+        <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
+          iGPSPORT, Garmin y otros GPS
+        </h2>
+        <p className="mt-1 text-sm text-[var(--color-stone)]">
+          Si tu ciclocomputador ya sube la salida a la nube, PedalMap puede{' '}
+          <strong className="font-semibold text-[var(--color-forest)]">traerla aquí</strong> y
+          mostrarte el análisis Free (tiempo en movimiento, VAM, potencia estimada, splits…). Tú
+          sigues en PedalMap: planificar, guardar y revisar — sin quedarte en otra app.
+        </p>
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[var(--color-stone)]">
+          <li>iGPSPORT, Garmin, Magene, Bryton y la mayoría que ya sincronizan a la nube</li>
+          <li>Tras autorizar, vuelves siempre a esta pantalla</li>
+          <li>Las salidas aparecen abajo, en Mis actividades</li>
+        </ul>
+
+        {!user || user.isAnonymous ? (
+          <p className="mt-3 text-sm text-[var(--color-stone)]">
+            <Link to="/login" className="font-semibold text-[var(--color-trail)]">
+              Inicia sesión
+            </Link>{' '}
+            para activar la sincronización.
+          </p>
+        ) : !cloudConfigured ? (
+          <p className="mt-4 rounded-xl bg-[var(--color-mist)] px-3 py-2 text-sm text-[var(--color-stone)]">
+            La sincronización en nube aún no está activa en el servidor. Cuando el dueño de PedalMap
+            termine de configurar las claves, aquí aparecerá el botón.
+          </p>
+        ) : !cloudConnected ? (
+          <div className="mt-4 space-y-2">
+            <Button disabled={cloudBusy} onClick={() => void connectCloudBridge()}>
+              {cloudBusy ? 'Abriendo…' : 'Activar sincronización → PedalMap'}
+            </Button>
+            <p className="text-xs text-[var(--color-stone)]">
+              Autorizas un momento la nube compatible de tu GPS y{' '}
+              <strong className="font-semibold text-[var(--color-forest)]">vuelves siempre a PedalMap</strong>
+              . No te quedas en otra app: el destino de las salidas eres tú, aquí.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm font-semibold text-[var(--color-forest)]">
+              Sincronización activa · destino: PedalMap
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={cloudBusy} onClick={() => void pullCloudRides(true)}>
+                {cloudBusy ? 'Importando…' : 'Traer salidas a PedalMap'}
+              </Button>
+              <Button variant="ghost" disabled={cloudBusy} onClick={() => void disconnectCloudBridge()}>
+                Desactivar sync
+              </Button>
+            </div>
+            <p className="text-xs text-[var(--color-stone)]">
+              Flujo habitual: termina la salida en tu GPS → deja que suba a la nube → pulsa «Traer
+              salidas» (o vuelve aquí) y revisa el análisis en PedalMap.
+            </p>
+          </div>
         )}
       </section>
 
@@ -323,7 +424,7 @@ export function MyActivitiesPage() {
           <Link to="/actividad" className="font-semibold text-[var(--color-trail)]">
             Empieza a grabar
           </Link>{' '}
-          o conecta tu GPS arriba.
+          o activa la sincronización arriba.
         </p>
       ) : (
         <ul className="mt-6 space-y-3">
@@ -340,7 +441,7 @@ export function MyActivitiesPage() {
                     </p>
                     <p className="text-xs text-[var(--color-stone)]">
                       {new Date(a.startedAt).toLocaleString('es-ES')}
-                      {a.source && a.source !== 'gps' ? ` · ${a.source}` : ''}
+                      {a.source === 'strava' ? ' · importada' : a.source && a.source !== 'gps' ? ` · ${a.source}` : ''}
                       {a.status !== 'finished' ? ` · ${a.status}` : ''}
                     </p>
                   </div>
