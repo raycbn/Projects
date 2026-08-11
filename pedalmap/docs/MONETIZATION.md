@@ -2,18 +2,24 @@
 
 ## Modelo
 
-**Freemium + suscripción** (Stripe **test/sandbox** mientras no haya ingresos).
+**Freemium + suscripción** (Stripe **Live** prices wired; confirm `sk_live` + live webhook before charging).
 
 ### Free
 - Límites de creación/guardado
 - Hasta **2** filtros activos a la vez
+- Soft trials: 1 GPX/semana · 1 Objetivo/mes
 
 ### Premium — 4,99 €/mes · 39,99 €/año
-- Ilimitado (rutas, filtros, GPX, circulares)
+- Ilimitado (rutas, filtros, GPX, circulares, avisos)
+- Anual: 7 días de prueba
 
-Price ids (test):
-- Mensual `price_1U2i2oDRDu30ohSLy0PIHXtJ` (prod `prod_V2neg03A0x2bBl`)
-- Anual `price_1U2i69DRDu30ohSLo5EoU9ed` (prod `prod_V2nhZxNNGpZOar`)
+Price ids (**Live**):
+- Mensual `price_1U3Jz2D9NwIvrlQEilHY4AXf` (prod `prod_V3Qq3Wjtf6JDeL`)
+- Anual `price_1U3K1LD9NwIvrlQEIIFS5oTG` (prod `prod_V3QtIN4qXG6R2R`)
+
+Legacy test prices (retirados del Worker):
+- Mensual `price_1U2i2oDRDu30ohSLy0PIHXtJ`
+- Anual `price_1U2i69DRDu30ohSLo5EoU9ed`
 
 ## Infra 0 €
 
