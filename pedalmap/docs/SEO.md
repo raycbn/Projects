@@ -44,8 +44,37 @@ Salir en Google (España, ciclismo) y ser citables por motores generativos (Chat
 
 ## Operativa post–Search Console
 
-1. Sitemap enviado + indexación de `/`, `/crear-ruta-bicicleta`, `/rutas-bicicleta-madrid`
-2. Esperar 2–7 días a datos de Rendimiento / Cobertura
-3. No lanzar Ads todavía sin queries reales en GSC (desperdicio de presupuesto)
-4. Opcional: Bing Webmaster Tools con el mismo sitemap
-5. Cuando GSC muestre impresiones: Ads Search solo a landings SEO
+1. Sitemap enviado + indexación de `/` (confirmado en Google) + guías clave
+2. Esperar datos de Rendimiento; no lanzar Ads de pago aún
+3. Bing Webmaster + mismo sitemap
+4. `https://pedalmap.es/llms.txt` — ficha para motores / agentes IA (GEO)
+
+## Publicidad orgánica y gratuita (prioridad)
+
+### Esta semana (tú, 0 €)
+1. **Bing Webmaster** — importa GSC o verifica y envía sitemap
+2. **Perfiles de marca** con enlace a pedalmap.es: Instagram, TikTok, YouTube, Strava Club, LinkedIn
+3. **3 posts útiles** (no solo “mira mi app”):
+   - Cómo crear una ruta GPX y pasarla a Garmin/Wahoo
+   - Ruta ejemplo Madrid / Barcelona (captura real del mapa PedalMap)
+   - Free vs Premium en 30 segundos
+4. **Comunidades** (aporta valor, no spam): foros bici ES, grupos Telegram/WhatsApp de grupetas, Reddit r/cycling + comunidades ES, Discord de ciclismo
+5. **Directorios gratis**: Product Hunt, AlternativeTo, Softonic/similar ES si encaja, listas “alternativas a Komoot”
+6. **Outreach 5–10 emails**: blogs/clubs ciclistas locales — “¿os paso una guía/ruta gratis para vuestra web?” a cambio de mención + enlace
+
+### Contenido que más empuja SEO (nosotros en código cuando digas)
+- Blog corto: GPX → Garmin, viento en ruta, Objetivo circular
+- Más hubs solo si hay texto útil (Bilbao, Zaragoza, Málaga…) — nunca pueblos vacíos
+- Rutas públicas indexables `/route/{slug}` cuando haya tracks reales compartidos
+
+### GEO (aparecer en ChatGPT / Perplexity / AI Overviews)
+- Mantener FAQ y `llms.txt` al día
+- Menciones de marca en sitios reales (foros, blogs, Strava)
+- Misma descripción de producto en todas partes: “planificador de rutas bici para España…”
+
+## Keywords (calidad > volumen)
+
+- crear ruta bicicleta / planificador rutas bici / crear ruta GPX
+- rutas bicicleta Madrid | Barcelona | Valencia | Sevilla
+- rutas MTB / gravel Madrid
+- calcular desnivel ruta bici

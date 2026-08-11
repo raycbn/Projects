@@ -1,0 +1,34 @@
+# PedalMap
+
+> Planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según tu bici (carretera, urbana, gravel, MTB, e-bike) y exportación GPX.
+
+Sitio: https://pedalmap.es
+Contacto: hola@pedalmap.es
+Soporte: soporte@pedalmap.es
+
+## Qué es
+PedalMap ayuda a crear salidas ciclistas realistas en España. El usuario elige origen/destino (o un Objetivo circular), el tipo de bici, y obtiene distancia, tiempo, desnivel, composición de superficie y viento relativo a la ruta.
+
+## Producto
+- Planificador web: https://pedalmap.es/route-planner
+- Crear ruta bicicleta: https://pedalmap.es/crear-ruta-bicicleta
+- Planificador rutas bici: https://pedalmap.es/planificador-rutas-bici
+- Crear / exportar GPX: https://pedalmap.es/crear-ruta-gpx
+- Premium (Free + trial anual 7 días): https://pedalmap.es/premium
+
+## Guías locales
+- Madrid: https://pedalmap.es/rutas-bicicleta-madrid
+- MTB Madrid: https://pedalmap.es/rutas-mtb-madrid
+- Gravel Madrid: https://pedalmap.es/rutas-gravel-madrid
+- Barcelona: https://pedalmap.es/rutas-bicicleta-barcelona
+- Valencia: https://pedalmap.es/rutas-bicicleta-valencia
+- Sevilla: https://pedalmap.es/rutas-bicicleta-sevilla
+
+## Diferenciadores
+- Routing orientado a tipo de bici y superficie (Valhalla primero, ORS respaldo)
+- Viento y desnivel en el mismo flujo de planificación
+- GPX para Garmin, Wahoo, OsmAnd, Organic Maps
+- Freemium en español, dominio pedalmap.es
+
+## No es
+No es una red social de actividades tipo Strava. No sustituye el criterio en carretera o monte: es un planificador previo a la salida.

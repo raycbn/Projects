@@ -3,7 +3,7 @@
  * a cached or SPA fallback response there breaks Google redirect login.
  */
 const CACHE = 'pedalmap-shell-v26'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/og-default.jpg']
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/og-default.jpg', '/llms.txt']
 const APEX = 'https://pedalmap.es'
 
 self.addEventListener('install', (event) => {
