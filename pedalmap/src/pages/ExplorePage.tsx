@@ -288,18 +288,44 @@ export function ExplorePage() {
           {tab === 'mas' && (
             <div className="space-y-6">
               <section className="space-y-3">
-                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Guías</h2>
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Guías prácticas
+                </h2>
                 <div className="grid gap-3">
-                  {seoPages.map((page) => (
-                    <Link
-                      key={page.path}
-                      to={page.path}
-                      className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
-                    >
-                      <p className="font-semibold text-[var(--color-forest)]">{page.heading}</p>
-                      <p className="mt-1 text-sm text-[var(--color-stone)]">{page.description}</p>
-                    </Link>
-                  ))}
+                  {seoPages
+                    .filter((p) => (p.kind ?? 'intent') !== 'city')
+                    .map((page) => (
+                      <Link
+                        key={page.path}
+                        to={page.path}
+                        className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
+                      >
+                        <p className="font-semibold text-[var(--color-forest)]">{page.heading}</p>
+                        <p className="mt-1 text-sm text-[var(--color-stone)]">{page.description}</p>
+                      </Link>
+                    ))}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Guías por ciudad
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {seoPages
+                    .filter((p) => p.kind === 'city')
+                    .map((page) => (
+                      <Link
+                        key={page.path}
+                        to={page.path}
+                        className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
+                      >
+                        <p className="font-semibold text-[var(--color-forest)]">{page.heading}</p>
+                        <p className="mt-1 text-sm text-[var(--color-stone)] line-clamp-2">
+                          {page.description}
+                        </p>
+                      </Link>
+                    ))}
                 </div>
               </section>
 

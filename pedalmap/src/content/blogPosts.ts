@@ -581,6 +581,346 @@ export const blogPosts: BlogPost[] = [
       { to: '/premium', label: 'Premium' },
     ],
   },
+  {
+    slug: 'alternativa-komoot-espana',
+    title: 'Alternativa a Komoot en España: cuándo PedalMap encaja mejor',
+    description:
+      'Comparativa honesta: PedalMap como alternativa a Komoot para planificar rutas bici en España (desnivel, viento, GPX, freemium).',
+    date: '2026-08-12',
+    readMinutes: 7,
+    tags: ['Comparativa', 'Komoot', 'Planificar'],
+    socialHook: '¿Alternativa a Komoot en España? PedalMap para planificar de verdad',
+    socialCaption:
+      'No es “matar” a Komoot: es planificar en ES con desnivel, viento y GPX.\npedalmap.es/alternativa-komoot\n#ciclismo #komoot #pedalmap',
+    lead:
+      'Si buscas una **alternativa a Komoot** centrada en **planificar** la salida en España —mapa, tipo de bici, desnivel, viento y GPX— PedalMap está hecho para eso. Aquí va una comparativa clara, sin humo.',
+    primaryCta: { to: '/alternativa-komoot', label: 'Ver página alternativa a Komoot' },
+    secondaryCtas: [
+      { to: '/route-planner', label: 'Probar el planificador' },
+      { to: '/crear-ruta-gpx', label: 'Exportar GPX' },
+    ],
+    blocks: [
+      {
+        type: 'h2',
+        text: 'Qué hace bien Komoot',
+      },
+      {
+        type: 'p',
+        text: 'Komoot brilla por comunidad, colecciones de tracks y un ecosistema maduro. Mucha gente lo usa como biblioteca de rutas ajenas y como navegación. Si eso es tu flujo principal, seguirá siendo una referencia.',
+      },
+      {
+        type: 'h2',
+        text: 'Dónde PedalMap aporta',
+      },
+      {
+        type: 'p',
+        text: 'PedalMap no es red social de actividades. Es la capa **previa a rodar**: [crear ruta bicicleta](/crear-ruta-bicicleta) con perfil carretera/gravel/MTB, ver **desnivel** y **superficie**, mirar **viento relativo** al sentido, y [exportar GPX](/crear-ruta-gpx) a Garmin/Wahoo/OsmAnd. Producto y dominio en español ([pedalmap.es](/)).',
+      },
+      {
+        type: 'h2',
+        text: 'Cuándo elegir PedalMap',
+      },
+      {
+        type: 'p',
+        text: 'Cuando quieres diseñar tú la salida (A→B o [circular/Objetivo](/ruta-circular-bicicleta)), comparar variantes por suelo y metros, y llevar el track al GPS sin fricción. Empieza Free; Premium solo si ya lo usas a menudo — [Free vs Premium](/blog/free-vs-premium).',
+      },
+      {
+        type: 'h2',
+        text: 'Prueba en 5 minutos',
+      },
+      {
+        type: 'p',
+        text: 'Abre el [planificador](/route-planner), calcula una salida cerca de casa y mira elevación + viento. Tutorial: [primera ruta](/blog/primera-ruta-pedalmap). Guías locales: [Madrid](/rutas-bicicleta-madrid), [Barcelona](/rutas-bicicleta-barcelona).',
+      },
+    ],
+    relatedPaths: [
+      { to: '/alternativa-komoot', label: 'Landing vs Komoot' },
+      { to: '/mejor-planificador-rutas-bici', label: 'Planificador en España' },
+      { to: '/blog/free-vs-premium', label: 'Free vs Premium' },
+    ],
+  },
+  {
+    slug: 'planificar-ruta-gravel-espana',
+    title: 'Cómo planificar una ruta gravel en España (perfil, superficie y GPX)',
+    description:
+      'Guía para crear rutas gravel: perfil de bici, superficie, desnivel, viento y exportación GPX con PedalMap.',
+    date: '2026-08-12',
+    readMinutes: 6,
+    tags: ['Gravel', 'Planificar', 'GPX'],
+    socialHook: 'Gravel sin improvisar el firme: perfil + superficie + GPX',
+    socialCaption:
+      'Mismo A→B, distinta bici = distinta ruta. Perfil gravel en PedalMap.\npedalmap.es/planificador-rutas-gravel\n#gravel #ciclismo #pedalmap',
+    lead:
+      'El gravel pide equilibrio: ni solo asfalto ni full enduro. Así planificas una **ruta gravel** en PedalMap con perfil correcto, superficie visible y GPX listo.',
+    primaryCta: { to: '/planificador-rutas-gravel', label: 'Abrir planificador gravel' },
+    secondaryCtas: [
+      { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
+      { to: '/rutas-gravel-barcelona', label: 'Gravel Barcelona' },
+    ],
+    blocks: [
+      {
+        type: 'h2',
+        text: '1) Elige el perfil gravel',
+      },
+      {
+        type: 'p',
+        text: 'En el [planificador](/route-planner) selecciona gravel. El routing prioriza vías mixtas según datos abiertos. Por qué importa: [elegir perfil de bici](/blog/elegir-perfil-bici).',
+      },
+      {
+        type: 'h2',
+        text: '2) Revisa superficie y desnivel',
+      },
+      {
+        type: 'p',
+        text: 'Antes de salir, mira la composición de suelo y el [desnivel](/blog/calcular-desnivel-ruta-bici). Si ves demasiado asfalto o un tramo demasiado técnico, cambia preferencias o waypoints y vuelve a calcular.',
+      },
+      {
+        type: 'h2',
+        text: '3) Viento y circular',
+      },
+      {
+        type: 'p',
+        text: 'En pistas abiertas el viento duele. Guía: [viento en la ruta](/blog/viento-en-la-ruta). Si no tienes destino fijo, prueba una [ruta circular](/ruta-circular-bicicleta) (Objetivo).',
+      },
+      {
+        type: 'h2',
+        text: '4) GPX al GPS',
+      },
+      {
+        type: 'p',
+        text: 'Exporta desde [crear ruta GPX](/crear-ruta-gpx). Tutoriales: [Garmin](/blog/exportar-gpx-garmin), [Wahoo](/blog/pasar-ruta-wahoo).',
+      },
+    ],
+    relatedPaths: [
+      { to: '/planificador-rutas-gravel', label: 'Planificador gravel' },
+      { to: '/blog/elegir-perfil-bici', label: 'Perfiles de bici' },
+      { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
+    ],
+  },
+  {
+    slug: 'ruta-ejemplo-barcelona',
+    title: 'Cómo planificar una ruta de bicicleta en Barcelona (ejemplo práctico)',
+    description:
+      'Ejemplo para trazar rutas bici en Barcelona: costa, Collserola, desnivel, perfil de bici y GPX con PedalMap.',
+    date: '2026-08-12',
+    readMinutes: 5,
+    tags: ['Barcelona', 'Ejemplo', 'Crear ruta'],
+    socialHook: 'Barcelona: costa o Collserola — planifica desnivel antes',
+    socialCaption:
+      'Misma ciudad, salidas muy distintas. Traza en PedalMap y mira metros.\npedalmap.es/rutas-bicicleta-barcelona\n#barcelona #ciclismo #pedalmap',
+    lead:
+      'Barcelona mezcla paseo marítimo y metros serios en Collserola. Este ejemplo te guía para **planificar la ruta** sin improvisar el desnivel.',
+    primaryCta: { to: '/rutas-bicicleta-barcelona', label: 'Guía rutas Barcelona' },
+    secondaryCtas: [
+      { to: '/route-planner', label: 'Abrir planificador' },
+      { to: '/rutas-mtb-barcelona', label: 'MTB Barcelona' },
+    ],
+    blocks: [
+      {
+        type: 'h2',
+        text: 'Define el tipo de salida',
+      },
+      {
+        type: 'p',
+        text: '¿Rodaje costero plano o subida a Collserola? Elige el [perfil de bici](/blog/elegir-perfil-bici) (carretera, gravel o MTB) antes de calcular. Guías: [MTB Barcelona](/rutas-mtb-barcelona), [gravel Barcelona](/rutas-gravel-barcelona).',
+      },
+      {
+        type: 'h2',
+        text: 'Traza en el planificador',
+      },
+      {
+        type: 'p',
+        text: 'Abre el [planificador](/route-planner), pon origen y destino (o [Objetivo circular](/ruta-circular-bicicleta)), calcula y revisa desnivel + superficie + viento.',
+      },
+      {
+        type: 'h2',
+        text: 'Exporta o navega',
+      },
+      {
+        type: 'p',
+        text: 'GPX a Garmin/Wahoo o móvil: [crear ruta GPX](/crear-ruta-gpx). Primera vez: [tutorial 5 minutos](/blog/primera-ruta-pedalmap).',
+      },
+    ],
+    relatedPaths: [
+      { to: '/rutas-bicicleta-barcelona', label: 'Hub Barcelona' },
+      { to: '/blog/ruta-ejemplo-madrid', label: 'Ejemplo Madrid' },
+      { to: '/crear-ruta-gpx', label: 'GPX' },
+    ],
+  },
+  {
+    slug: 'evitar-carreteras-ruta-bici',
+    title: 'Cómo evitar carreteras principales al crear una ruta en bici',
+    description:
+      'Consejos para priorizar carril bici y vías más tranquilas al planificar rutas ciclistas en PedalMap.',
+    date: '2026-08-12',
+    readMinutes: 5,
+    tags: ['Seguridad', 'Planificar', 'Preferencias'],
+    socialHook: 'Menos nacional, más carril: preferencias al crear la ruta',
+    socialCaption:
+      'Antes de salir: mira idoneidad y superficie. Ajusta preferencias y recalcula.\npedalmap.es/crear-ruta-bicicleta\n#ciclismo #seguridad #pedalmap',
+    lead:
+      'Nadie quiere acabar en una nacional “porque el GPS acorta”. Así usas PedalMap para **evitar carreteras principales** y priorizar opciones más ciclistas.',
+    primaryCta: { to: '/route-planner', label: 'Calcular ruta con preferencias' },
+    secondaryCtas: [
+      { to: '/crear-ruta-bicicleta', label: 'Guía crear ruta' },
+      { to: '/planificador-rutas-bici', label: 'Planificador' },
+    ],
+    blocks: [
+      {
+        type: 'h2',
+        text: 'Usa el perfil de bici correcto',
+      },
+      {
+        type: 'p',
+        text: 'Urbana y carretera no son lo mismo que gravel/MTB. El perfil cambia qué vías prioriza el motor — [elegir perfil](/blog/elegir-perfil-bici).',
+      },
+      {
+        type: 'h2',
+        text: 'Revisa idoneidad y superficie',
+      },
+      {
+        type: 'p',
+        text: 'Tras calcular, mira el % de idoneidad y la mezcla de suelos. Si ves demasiado tráfico potencial, cambia preferencias (carril bici / evitar principales) o añade un waypoint y vuelve a crear la ruta.',
+      },
+      {
+        type: 'h2',
+        text: 'No improvises el día D',
+      },
+      {
+        type: 'p',
+        text: 'Exporta [GPX](/crear-ruta-gpx) cuando el track te convenza. En ciudad, combina con sentido común y señalización local.',
+      },
+    ],
+    relatedPaths: [
+      { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },
+      { to: '/blog/elegir-perfil-bici', label: 'Perfiles' },
+      { to: '/blog/primera-ruta-pedalmap', label: 'Primera ruta' },
+    ],
+  },
+  {
+    slug: 'mejor-planificador-rutas-bici-espana',
+    title: 'Qué mirar en un planificador de rutas bici en España (checklist)',
+    description:
+      'Checklist para elegir planificador de rutas ciclistas en España: perfil de bici, desnivel, viento, GPX y límites Free.',
+    date: '2026-08-12',
+    readMinutes: 6,
+    tags: ['Planificar', 'Comparativa', 'España'],
+    socialHook: 'Checklist: qué pedir a un planificador de rutas bici',
+    socialCaption:
+      'Perfil de bici + desnivel + viento + GPX. Sin red social obligatoria.\npedalmap.es/mejor-planificador-rutas-bici\n#ciclismo #pedalmap',
+    lead:
+      'Antes de decidir “el mejor” planificador, usa esta **checklist**. Spoiler: PedalMap está diseñado para marcarla en el contexto España.',
+    primaryCta: { to: '/mejor-planificador-rutas-bici', label: 'Ver PedalMap como planificador' },
+    secondaryCtas: [
+      { to: '/alternativa-komoot', label: 'Alternativa a Komoot' },
+      { to: '/route-planner', label: 'Probar ahora' },
+    ],
+    blocks: [
+      {
+        type: 'h2',
+        text: '1) Perfil según tu bici',
+      },
+      {
+        type: 'p',
+        text: 'Carretera ≠ gravel ≠ MTB. Si el planificador no distingue, acabarás en el firme equivocado — [perfiles](/blog/elegir-perfil-bici).',
+      },
+      {
+        type: 'h2',
+        text: '2) Desnivel y superficie visibles',
+      },
+      {
+        type: 'p',
+        text: 'Los km mienten. Necesitas [desnivel](/blog/calcular-desnivel-ruta-bici) y composición de suelo antes de salir.',
+      },
+      {
+        type: 'h2',
+        text: '3) Viento relativo a la ruta',
+      },
+      {
+        type: 'p',
+        text: 'No basta el “viento en la ciudad”: importa el sentido del recorrido — [viento en la ruta](/blog/viento-en-la-ruta).',
+      },
+      {
+        type: 'h2',
+        text: '4) GPX a tu GPS',
+      },
+      {
+        type: 'p',
+        text: 'Garmin, Wahoo, OsmAnd… sin GPX el plan se queda en la pantalla — [crear ruta GPX](/crear-ruta-gpx).',
+      },
+      {
+        type: 'h2',
+        text: '5) Límites claros Free / pago',
+      },
+      {
+        type: 'p',
+        text: 'Prueba sin sorpresas: [Free vs Premium](/blog/free-vs-premium). PedalMap: [planificador](/planificador-rutas-bici) en pedalmap.es.',
+      },
+    ],
+    relatedPaths: [
+      { to: '/mejor-planificador-rutas-bici', label: 'Landing planificador ES' },
+      { to: '/blog/alternativa-komoot-espana', label: 'vs Komoot' },
+      { to: '/planificador-rutas-bici', label: 'Guía planificador' },
+    ],
+  },
+  {
+    slug: 'compartir-ruta-grupeta',
+    title: 'Cómo preparar y compartir una ruta para la grupeta',
+    description:
+      'Prepara la salida de la grupeta: calcula ruta, revisa desnivel y viento, exporta GPX y compártela con claridad.',
+    date: '2026-08-12',
+    readMinutes: 5,
+    tags: ['Grupeta', 'GPX', 'Comunidad'],
+    socialHook: 'Grupeta sin “¿por dónde vamos?”: ruta + GPX + desnivel',
+    socialCaption:
+      'Calcula, mira metros y viento, exporta GPX y pásalo al chat.\npedalmap.es/crear-ruta-bicicleta\n#grupeta #ciclismo #pedalmap',
+    lead:
+      'La mejor publicidad de PedalMap es una **grupeta que sale con plan**. Así preparas la ruta y la compartes sin caos en el chat.',
+    primaryCta: { to: '/route-planner', label: 'Preparar la ruta ahora' },
+    secondaryCtas: [
+      { to: '/crear-ruta-gpx', label: 'Exportar GPX' },
+      { to: '/ruta-circular-bicicleta', label: 'Circular / Objetivo' },
+    ],
+    blocks: [
+      {
+        type: 'h2',
+        text: '1) Cuadra km y desnivel con el nivel del grupo',
+      },
+      {
+        type: 'p',
+        text: 'Usa origen–destino o [Objetivo circular](/ruta-circular-bicicleta). Revisa [desnivel](/blog/calcular-desnivel-ruta-bici) antes de mandar el track.',
+      },
+      {
+        type: 'h2',
+        text: '2) Mira el viento',
+      },
+      {
+        type: 'p',
+        text: 'Un “suave” en el valle puede ser pared de cara a la vuelta — [viento en la ruta](/blog/viento-en-la-ruta).',
+      },
+      {
+        type: 'h2',
+        text: '3) Exporta GPX y pásalo limpio',
+      },
+      {
+        type: 'p',
+        text: 'Un solo archivo GPX + resumen (km, m+, hora). Tutoriales [Garmin](/blog/exportar-gpx-garmin) / [Wahoo](/blog/pasar-ruta-wahoo). Si alguien usa solo el móvil: [OsmAnd / Organic Maps](/blog/gpx-osmand-organic-maps).',
+      },
+      {
+        type: 'h2',
+        text: '4) Deja feedback útil',
+      },
+      {
+        type: 'p',
+        text: 'Si el routing falla en vuestra zona, escribid a soporte: mejora el producto y el SEO local con uso real.',
+      },
+    ],
+    relatedPaths: [
+      { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },
+      { to: '/blog/exportar-gpx-garmin', label: 'GPX Garmin' },
+      { to: '/blog/ruta-circular-objetivo', label: 'Objetivo' },
+    ],
+  },
 ]
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

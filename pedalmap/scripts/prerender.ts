@@ -159,24 +159,31 @@ const pages: PageSpec[] = [
       { to: '/premium', label: 'Premium' },
     ],
   },
-  ...seoPages.map((p) => ({
-    path: p.path,
-    title: p.title,
-    description: p.description,
-    heading: p.heading,
-    paragraphs: p.body,
-    related: p.related,
-    jsonLd: webPageJsonLd({
+  ...seoPages.map((p) => {
+    const pageLd = webPageJsonLd({
       path: p.path,
       name: p.heading,
       description: p.description,
-    }),
-  })),
+    })
+    return {
+      path: p.path,
+      title: p.title,
+      description: p.description,
+      heading: p.heading,
+      paragraphs: [
+        ...p.body,
+        ...(p.faqs?.flatMap((f) => [`## ${f.q}`, f.a]) ?? []),
+      ],
+      related: p.related,
+      jsonLd:
+        p.faqs && p.faqs.length > 0 ? [pageLd, faqPageJsonLd(p.faqs)] : pageLd,
+    }
+  }),
   {
     path: '/blog',
     title: 'Blog ciclista | PedalMap',
     description:
-      'Guías prácticas: GPX a Garmin/Wahoo, Objetivo circular, viento, desnivel y cómo planificar rutas en España con PedalMap.',
+      'Guías prácticas: GPX a Garmin/Wahoo, gravel, alternativa a Komoot, Objetivo circular, viento y rutas en España con PedalMap.',
     heading: 'Blog PedalMap',
     paragraphs: [
       'Tutoriales cortos para crear rutas, exportar GPX y salir con datos de verdad.',

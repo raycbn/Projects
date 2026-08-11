@@ -8,7 +8,7 @@ export function BlogIndexPage() {
   usePageMeta({
     title: 'Blog ciclista | PedalMap',
     description:
-      'Guías prácticas: GPX a Garmin/Wahoo, Objetivo circular, viento, desnivel y cómo planificar rutas en España con PedalMap.',
+      'Guías prácticas: GPX a Garmin/Wahoo, gravel, alternativa a Komoot, Objetivo circular, viento y rutas en España con PedalMap.',
     path: '/blog',
   })
   useJsonLd(

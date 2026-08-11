@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
-import { webPageJsonLd } from '@/lib/jsonLd'
+import { faqPageJsonLd, webPageJsonLd } from '@/lib/jsonLd'
+import type { FaqItem } from '@/content/faqs'
 
 export interface SeoPageContent {
   path: string
@@ -11,6 +13,10 @@ export interface SeoPageContent {
   heading: string
   body: string[]
   related?: Array<{ to: string; label: string }>
+  /** Optional FAQ block + FAQPage JSON-LD for rich results */
+  faqs?: FaqItem[]
+  /** Helps Explorar group guides without stuffing the UI */
+  kind?: 'intent' | 'city' | 'compare'
 }
 
 export function SeoContentPage({ content }: { content: SeoPageContent }) {
@@ -19,14 +25,18 @@ export function SeoContentPage({ content }: { content: SeoPageContent }) {
     description: content.description,
     path: content.path,
   })
-  useJsonLd(
-    `seo-${content.path}`,
-    webPageJsonLd({
+  const jsonLd = useMemo(() => {
+    const page = webPageJsonLd({
       path: content.path,
       name: content.heading,
       description: content.description,
-    }),
-  )
+    })
+    if (content.faqs && content.faqs.length > 0) {
+      return [page, faqPageJsonLd(content.faqs)]
+    }
+    return page
+  }, [content.path, content.heading, content.description, content.faqs])
+  useJsonLd(`seo-${content.path}`, jsonLd)
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12 pb-24 md:px-6">
@@ -52,6 +62,21 @@ export function SeoContentPage({ content }: { content: SeoPageContent }) {
           Qué es PedalMap
         </Link>
       </div>
+      {content.faqs && content.faqs.length > 0 && (
+        <section className="mt-12 border-t border-[var(--color-fog)] pt-6" aria-label="Preguntas frecuentes">
+          <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
+            Preguntas frecuentes
+          </h2>
+          <dl className="mt-4 space-y-4">
+            {content.faqs.map((item) => (
+              <div key={item.q}>
+                <dt className="font-semibold text-[var(--color-forest)]">{item.q}</dt>
+                <dd className="mt-1 text-sm leading-relaxed text-[var(--color-stone)]">{item.a}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       {content.related && content.related.length > 0 && (
         <nav className="mt-12 border-t border-[var(--color-fog)] pt-6" aria-label="Guías relacionadas">
           <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">

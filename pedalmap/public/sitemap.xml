@@ -14,13 +14,26 @@
   <url><loc>https://pedalmap.es/blog/gpx-osmand-organic-maps</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/blog/calcular-desnivel-ruta-bici</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/blog/primera-ruta-pedalmap</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://pedalmap.es/blog/alternativa-komoot-espana</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://pedalmap.es/blog/planificar-ruta-gravel-espana</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://pedalmap.es/blog/ruta-ejemplo-barcelona</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/blog/evitar-carreteras-ruta-bici</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/blog/mejor-planificador-rutas-bici-espana</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://pedalmap.es/blog/compartir-ruta-grupeta</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://pedalmap.es/crear-ruta-bicicleta</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
   <url><loc>https://pedalmap.es/planificador-rutas-bici</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
   <url><loc>https://pedalmap.es/crear-ruta-gpx</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://pedalmap.es/planificador-rutas-gravel</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://pedalmap.es/planificador-rutas-mtb</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://pedalmap.es/ruta-circular-bicicleta</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://pedalmap.es/alternativa-komoot</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://pedalmap.es/mejor-planificador-rutas-bici</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-madrid</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/rutas-mtb-madrid</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://pedalmap.es/rutas-gravel-madrid</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-barcelona</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/rutas-mtb-barcelona</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://pedalmap.es/rutas-gravel-barcelona</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-valencia</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-sevilla</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-bilbao</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
@@ -30,6 +43,10 @@
   <url><loc>https://pedalmap.es/rutas-bicicleta-alicante</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-murcia</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/rutas-bicicleta-santander</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/rutas-bicicleta-cordoba</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/rutas-bicicleta-valladolid</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/rutas-bicicleta-pamplona</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
+  <url><loc>https://pedalmap.es/rutas-bicicleta-palma</loc><changefreq>monthly</changefreq><priority>0.75</priority></url>
   <url><loc>https://pedalmap.es/premium</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
   <url><loc>https://pedalmap.es/privacidad</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://pedalmap.es/cookies</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>

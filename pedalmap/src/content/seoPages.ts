@@ -3,6 +3,7 @@ import type { SeoPageContent } from '@/pages/SeoContentPage'
 export const seoPages: SeoPageContent[] = [
   {
     path: '/crear-ruta-bicicleta',
+    kind: 'intent',
     title: 'Crear ruta bicicleta online | PedalMap',
     description:
       'Crea una ruta en bicicleta online con mapa, desnivel, viento y superficie. Planificador ciclista gratuito en España — empieza en segundos.',
@@ -12,14 +13,26 @@ export const seoPages: SeoPageContent[] = [
       'A diferencia de un GPS genérico, el motor tiene en cuenta carretera, urbana, gravel, MTB o e-bike para priorizar vías más adecuadas. Verás un % de idoneidad y un perfil de elevación sincronizado con el mapa.',
       'No necesitas cuenta para probar. Cuando quieras guardar rutas, avisos de viento o sincronizar, crea una cuenta Free. Premium quita los límites de creaciones, GPX y Objetivo.',
     ],
+    faqs: [
+      {
+        q: '¿Puedo crear una ruta de bicicleta gratis?',
+        a: 'Sí. Puedes calcular rutas sin cuenta. Free incluye cupos mensuales de creaciones, 1 GPX/semana y 1 Objetivo/mes. Premium quita los techos.',
+      },
+      {
+        q: '¿Qué datos veo al crear la ruta?',
+        a: 'Distancia, tiempo estimado, desnivel, composición de superficie, idoneidad según tu bici y viento relativo al sentido del recorrido.',
+      },
+    ],
     related: [
       { to: '/planificador-rutas-bici', label: 'Planificador de rutas bici' },
       { to: '/crear-ruta-gpx', label: 'Crear ruta GPX' },
+      { to: '/ruta-circular-bicicleta', label: 'Ruta circular' },
       { to: '/rutas-bicicleta-madrid', label: 'Rutas bici Madrid' },
     ],
   },
   {
     path: '/planificador-rutas-bici',
+    kind: 'intent',
     title: 'Planificador de rutas bici | PedalMap',
     description:
       'Planificador de rutas bici con perfiles carretera/MTB/gravel, viento, desnivel y exportación GPX. Hecho para ciclistas en España.',
@@ -29,14 +42,26 @@ export const seoPages: SeoPageContent[] = [
       'Puedes priorizar carril bici, evitar carreteras principales o buscar menor desnivel según tu forma. Tras calcular, revisas viento relativo a la ruta, superficie y exportas GPX o abres la navegación.',
       'Empieza Free. Si entrenas a menudo o quieres Objetivo ilimitado y avisos, Premium incluye 7 días de prueba en el plan anual.',
     ],
+    faqs: [
+      {
+        q: '¿Sirve para carretera, gravel y MTB?',
+        a: 'Sí. Eliges el perfil de bici y el routing prioriza vías más coherentes con ese uso (Valhalla primero; ORS como respaldo).',
+      },
+      {
+        q: '¿Puedo exportar la ruta a Garmin o Wahoo?',
+        a: 'Sí, via GPX. Free: 1 descarga/semana. Premium: ilimitado. Guías en el blog para Connect y ELEMNT.',
+      },
+    ],
     related: [
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
+      { to: '/planificador-rutas-gravel', label: 'Planificador gravel' },
+      { to: '/planificador-rutas-mtb', label: 'Planificador MTB' },
       { to: '/crear-ruta-gpx', label: 'Exportar GPX' },
-      { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
     ],
   },
   {
     path: '/crear-ruta-gpx',
+    kind: 'intent',
     title: 'Crear ruta GPX para bicicleta | PedalMap',
     description:
       'Genera y descarga rutas GPX para ciclismo. Compatible con Garmin, Wahoo, OsmAnd y Organic Maps. Prueba Free, ilimitado en Premium.',
@@ -46,14 +71,171 @@ export const seoPages: SeoPageContent[] = [
       'La exportación GPX ilimitada forma parte de Premium; Free incluye 1 descarga por semana para validar el flujo completo.',
       'Si usas Garmin Connect o Wahoo, el GPX se carga como actividad/recorrido planificado. En móvil, OsmAnd y Organic Maps abren el mismo archivo sin fricción.',
     ],
+    faqs: [
+      {
+        q: '¿El GPX de PedalMap funciona en Garmin Edge?',
+        a: 'Sí. Exportas el .gpx, lo importas en Garmin Connect como curso y sincronizas el Edge.',
+      },
+      {
+        q: '¿Cuántos GPX puedo descargar gratis?',
+        a: '1 por semana en Free. Premium = exportaciones ilimitadas.',
+      },
+    ],
     related: [
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
-      { to: '/planificador-rutas-bici', label: 'Planificador' },
+      { to: '/blog/exportar-gpx-garmin', label: 'Guía Garmin' },
+      { to: '/blog/pasar-ruta-wahoo', label: 'Guía Wahoo' },
       { to: '/premium', label: 'Ver Premium' },
     ],
   },
   {
+    path: '/planificador-rutas-gravel',
+    kind: 'intent',
+    title: 'Planificador de rutas gravel | PedalMap',
+    description:
+      'Planifica rutas gravel en España: pistas, caminos mixtos, desnivel, superficie y GPX. Perfil gravel orientado a tierra compacta sin full MTB.',
+    heading: 'Planificador de rutas gravel',
+    body: [
+      'El gravel pide un equilibrio: ni solo asfalto de grupeta ni singletrack técnico de MTB. Con el perfil gravel de PedalMap priorizas caminos y pistas más coherentes con una bici de aventura.',
+      'Calcula origen–destino o un Objetivo circular, revisa la composición de superficie y el desnivel, y mira el viento antes de salir a zonas abiertas. Luego exporta GPX a Garmin, Wahoo u OsmAnd.',
+      'Ideal para preparar salidas por Madrid (sierra y pistas), Barcelona (Collserola / conexiones), Valencia (huerta y caminos) u otras provincias sin improvisar el firme sobre la marcha.',
+    ],
+    faqs: [
+      {
+        q: '¿Qué diferencia el perfil gravel del de carretera?',
+        a: 'Gravel favorece vías mixtas y pistas según datos OSM/Valhalla; carretera prioriza asfalto y ciclables. Mismo A→B puede salir distinto.',
+      },
+      {
+        q: '¿Puedo hacer una circular gravel por km y desnivel?',
+        a: 'Sí, con modo Objetivo: indicas km y metros + y generas una circular alrededor del punto de partida.',
+      },
+    ],
+    related: [
+      { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
+      { to: '/rutas-gravel-barcelona', label: 'Gravel Barcelona' },
+      { to: '/blog/planificar-ruta-gravel-espana', label: 'Guía blog gravel' },
+      { to: '/planificador-rutas-mtb', label: 'Planificador MTB' },
+    ],
+  },
+  {
+    path: '/planificador-rutas-mtb',
+    kind: 'intent',
+    title: 'Planificador de rutas MTB | PedalMap',
+    description:
+      'Planifica rutas MTB con perfil mountain bike, desnivel, track y GPX. Prepara salidas de sierra y caminos en España con PedalMap.',
+    heading: 'Planificador de rutas MTB',
+    body: [
+      'Selecciona el perfil MTB para que el motor priorice vías más adecuadas a mountain bike según OpenStreetMap / Valhalla. Útil en sierra, zonas de monte y conexiones por caminos donde el asfalto no es el objetivo.',
+      'Revisa siempre el terreno real, el estado tras lluvia y las restricciones locales (espacios protegidos, vedados). PedalMap te da track, desnivel y superficie; el criterio en el monte es tuyo.',
+      'Exporta GPX a tu GPS o navega desde el móvil. Empieza Free; Premium desbloquea creaciones y exportaciones si entrenas varias veces por semana.',
+    ],
+    faqs: [
+      {
+        q: '¿El planificador MTB sustituye el conocimiento local?',
+        a: 'No. Es una ayuda previa: track y desnivel. Comprueba restricciones, senderos y condiciones del día.',
+      },
+      {
+        q: '¿Hay guías MTB por ciudad?',
+        a: 'Sí: por ejemplo rutas MTB Madrid y MTB Barcelona, además del planificador general.',
+      },
+    ],
+    related: [
+      { to: '/rutas-mtb-madrid', label: 'MTB Madrid' },
+      { to: '/rutas-mtb-barcelona', label: 'MTB Barcelona' },
+      { to: '/crear-ruta-gpx', label: 'Crear GPX' },
+      { to: '/blog/elegir-perfil-bici', label: 'Elegir perfil' },
+    ],
+  },
+  {
+    path: '/ruta-circular-bicicleta',
+    kind: 'intent',
+    title: 'Crear ruta circular en bicicleta | PedalMap',
+    description:
+      'Crea una ruta circular en bicicleta por kilómetros y desnivel (modo Objetivo). Ideal para entrenar sin destino fijo. Free 1/mes.',
+    heading: 'Ruta circular en bicicleta',
+    body: [
+      'Cuando el entreno manda (“quiero ~70 km y ~800 m+”) y el sitio exacto de llegada da igual, una ruta circular es la herramienta correcta. En PedalMap se llama modo Objetivo.',
+      'Indicas el punto de partida, la distancia objetivo y el desnivel deseado. Generamos una circular con el perfil de tu bici (carretera, gravel, MTB…) para que el suelo encaje con lo que montas.',
+      'Free incluye 1 Objetivo al mes para probar. Premium deja Objetivo ilimitado (el plan anual trae 7 días de prueba). Luego revisas viento, superficie y exportas GPX si quieres llevarla al GPS.',
+    ],
+    faqs: [
+      {
+        q: '¿Objetivo es lo mismo que ruta circular?',
+        a: 'Sí en la práctica: generas una salida que vuelve al punto de partida según km y desnivel que marques.',
+      },
+      {
+        q: '¿Cuántas circulares gratis puedo hacer?',
+        a: '1 al mes en Free. Ilimitadas en Premium.',
+      },
+    ],
+    related: [
+      { to: '/blog/ruta-circular-objetivo', label: 'Tutorial Objetivo' },
+      { to: '/crear-ruta-bicicleta', label: 'Ruta origen–destino' },
+      { to: '/planificador-rutas-bici', label: 'Planificador' },
+      { to: '/premium', label: 'Premium' },
+    ],
+  },
+  {
+    path: '/alternativa-komoot',
+    kind: 'compare',
+    title: 'Alternativa a Komoot en España | PedalMap',
+    description:
+      'PedalMap es una alternativa a Komoot para planificar rutas bici en España: perfiles de bici, desnivel, viento, superficie y GPX. Free para empezar.',
+    heading: 'Alternativa a Komoot (España)',
+    body: [
+      'Si buscas una alternativa a Komoot centrada en planificar la salida en España —no en una red social de tracks—, PedalMap está pensado para eso: mapa, tipo de bici, desnivel, superficie y viento relativo a la ruta, con exportación GPX.',
+      'Komoot es potente y tiene mucha comunidad. PedalMap no pretende copiarlo: prioriza un flujo claro en español (pedalmap.es), freemium transparente y datos útiles antes de rodar (incluido viento en el sentido del recorrido).',
+      'Prueba Free sin tarjeta. Si ya usas Garmin o Wahoo, el GPX de PedalMap encaja en el mismo flujo que con otras apps. Comparativa honesta y tutoriales en el blog.',
+    ],
+    faqs: [
+      {
+        q: '¿PedalMap sustituye a Komoot?',
+        a: 'Depende de tu uso. Si lo que quieres es planificar A→B o circulares con desnivel/viento/GPX en España, sí puede ser tu herramienta principal. Si buscas colecciones sociales enormes de tracks ajenos, Komoot sigue siendo referencia.',
+      },
+      {
+        q: '¿Puedo pasar rutas de PedalMap a mi GPS?',
+        a: 'Sí, exportando GPX a Garmin Connect, Wahoo, OsmAnd u Organic Maps.',
+      },
+    ],
+    related: [
+      { to: '/blog/alternativa-komoot-espana', label: 'Comparativa en el blog' },
+      { to: '/planificador-rutas-bici', label: 'Planificador' },
+      { to: '/crear-ruta-gpx', label: 'GPX' },
+      { to: '/blog/free-vs-premium', label: 'Free vs Premium' },
+    ],
+  },
+  {
+    path: '/mejor-planificador-rutas-bici',
+    kind: 'compare',
+    title: 'Mejor planificador de rutas bici en España | PedalMap',
+    description:
+      '¿Buscas el mejor planificador de rutas bici en España? PedalMap: mapa, desnivel, viento, superficie por tipo de bici y GPX. Empieza Free.',
+    heading: 'Planificador de rutas bici en España',
+    body: [
+      '“El mejor” depende de lo que midas. Si priorizas planificar salidas reales en España con perfil de bici, desnivel visible, viento relativo a la ruta y GPX listo para Garmin/Wahoo, PedalMap está diseñado exactamente para eso.',
+      'No es una red social de actividades. Es la capa previa: decides el recorrido, miras metros y suelo, y sales con un plan (o con el track en el Edge). Dominio y producto en español: pedalmap.es.',
+      'Empieza Free. Si entrenas a menudo, Premium quita límites de creaciones, GPX y Objetivo circular. Guías locales para Madrid, Barcelona, Valencia y más ciudades.',
+    ],
+    faqs: [
+      {
+        q: '¿PedalMap funciona en toda España?',
+        a: 'Sí. El routing cubre el territorio con datos abiertos; las guías locales destacan hubs con más demanda de búsqueda.',
+      },
+      {
+        q: '¿Necesito app de móvil?',
+        a: 'Es web. En el móvil puedes planificar, navegar o llevar el GPX a OsmAnd / Organic Maps / GPS.',
+      },
+    ],
+    related: [
+      { to: '/planificador-rutas-bici', label: 'Abrir guía planificador' },
+      { to: '/alternativa-komoot', label: 'Alternativa a Komoot' },
+      { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },
+      { to: '/blog/primera-ruta-pedalmap', label: 'Primera ruta en 5 min' },
+    ],
+  },
+  {
     path: '/rutas-bicicleta-madrid',
+    kind: 'city',
     title: 'Rutas bicicleta Madrid | PedalMap',
     description:
       'Planifica rutas de bicicleta en Madrid y alrededores: Casa de Campo, sierra, desnivel y GPX con PedalMap.',
@@ -66,11 +248,13 @@ export const seoPages: SeoPageContent[] = [
     related: [
       { to: '/rutas-mtb-madrid', label: 'MTB Madrid' },
       { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
+      { to: '/blog/ruta-ejemplo-madrid', label: 'Ejemplo práctico Madrid' },
       { to: '/rutas-bicicleta-barcelona', label: 'Rutas bici Barcelona' },
     ],
   },
   {
     path: '/rutas-mtb-madrid',
+    kind: 'city',
     title: 'Rutas MTB Madrid | PedalMap',
     description:
       'Crea rutas MTB en Madrid con perfil mountain bike, desnivel y track GPX para tu GPS.',
@@ -83,11 +267,13 @@ export const seoPages: SeoPageContent[] = [
     related: [
       { to: '/rutas-bicicleta-madrid', label: 'Bici Madrid' },
       { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
+      { to: '/planificador-rutas-mtb', label: 'Planificador MTB' },
       { to: '/crear-ruta-gpx', label: 'Crear GPX' },
     ],
   },
   {
     path: '/rutas-gravel-madrid',
+    kind: 'city',
     title: 'Rutas gravel Madrid | PedalMap',
     description:
       'Planifica rutas gravel por Madrid y la sierra con mapa, elevación, viento y exportación GPX.',
@@ -100,11 +286,13 @@ export const seoPages: SeoPageContent[] = [
     related: [
       { to: '/rutas-bicicleta-madrid', label: 'Bici Madrid' },
       { to: '/rutas-mtb-madrid', label: 'MTB Madrid' },
-      { to: '/planificador-rutas-bici', label: 'Planificador' },
+      { to: '/planificador-rutas-gravel', label: 'Planificador gravel' },
+      { to: '/blog/planificar-ruta-gravel-espana', label: 'Guía gravel' },
     ],
   },
   {
     path: '/rutas-bicicleta-barcelona',
+    kind: 'city',
     title: 'Rutas bicicleta Barcelona | PedalMap',
     description:
       'Planifica rutas de bicicleta en Barcelona y alrededores: costa, Collserola, desnivel y GPX con PedalMap.',
@@ -115,13 +303,51 @@ export const seoPages: SeoPageContent[] = [
       'Si vienes de Madrid u otra ciudad, el mismo flujo te sirve: Free para probar, Premium cuando entrenes a menudo.',
     ],
     related: [
+      { to: '/rutas-mtb-barcelona', label: 'MTB Barcelona' },
+      { to: '/rutas-gravel-barcelona', label: 'Gravel Barcelona' },
+      { to: '/blog/ruta-ejemplo-barcelona', label: 'Ejemplo Barcelona' },
       { to: '/rutas-bicicleta-madrid', label: 'Rutas bici Madrid' },
-      { to: '/rutas-bicicleta-valencia', label: 'Rutas bici Valencia' },
-      { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },
+    ],
+  },
+  {
+    path: '/rutas-mtb-barcelona',
+    kind: 'city',
+    title: 'Rutas MTB Barcelona | PedalMap',
+    description:
+      'Crea rutas MTB en Barcelona y Collserola con perfil mountain bike, desnivel y GPX.',
+    heading: 'Rutas MTB en Barcelona',
+    body: [
+      'Collserola y alrededores concentran gran parte del MTB periurbano de Barcelona. Con el perfil MTB trazas una salida con desnivel visible y track exportable.',
+      'Respeta restricciones de parque, horarios y otros usuarios. PedalMap ayuda a planificar; no sustituye señales ni normativa local.',
+      'Lleva el GPX al GPS o usa navegación móvil. Free para empezar.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-barcelona', label: 'Bici Barcelona' },
+      { to: '/rutas-gravel-barcelona', label: 'Gravel Barcelona' },
+      { to: '/planificador-rutas-mtb', label: 'Planificador MTB' },
+    ],
+  },
+  {
+    path: '/rutas-gravel-barcelona',
+    kind: 'city',
+    title: 'Rutas gravel Barcelona | PedalMap',
+    description:
+      'Planifica rutas gravel en Barcelona y alrededores: pistas, Collserola suave y conexiones con mapa y GPX.',
+    heading: 'Rutas gravel en Barcelona',
+    body: [
+      'Entre el asfalto urbano y el MTB técnico hay un espacio gravel: pistas y caminos alrededor de Collserola y conexiones hacia el interior. El perfil gravel de PedalMap te ayuda a buscar ese equilibrio.',
+      'Calcula, revisa superficie y desnivel, y exporta GPX. Combina con viento si sales a zonas abiertas de costa o valle.',
+      'Empieza Free en el planificador.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-barcelona', label: 'Bici Barcelona' },
+      { to: '/planificador-rutas-gravel', label: 'Planificador gravel' },
+      { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
     ],
   },
   {
     path: '/rutas-bicicleta-valencia',
+    kind: 'city',
     title: 'Rutas bicicleta Valencia | PedalMap',
     description:
       'Planifica rutas de bicicleta en Valencia: Turia, huerta, costa y desnivel con mapa y GPX en PedalMap.',
@@ -133,12 +359,14 @@ export const seoPages: SeoPageContent[] = [
     ],
     related: [
       { to: '/rutas-bicicleta-barcelona', label: 'Rutas bici Barcelona' },
-      { to: '/rutas-bicicleta-sevilla', label: 'Rutas bici Sevilla' },
+      { to: '/rutas-bicicleta-alicante', label: 'Rutas Alicante' },
+      { to: '/blog/viento-en-la-ruta', label: 'Viento en la ruta' },
       { to: '/planificador-rutas-bici', label: 'Planificador' },
     ],
   },
   {
     path: '/rutas-bicicleta-sevilla',
+    kind: 'city',
     title: 'Rutas bicicleta Sevilla | PedalMap',
     description:
       'Planifica rutas de bicicleta en Sevilla y alrededores con mapa, desnivel, viento y exportación GPX.',
@@ -149,13 +377,14 @@ export const seoPages: SeoPageContent[] = [
       'Empieza sin cuenta. Cuando quieras guardar varias rutas al mes o avisos de viento, crea usuario Free o Premium.',
     ],
     related: [
-      { to: '/rutas-bicicleta-valencia', label: 'Rutas bici Valencia' },
-      { to: '/rutas-bicicleta-madrid', label: 'Rutas bici Madrid' },
+      { to: '/rutas-bicicleta-cordoba', label: 'Rutas Córdoba' },
+      { to: '/rutas-bicicleta-malaga', label: 'Rutas Málaga' },
       { to: '/crear-ruta-gpx', label: 'Crear GPX' },
     ],
   },
   {
     path: '/rutas-bicicleta-bilbao',
+    kind: 'city',
     title: 'Rutas bicicleta Bilbao | PedalMap',
     description:
       'Planifica rutas de bicicleta en Bilbao y Bizkaia: ría, costa, desnivel y GPX con PedalMap.',
@@ -167,12 +396,13 @@ export const seoPages: SeoPageContent[] = [
     ],
     related: [
       { to: '/rutas-bicicleta-santander', label: 'Rutas Santander' },
-      { to: '/rutas-bicicleta-zaragoza', label: 'Rutas Zaragoza' },
+      { to: '/rutas-bicicleta-pamplona', label: 'Rutas Pamplona' },
       { to: '/blog/primera-ruta-pedalmap', label: 'Primera ruta' },
     ],
   },
   {
     path: '/rutas-bicicleta-zaragoza',
+    kind: 'city',
     title: 'Rutas bicicleta Zaragoza | PedalMap',
     description:
       'Planifica rutas de bicicleta en Zaragoza: Ebro, canal, rodajes planos y escapadas con mapa y GPX.',
@@ -184,12 +414,13 @@ export const seoPages: SeoPageContent[] = [
     ],
     related: [
       { to: '/rutas-bicicleta-madrid', label: 'Rutas Madrid' },
-      { to: '/rutas-bicicleta-bilbao', label: 'Rutas Bilbao' },
+      { to: '/rutas-bicicleta-valladolid', label: 'Rutas Valladolid' },
       { to: '/blog/viento-en-la-ruta', label: 'Viento en la ruta' },
     ],
   },
   {
     path: '/rutas-bicicleta-malaga',
+    kind: 'city',
     title: 'Rutas bicicleta Málaga | PedalMap',
     description:
       'Planifica rutas de bicicleta en Málaga y la Costa del Sol: costa, montaña cercana, desnivel y GPX.',
@@ -207,6 +438,7 @@ export const seoPages: SeoPageContent[] = [
   },
   {
     path: '/rutas-bicicleta-granada',
+    kind: 'city',
     title: 'Rutas bicicleta Granada | PedalMap',
     description:
       'Planifica rutas de bicicleta en Granada: Vega, sierra y desnivel real con mapa y exportación GPX.',
@@ -224,6 +456,7 @@ export const seoPages: SeoPageContent[] = [
   },
   {
     path: '/rutas-bicicleta-alicante',
+    kind: 'city',
     title: 'Rutas bicicleta Alicante | PedalMap',
     description:
       'Planifica rutas de bicicleta en Alicante: costa, interior y desnivel con PedalMap y GPX.',
@@ -241,6 +474,7 @@ export const seoPages: SeoPageContent[] = [
   },
   {
     path: '/rutas-bicicleta-murcia',
+    kind: 'city',
     title: 'Rutas bicicleta Murcia | PedalMap',
     description:
       'Planifica rutas de bicicleta en Murcia y alrededores con mapa, desnivel, viento y GPX.',
@@ -258,6 +492,7 @@ export const seoPages: SeoPageContent[] = [
   },
   {
     path: '/rutas-bicicleta-santander',
+    kind: 'city',
     title: 'Rutas bicicleta Santander | PedalMap',
     description:
       'Planifica rutas de bicicleta en Santander y Cantabria: costa, desnivel y GPX con PedalMap.',
@@ -271,6 +506,78 @@ export const seoPages: SeoPageContent[] = [
       { to: '/rutas-bicicleta-bilbao', label: 'Rutas Bilbao' },
       { to: '/blog/viento-en-la-ruta', label: 'Viento en la ruta' },
       { to: '/planificador-rutas-bici', label: 'Planificador' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-cordoba',
+    kind: 'city',
+    title: 'Rutas bicicleta Córdoba | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Córdoba: Guadalquivir, campiña, desnivel y GPX con PedalMap.',
+    heading: 'Rutas de bicicleta en Córdoba',
+    body: [
+      'Córdoba permite rodajes junto al Guadalquivir y escapadas hacia la campiña o sierra con más metros. El calor marca horarios: planifica desnivel y exposición con antelación.',
+      'Con PedalMap eliges el perfil de bici, calculas la ruta y revisas superficie y viento antes de salir. Exporta GPX a Garmin/Wahoo o navega desde el móvil.',
+      'Empieza Free; Premium si preparas varias salidas a la semana.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-sevilla', label: 'Rutas Sevilla' },
+      { to: '/rutas-bicicleta-granada', label: 'Rutas Granada' },
+      { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-valladolid',
+    kind: 'city',
+    title: 'Rutas bicicleta Valladolid | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Valladolid y Castilla: rodajes, desnivel suave y GPX con PedalMap.',
+    heading: 'Rutas de bicicleta en Valladolid',
+    body: [
+      'Valladolid y su entorno encajan con rodajes largos, a menudo con viento de meseta. PedalMap te ayuda a cuadrar kilómetros, metros y exposición al aire antes de la grupeta.',
+      'Perfil carretera para asfalto; gravel si encadenas caminos. Guarda o exporta GPX.',
+      'Prueba Free en pedalmap.es.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-zaragoza', label: 'Rutas Zaragoza' },
+      { to: '/rutas-bicicleta-madrid', label: 'Rutas Madrid' },
+      { to: '/blog/viento-en-la-ruta', label: 'Viento' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-pamplona',
+    kind: 'city',
+    title: 'Rutas bicicleta Pamplona | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Pamplona y Navarra: desnivel, viento y GPX con PedalMap.',
+    heading: 'Rutas de bicicleta en Pamplona',
+    body: [
+      'Pamplona y Navarra premian mirar el desnivel: salidas urbanas cortas y, en cuanto sales, metros serios hacia valles y puertos. Calcula el perfil antes de comprometerte.',
+      'Elige carretera, gravel o MTB según la zona. Revisa viento y superficie, y lleva GPX al GPS.',
+      'Empieza Free; Premium si entrenas con frecuencia.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-bilbao', label: 'Rutas Bilbao' },
+      { to: '/blog/calcular-desnivel-ruta-bici', label: 'Desnivel' },
+      { to: '/planificador-rutas-bici', label: 'Planificador' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-palma',
+    kind: 'city',
+    title: 'Rutas bicicleta Palma de Mallorca | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Palma y Mallorca: costa, puertos, desnivel y GPX con PedalMap.',
+    heading: 'Rutas de bicicleta en Palma (Mallorca)',
+    body: [
+      'Mallorca es destino clásico de entrenamiento: costa para rodajes y puertos de referencia a poca distancia de Palma. Define km y desnivel antes de salir, sobre todo con calor o viento de tramontana.',
+      'Con PedalMap trazas la ruta, eliges el tipo de bici y revisas elevación y superficie. Exporta GPX a tu Edge o Wahoo.',
+      'Ideal para preparar la semana de stage o la salida del hotel sin improvisar el recorrido.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-barcelona', label: 'Rutas Barcelona' },
+      { to: '/ruta-circular-bicicleta', label: 'Ruta circular / Objetivo' },
+      { to: '/crear-ruta-gpx', label: 'Crear GPX' },
     ],
   },
 ]

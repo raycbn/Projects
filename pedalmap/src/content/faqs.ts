@@ -35,4 +35,12 @@ export const landingFaqs: FaqItem[] = [
     q: '¿PedalMap es gratis?',
     a: `Sí: el plan Free incluye hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes, 1 GPX a la semana, 1 Objetivo al mes y filtros básicos. Premium quita los techos y añade trial anual de 7 días.`,
   },
+  {
+    q: '¿PedalMap es una alternativa a Komoot?',
+    a: 'Puede serlo si lo que buscas es planificar salidas en España con perfil de bici, desnivel, viento, superficie y GPX. No es una red social de tracks: es la capa previa a rodar. Comparativa en pedalmap.es/alternativa-komoot.',
+  },
+  {
+    q: '¿Puedo planificar rutas gravel o MTB?',
+    a: 'Sí. Elige el perfil gravel o MTB en el planificador para priorizar vías más coherentes con ese uso, revisa superficie y desnivel, y exporta GPX si quieres llevarla al GPS.',
+  },
 ]

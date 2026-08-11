@@ -92,6 +92,15 @@ export function AppShell() {
               <Link className="hover:text-[var(--color-forest)]" to="/crear-ruta-bicicleta">
                 Crear ruta
               </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/planificador-rutas-gravel">
+                Gravel
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/ruta-circular-bicicleta">
+                Circular
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/alternativa-komoot">
+                vs Komoot
+              </Link>
               <Link className="hover:text-[var(--color-forest)]" to="/rutas-bicicleta-madrid">
                 Madrid
               </Link>
