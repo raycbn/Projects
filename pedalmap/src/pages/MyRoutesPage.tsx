@@ -9,6 +9,7 @@ import { exportRouteToGpx } from '@/lib/gpx'
 import { track } from '@/lib/analytics'
 import { routeRepository } from '@/services/RouteRepository'
 import { canExportGpx } from '@/services/EntitlementService'
+import { authService } from '@/services/AuthService'
 import { usePageMeta } from '@/hooks/usePageMeta'
 
 export function MyRoutesPage() {
@@ -110,9 +111,7 @@ export function MyRoutesPage() {
             a.click()
             URL.revokeObjectURL(url)
             if (profile && profile.plan !== 'premium') {
-              void import('@/services/AuthService').then(({ authService }) =>
-                authService.recordFreeGpxExport(profile.uid).catch(() => undefined),
-              )
+              void authService.recordFreeGpxExport(profile.uid).catch(() => undefined)
               track('free_trial_used', { kind: 'gpx' })
             }
             track('gpx_exported')
