@@ -758,7 +758,7 @@ export function MapView({
     <div
       className={
         className
-          ? `relative h-full min-h-[240px] w-full ${className}`
+          ? `relative w-full min-h-[240px] ${className}`
           : 'relative h-full min-h-[320px] w-full'
       }
     >

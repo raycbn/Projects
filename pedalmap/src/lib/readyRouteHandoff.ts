@@ -9,6 +9,7 @@ export type ReadyRoutePacket = {
   draft: RouteDraft
   savedRouteId?: string | null
   shareSlug?: string | null
+  source?: 'calculate' | 'saved' | 'import'
 }
 
 export function stashReadyRoute(packet: ReadyRoutePacket): void {

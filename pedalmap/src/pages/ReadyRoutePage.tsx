@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { usePlanner } from '@/app/PlannerContext'
@@ -13,15 +13,19 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 import { peekReadyRoute, stashReadyRoute, type ReadyRoutePacket } from '@/lib/readyRouteHandoff'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { shareRouteCard } from '@/lib/shareCard'
-import { routeRepository } from '@/services/RouteRepository'
+import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
 import { canSaveRoute } from '@/services/EntitlementService'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import {
+  formatWeatherHourCaption,
   formatWeatherWindowCaption,
 } from '@/lib/weatherFormat'
+import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
+import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
+import { bearingLabel } from '@/lib/wind'
 import { track } from '@/lib/analytics'
-import type { RouteDraft } from '@/domain/types'
 import { applySelectedOption } from '@/lib/routeOptions'
+import type { RouteDraft } from '@/domain/types'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 
 const MapView = lazy(() =>
@@ -45,14 +49,21 @@ function bikeLabel(bike: RouteDraft['bikeType']): string {
   }
 }
 
+function normalizeDraftGeometry(draft: RouteDraft): RouteDraft {
+  return {
+    ...draft,
+    geometry: geometryFromStored(draft.geometry),
+  }
+}
+
 export function ReadyRoutePage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { user, profile, firebaseReady } = useAuth()
-  const { draft: plannerDraft, showPaywall, paywallReason, clearPaywall, selectRouteOption } =
-    usePlanner()
+  const { showPaywall, paywallReason, clearPaywall, selectRouteOption } = usePlanner()
 
   const [packet, setPacket] = useState<ReadyRoutePacket | null>(() => peekReadyRoute())
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [rideOpen, setRideOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [windOpen, setWindOpen] = useState(false)
@@ -62,8 +73,11 @@ export function ReadyRoutePage() {
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
   const [bestLine, setBestLine] = useState<string | null>(null)
+  const [showWindArrows, setShowWindArrows] = useState(true)
+  const exportRef = useRef<HTMLDetailsElement | null>(null)
 
-  const draft = packet?.draft ?? null
+  const routeIdParam = params.get('routeId')
+  const draft = packet?.draft ? normalizeDraftGeometry(packet.draft) : null
 
   usePageMeta({
     title: draft ? `${draft.title || 'Ruta lista'} | PedalMap` : 'Ruta lista | PedalMap',
@@ -73,37 +87,47 @@ export function ReadyRoutePage() {
     path: '/ruta',
   })
 
-  // Prefer planner draft if we just calculated; else session packet; else load by routeId.
+  // Abrir desde Mis rutas: routeId gana siempre (no mezclar con draft del planner).
   useEffect(() => {
-    const routeId = params.get('routeId')
-    if (plannerDraft?.geometry) {
-      const next = {
-        draft: plannerDraft,
-        savedRouteId: packet?.savedRouteId ?? null,
-        shareSlug: packet?.shareSlug ?? null,
-      }
-      stashReadyRoute(next)
-      setPacket(next)
-      return
-    }
-    if (packet?.draft) return
-    if (!routeId || !firebaseReady) return
+    if (!routeIdParam) return
+    if (!firebaseReady || !routeRepository.isConfigured()) return
     let cancelled = false
-    void routeRepository.getById(routeId).then((route) => {
-      if (cancelled || !route) return
-      const next: ReadyRoutePacket = {
-        draft: route,
-        savedRouteId: route.id,
-        shareSlug: route.shareSlug ?? null,
-      }
-      stashReadyRoute(next)
-      setPacket(next)
-    })
+    setLoadError(null)
+    void routeRepository
+      .getById(routeIdParam)
+      .then((route) => {
+        if (cancelled) return
+        if (!route) {
+          setLoadError('No encontramos esa ruta guardada.')
+          return
+        }
+        const next: ReadyRoutePacket = {
+          draft: route,
+          savedRouteId: route.id,
+          shareSlug: route.shareSlug ?? null,
+          source: 'saved',
+        }
+        stashReadyRoute(next)
+        setPacket(next)
+      })
+      .catch((err) => {
+        console.error('[ready-route] load', err)
+        if (!cancelled) setLoadError('No se pudo cargar la ruta.')
+      })
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plannerDraft, params, firebaseReady])
+  }, [routeIdParam, firebaseReady])
+
+  // Sin routeId: usar handoff de session (tras Crear ruta) si hace falta.
+  useEffect(() => {
+    if (routeIdParam) return
+    if (packet?.draft) return
+    const peeked = peekReadyRoute()
+    if (peeked?.draft) {
+      setPacket(peeked)
+    }
+  }, [routeIdParam, packet?.draft])
 
   const fitKey = useMemo(
     () =>
@@ -112,6 +136,31 @@ export function ReadyRoutePage() {
         : 'empty',
     [draft],
   )
+
+  const windOverlay = useMemo(() => {
+    if (!draft?.geometry) return null
+    if (!selectedWindHour && !selectedWindWindow) return null
+    return buildRouteWindOverlay(draft.geometry, {
+      routeType: draft.type,
+      hour: selectedWindHour,
+      window: selectedWindHour ? null : selectedWindWindow,
+    })
+  }, [draft, selectedWindHour, selectedWindWindow])
+
+  const windCaption = useMemo(() => {
+    if (selectedWindHour) {
+      return `${formatWeatherHourCaption(selectedWindHour.time)} · ${selectedWindHour.windSpeedKmh} km/h ${bearingLabel(selectedWindHour.windDirectionDeg)}`
+    }
+    if (selectedWindWindow) {
+      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
+    }
+    return null
+  }, [selectedWindHour, selectedWindWindow])
+
+  const surfaceOverlay = useMemo(() => {
+    if (!draft?.geometry) return null
+    return buildSurfaceRouteOverlay(draft.geometry, draft.surfaceEdges)
+  }, [draft])
 
   function stashForRide() {
     if (!draft) return
@@ -146,11 +195,21 @@ export function ReadyRoutePage() {
     setSaveBusy(true)
     setMessage(null)
     try {
-      const saved = await routeRepository.save(user.uid, draft, { isPublic: false })
-      const next = { draft, savedRouteId: saved.id, shareSlug: saved.shareSlug ?? null }
-      stashReadyRoute(next)
-      setPacket(next)
-      setMessage('Ruta guardada en Mis rutas.')
+      if (packet?.savedRouteId) {
+        await routeRepository.update(packet.savedRouteId, user.uid, draft)
+        setMessage('Ruta actualizada en Mis rutas.')
+      } else {
+        const saved = await routeRepository.save(user.uid, draft, { isPublic: false })
+        const next = {
+          draft,
+          savedRouteId: saved.id,
+          shareSlug: saved.shareSlug ?? null,
+          source: 'saved' as const,
+        }
+        stashReadyRoute(next)
+        setPacket(next)
+        setMessage('Ruta guardada en Mis rutas.')
+      }
       track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'ready_route' })
     } catch (error) {
       console.error('[ready-route] save', error)
@@ -181,6 +240,7 @@ export function ReadyRoutePage() {
         draft,
         savedRouteId: published.routeId,
         shareSlug: published.shareSlug,
+        source: packet?.source ?? ('calculate' as const),
       }
       stashReadyRoute(next)
       setPacket(next)
@@ -207,6 +267,20 @@ export function ReadyRoutePage() {
     }
   }
 
+  if (loadError) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-16 pb-28 text-center">
+        <h1 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
+          Ruta no disponible
+        </h1>
+        <p className="mt-3 text-[var(--color-stone)]">{loadError}</p>
+        <Link to="/my-routes" className="mt-8 inline-block">
+          <Button>Mis rutas</Button>
+        </Link>
+      </main>
+    )
+  }
+
   if (!draft) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16 pb-28 text-center">
@@ -224,23 +298,38 @@ export function ReadyRoutePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-var(--header-h,3.5rem))] max-w-6xl flex-col pb-28 lg:pb-8">
-      <div className="relative min-h-[48vh] flex-1 bg-[var(--color-fog)] lg:min-h-[55vh]">
+    <main className="mx-auto max-w-6xl pb-10">
+      {/* Explicit height — MapLibre needs a real computed height, not only min-height + h-full */}
+      <div className="relative h-[min(52vh,28rem)] w-full overflow-hidden bg-[var(--color-fog)] sm:h-[min(58vh,34rem)]">
         <Suspense
           fallback={
-            <div className="flex h-full min-h-[48vh] items-center justify-center text-sm text-[var(--color-stone)]">
+            <div className="flex h-full items-center justify-center text-sm text-[var(--color-stone)]">
               Cargando mapa…
             </div>
           }
         >
           <MapView
-            className="absolute inset-0 h-full w-full"
+            className="h-full w-full"
             waypoints={draft.waypoints}
             geometry={draft.geometry}
+            windOverlay={windOverlay}
+            windCaption={windCaption}
+            showWindArrows={showWindArrows}
+            surfaceOverlay={surfaceOverlay}
             fitKey={fitKey}
             interactive={false}
           />
         </Suspense>
+        {windOverlay?.features?.length ? (
+          <button
+            type="button"
+            className="absolute right-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]"
+            aria-pressed={showWindArrows}
+            onClick={() => setShowWindArrows((v) => !v)}
+          >
+            {showWindArrows ? 'Ocultar flechas' : 'Mostrar flechas'}
+          </button>
+        ) : null}
       </div>
 
       <div className="mx-auto w-full max-w-xl space-y-4 px-4 py-5">
@@ -275,7 +364,7 @@ export function ReadyRoutePage() {
               {shareBusy ? 'Publicando…' : 'Compartir'}
             </Button>
             <Button variant="ghost" disabled={saveBusy} onClick={() => void handleSave()}>
-              {saveBusy ? 'Guardando…' : 'Guardar'}
+              {saveBusy ? 'Guardando…' : packet?.savedRouteId ? 'Actualizar' : 'Guardar'}
             </Button>
           </div>
         </div>
@@ -353,6 +442,7 @@ export function ReadyRoutePage() {
         </details>
 
         <details
+          ref={exportRef}
           className="rounded-2xl bg-[var(--color-mist)]/50"
           open={exportOpen}
           onToggle={(e) => setExportOpen((e.target as HTMLDetailsElement).open)}
@@ -370,7 +460,11 @@ export function ReadyRoutePage() {
 
         <div className="flex flex-wrap gap-3 text-sm">
           <Link
-            to="/route-planner"
+            to={
+              packet?.savedRouteId
+                ? `/route-planner?routeId=${packet.savedRouteId}&edit=1`
+                : '/route-planner'
+            }
             className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
           >
             Editar en el planificador
@@ -401,6 +495,9 @@ export function ReadyRoutePage() {
         onNavigate={() => {
           stashForRide()
           setRideOpen(false)
+          if (!draft.instructions?.length) {
+            setMessage('Navegación abierta. Esta ruta no tiene indicaciones paso a paso guardadas.')
+          }
           navigate('/navegacion')
         }}
         onRecord={() => {
@@ -413,6 +510,9 @@ export function ReadyRoutePage() {
         onExportGpx={() => {
           setRideOpen(false)
           setExportOpen(true)
+          window.setTimeout(() => {
+            exportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 50)
         }}
       />
 

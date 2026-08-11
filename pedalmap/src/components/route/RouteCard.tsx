@@ -25,11 +25,18 @@ export function RouteCard({
 
   useEffect(() => {
     if (!menuOpen) return
-    function onDoc(e: MouseEvent) {
+    function onDoc(e: MouseEvent | PointerEvent) {
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
     }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
   }, [menuOpen])
 
   return (

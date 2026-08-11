@@ -25,8 +25,12 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="premium-title"
+      onClick={onClose}
     >
-      <div className="w-full max-w-md animate-rise rounded-t-3xl bg-[var(--color-panel)] p-6 text-white shadow-2xl safe-pb sm:rounded-3xl">
+      <div
+        className="w-full max-w-md animate-rise rounded-t-3xl bg-[var(--color-panel)] p-6 text-white shadow-2xl safe-pb sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
           PedalMap Premium
         </p>

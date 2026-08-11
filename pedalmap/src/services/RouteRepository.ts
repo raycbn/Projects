@@ -143,7 +143,8 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     circularDistanceMeters: draft.circularDistanceMeters,
     targetElevationGainMeters: draft.targetElevationGainMeters,
     circularSeed: draft.circularSeed,
-    // Omit instructions / surfaceEdges — large and unused on share/save list views.
+    // Keep turn-by-turn for navigation after Abrir (cap size).
+    instructions: (draft.instructions ?? []).slice(0, 120),
     selectedOptionId: draft.selectedOptionId,
   })
 }
@@ -394,13 +395,17 @@ export class RouteRepository {
     }
   }
 
-  async update(routeId: string, userId: string, draft: Partial<RouteDraft>): Promise<void> {
+  async update(routeId: string, userId: string, draft: Partial<RouteDraft> | RouteDraft): Promise<void> {
     const ref = doc(getDb(), 'routes', routeId)
     const existing = await getDoc(ref)
     if (!existing.exists() || existing.data().userId !== userId) {
       throw new Error('No tienes permiso para editar esta ruta')
     }
-    await updateDoc(ref, { ...draft, updatedAt: serverTimestamp() })
+    const payload =
+      'geometry' in draft && draft.geometry
+        ? toPersistedDraft(draft as RouteDraft)
+        : stripUndefinedDeep(draft)
+    await updateDoc(ref, { ...payload, updatedAt: serverTimestamp() })
   }
 
   async duplicate(userId: string, route: SavedRoute): Promise<SavedRoute> {

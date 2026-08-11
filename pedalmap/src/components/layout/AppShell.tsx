@@ -16,7 +16,8 @@ export function AppShell() {
   const { user, profile, logout, firebaseReady } = useAuth()
   const { pathname } = useLocation()
   const isPlanner = pathname.startsWith('/route-planner')
-  const isReadyRoute = pathname.startsWith('/ruta')
+  // Exact /ruta only — do not match SEO /rutas-*
+  const isReadyRoute = pathname === '/ruta'
   const isNav = pathname.startsWith('/navegacion')
   const hideTabbar = isPlanner || isReadyRoute || isNav
   const wash = !isPlanner && !isReadyRoute && !isNav
@@ -74,7 +75,7 @@ export function AppShell() {
 
       <Outlet />
 
-      {!isPlanner && !isNav && (
+      {!isPlanner && !isNav && !isReadyRoute && (
         <footer className="border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_70%,white)] px-4 py-8 pb-24 md:pb-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-[var(--color-stone)] md:flex-row md:items-center md:justify-between">
             <div>

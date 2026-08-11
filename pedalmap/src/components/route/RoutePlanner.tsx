@@ -120,7 +120,8 @@ export function RoutePlanner() {
 
   function goToReady(result = activeDraft) {
     if (!result) return
-    stashReadyRoute({ draft: result })
+    if (status === 'editing') return
+    stashReadyRoute({ draft: result, source: 'calculate' })
     navigate('/ruta')
   }
 
@@ -169,13 +170,14 @@ export function RoutePlanner() {
   }
 
   function handlePickCompare(row: BikeCompareRow) {
-    setDraftFromImport({
-      ...row.draft,
-      title: row.draft.title.replace(/ · comparación$/i, ''),
-    })
     setBikeType(row.bikeType)
     setCompareRows(null)
-    stashReadyRoute({ draft: row.draft })
+    const cleaned = {
+      ...row.draft,
+      title: row.draft.title.replace(/ · comparación$/i, ''),
+    }
+    setDraftFromImport(cleaned)
+    stashReadyRoute({ draft: cleaned, source: 'calculate' })
     navigate('/ruta')
   }
 
@@ -264,8 +266,7 @@ export function RoutePlanner() {
                         placeholder="Punto intermedio"
                         valueLabel={w.name}
                         onSelect={(place) => {
-                          removeWaypoint(w.id)
-                          addVia(place.position, place.label)
+                          updateWaypointPosition(w.id, place.position)
                         }}
                       />
                     </div>
@@ -469,7 +470,11 @@ export function RoutePlanner() {
                 </Button>
               )}
 
-              <Button className="w-full !py-3" onClick={() => goToReady()}>
+              <Button
+                className="w-full !py-3"
+                disabled={status === 'editing' || status === 'calculating'}
+                onClick={() => goToReady()}
+              >
                 Ver ruta lista
               </Button>
 

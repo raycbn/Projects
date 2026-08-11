@@ -1,5 +1,11 @@
+import { useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { RoutePlanner } from '@/components/route/RoutePlanner'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { usePlanner } from '@/app/PlannerContext'
+import { useAuth } from '@/app/AuthContext'
+import { routeRepository } from '@/services/RouteRepository'
+import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 
 export function RoutePlannerPage() {
   usePageMeta({
@@ -8,6 +14,35 @@ export function RoutePlannerPage() {
       'Crea rutas ciclistas con mapa, desnivel, tiempo estimado y perfil de elevación. Ideal para carretera, MTB y gravel.',
     path: '/route-planner',
   })
+
+  const [params] = useSearchParams()
+  const { firebaseReady } = useAuth()
+  const { setDraftFromImport, startEditing } = usePlanner()
+
+  // Support Mis rutas → Editar (?routeId=&edit=1)
+  useEffect(() => {
+    const routeId = params.get('routeId')
+    if (!routeId || !firebaseReady || !routeRepository.isConfigured()) return
+    let cancelled = false
+    void routeRepository.getById(routeId).then((route) => {
+      if (cancelled || !route) return
+      setDraftFromImport(route)
+      stashReadyRoute({
+        draft: route,
+        savedRouteId: route.id,
+        shareSlug: route.shareSlug ?? null,
+        source: 'saved',
+      })
+      if (params.get('edit') === '1') {
+        // Defer so draft is committed before entering edit mode.
+        window.setTimeout(() => startEditing(), 0)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, firebaseReady])
 
   return <RoutePlanner />
 }
