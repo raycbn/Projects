@@ -30,6 +30,7 @@ STRIPE_PRICE_MONTHLY = "price_1U2i2oDRDu30ohSLy0PIHXtJ"
 STRIPE_PRICE_YEARLY = "price_1U2i69DRDu30ohSLo5EoU9ed"
 APP_URL = "https://pedalmap.es"
 ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
-# PREMIUM_ALLOWLIST: do not commit personal Gmail. Set as Worker secret, e.g.
-#   echo 'premium@pedalmap.es,you@…' | npx wrangler secret put PREMIUM_ALLOWLIST
+# PREMIUM_ALLOWLIST: Cloudflare secret (not committed). Includes brand + both
+# developer Auth emails. Rotate with:
+#   echo 'premium@pedalmap.es,dev1@…,dev2@…' | npx wrangler secret put PREMIUM_ALLOWLIST
 # Code default (if unset): premium@pedalmap.es
