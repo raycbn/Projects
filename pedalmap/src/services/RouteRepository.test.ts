@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  coordsFromStored,
+  coordsToStored,
   stripUndefinedDeep,
   toPersistedDraft,
   toSharePublishPayload,
@@ -7,7 +9,7 @@ import {
 import type { RouteDraft } from '@/domain/types'
 
 describe('toPersistedDraft', () => {
-  it('strips undefined and drops bulky alternatives', () => {
+  it('strips undefined, drops bulky fields, and avoids nested coordinate arrays', () => {
     const draft = {
       title: 'Test',
       type: 'a_to_b',
@@ -36,10 +38,29 @@ describe('toPersistedDraft', () => {
     expect('routeOptions' in payload).toBe(false)
     expect('alternatives' in payload).toBe(false)
     expect(stripUndefinedDeep({ a: 1, b: undefined })).toEqual({ a: 1 })
+
+    const geometry = payload.geometry as { coordinates: unknown[] }
+    expect(geometry.coordinates[0]).toEqual({ lng: -3.7, lat: 40.4 })
+    expect(Array.isArray(geometry.coordinates[0])).toBe(false)
+  })
+
+  it('round-trips stored coords', () => {
+    const stored = coordsToStored([
+      [-3.7, 40.4],
+      [-3.6, 40.5],
+    ])
+    expect(coordsFromStored(stored)).toEqual([
+      [-3.7, 40.4],
+      [-3.6, 40.5],
+    ])
+    expect(coordsFromStored([[-3.7, 40.4]])).toEqual([[-3.7, 40.4]])
   })
 
   it('downsamples long geometries for share publish', () => {
-    const coords = Array.from({ length: 5000 }, (_, i) => [ -3.7 + i * 0.00001, 40.4 ] as [number, number])
+    const coords = Array.from(
+      { length: 5000 },
+      (_, i) => [-3.7 + i * 0.00001, 40.4] as [number, number],
+    )
     const draft = {
       title: 'Larga',
       type: 'a_to_b',
@@ -60,6 +81,10 @@ describe('toPersistedDraft', () => {
     const share = toSharePublishPayload(draft)
     const geometry = share.geometry as { coordinates: unknown[] }
     expect(geometry.coordinates.length).toBeLessThanOrEqual(2500)
+    expect(geometry.coordinates[0]).toMatchObject({
+      lng: expect.any(Number),
+      lat: expect.any(Number),
+    })
     expect((share.elevationProfile as unknown[]).length).toBeLessThanOrEqual(400)
   })
 })

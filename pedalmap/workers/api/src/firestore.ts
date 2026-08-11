@@ -610,6 +610,31 @@ export type PublishShareInput = {
   routeId?: string
 }
 
+/** Firestore rejects nested arrays — normalize LineString coords to {lng,lat}[]. */
+function firestoreSafeGeometry(geometry: unknown): { type: string; coordinates: Array<{ lng: number; lat: number }> } {
+  const raw = (geometry && typeof geometry === 'object' ? geometry : {}) as {
+    type?: string
+    coordinates?: unknown
+  }
+  const coordsIn = Array.isArray(raw.coordinates) ? raw.coordinates : []
+  const coordinates: Array<{ lng: number; lat: number }> = []
+  for (const item of coordsIn) {
+    if (Array.isArray(item) && item.length >= 2) {
+      const lng = Number(item[0])
+      const lat = Number(item[1])
+      if (Number.isFinite(lng) && Number.isFinite(lat)) coordinates.push({ lng, lat })
+      continue
+    }
+    if (item && typeof item === 'object') {
+      const rec = item as Record<string, unknown>
+      const lng = Number(rec.lng)
+      const lat = Number(rec.lat)
+      if (Number.isFinite(lng) && Number.isFinite(lat)) coordinates.push({ lng, lat })
+    }
+  }
+  return { type: 'LineString', coordinates }
+}
+
 /**
  * Admin publish for WhatsApp / public link sharing.
  * Bypasses client security-rule edge cases (missing usage, stale free plan, etc.).
@@ -626,6 +651,7 @@ export async function publishPublicRouteShare(
   const now = new Date().toISOString()
   const title = String(input.title || 'Ruta').slice(0, 120)
   const shareSlug = (input.shareSlug || createShareSlug(title)).slice(0, 80)
+  const safeGeometry = firestoreSafeGeometry(input.geometry)
 
   const routeFields: Record<string, unknown> = {
     userId: { stringValue: uid },
@@ -634,7 +660,7 @@ export async function publishPublicRouteShare(
     bikeType: { stringValue: String(input.bikeType || 'road') },
     preferences: toFirestoreValue(input.preferences ?? []),
     waypoints: toFirestoreValue(input.waypoints ?? []),
-    geometry: toFirestoreValue(input.geometry),
+    geometry: toFirestoreValue(safeGeometry),
     elevationProfile: toFirestoreValue(input.elevationProfile ?? []),
     stats: toFirestoreValue(input.stats ?? {}),
     isPublic: { booleanValue: true },
@@ -724,7 +750,7 @@ export async function publishPublicRouteShare(
         bikeType: { stringValue: String(input.bikeType || 'road') },
         preferences: toFirestoreValue(input.preferences ?? []),
         waypoints: toFirestoreValue(input.waypoints ?? []),
-        geometry: toFirestoreValue(input.geometry),
+        geometry: toFirestoreValue(safeGeometry),
         elevationProfile: toFirestoreValue(input.elevationProfile ?? []),
         stats: toFirestoreValue(input.stats ?? {}),
         isPublic: { booleanValue: true },

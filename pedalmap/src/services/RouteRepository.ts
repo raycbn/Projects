@@ -73,13 +73,63 @@ function downsampleElevation<T>(points: T[], maxPoints: number): T[] {
   return out
 }
 
+/** Firestore forbids nested arrays — store LineString coords as objects. */
+export type StoredLngLat = { lng: number; lat: number }
+
+export function coordsToStored(coords: [number, number][]): StoredLngLat[] {
+  return coords
+    .map(([lng, lat]) => ({ lng: Number(lng), lat: Number(lat) }))
+    .filter((c) => Number.isFinite(c.lng) && Number.isFinite(c.lat))
+}
+
+export function coordsFromStored(raw: unknown): [number, number][] {
+  if (!Array.isArray(raw)) return []
+  const out: [number, number][] = []
+  for (const item of raw) {
+    if (Array.isArray(item) && item.length >= 2) {
+      const lng = Number(item[0])
+      const lat = Number(item[1])
+      if (Number.isFinite(lng) && Number.isFinite(lat)) out.push([lng, lat])
+      continue
+    }
+    if (item && typeof item === 'object') {
+      const rec = item as Record<string, unknown>
+      const lng = Number(rec.lng ?? rec[0])
+      const lat = Number(rec.lat ?? rec[1])
+      if (Number.isFinite(lng) && Number.isFinite(lat)) out.push([lng, lat])
+    }
+  }
+  return out
+}
+
+export function geometryToStored(
+  geometry: { type?: string; coordinates?: [number, number][] } | undefined,
+  maxPoints: number,
+): { type: 'LineString'; coordinates: StoredLngLat[] } {
+  const coords = downsampleCoords(
+    (geometry?.coordinates ?? []) as [number, number][],
+    maxPoints,
+  )
+  return { type: 'LineString', coordinates: coordsToStored(coords) }
+}
+
+export function geometryFromStored(raw: unknown): SavedRoute['geometry'] {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as {
+    type?: string
+    coordinates?: unknown
+  }
+  return {
+    type: 'LineString',
+    coordinates: coordsFromStored(data.coordinates),
+  }
+}
+
 /**
  * Persist only what the shared/saved route page needs.
  * Drop bulky alternative options (duplicate geometries) that often blow the 1 MiB doc limit.
  */
 export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
   const title = String(draft.title || 'Ruta').slice(0, 120)
-  const coords = (draft.geometry?.coordinates ?? []) as [number, number][]
   return stripUndefinedDeep({
     title,
     description: draft.description,
@@ -87,10 +137,7 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     bikeType: draft.bikeType,
     preferences: draft.preferences ?? [],
     waypoints: draft.waypoints ?? [],
-    geometry: {
-      type: 'LineString' as const,
-      coordinates: downsampleCoords(coords, 4000),
-    },
+    geometry: geometryToStored(draft.geometry, 4000),
     elevationProfile: downsampleElevation(draft.elevationProfile ?? [], 800),
     stats: draft.stats,
     circularDistanceMeters: draft.circularDistanceMeters,
@@ -114,14 +161,7 @@ export function toSharePublishPayload(
       (persisted.elevationProfile as unknown[]) ?? [],
       400,
     ),
-    geometry: {
-      type: 'LineString',
-      coordinates: downsampleCoords(
-        ((persisted.geometry as { coordinates?: [number, number][] })?.coordinates ??
-          []) as [number, number][],
-        2500,
-      ),
-    },
+    geometry: geometryToStored(draft.geometry, 2500),
     routeId: options?.routeId || undefined,
   })
 }
@@ -455,7 +495,7 @@ export class RouteRepository {
       bikeType: (data.bikeType as SavedRoute['bikeType']) ?? 'road',
       preferences: (data.preferences as SavedRoute['preferences']) ?? [],
       waypoints: (data.waypoints as SavedRoute['waypoints']) ?? [],
-      geometry: data.geometry as SavedRoute['geometry'],
+      geometry: geometryFromStored(data.geometry),
       elevationProfile: (data.elevationProfile as SavedRoute['elevationProfile']) ?? [],
       stats: data.stats as SavedRoute['stats'],
       circularDistanceMeters: data.circularDistanceMeters as number | undefined,
