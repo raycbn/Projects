@@ -162,4 +162,47 @@ describe('activity stats', () => {
     expect(stats.durationSeconds).toBe(3600)
     expect(stats.elevationGainMeters).toBeGreaterThanOrEqual(40)
   })
+
+  it('keeps distance and elevation at 0 with a single GPS point', () => {
+    const startedAt = '2026-08-10T10:00:00.000Z'
+    const stats = computeActivityStats(
+      [
+        {
+          position: { lat: 40.4, lng: -3.7 },
+          elevationMeters: 100,
+          recordedAt: startedAt,
+        },
+      ],
+      startedAt,
+      '2026-08-10T10:05:00.000Z',
+      { durationSeconds: 120 },
+    )
+    expect(stats.distanceMeters).toBe(0)
+    expect(stats.elevationGainMeters).toBe(0)
+    expect(stats.durationSeconds).toBe(120)
+  })
+
+  it('honors pause-aware durationSeconds override', () => {
+    const startedAt = '2026-08-10T10:00:00.000Z'
+    const finishedAt = '2026-08-10T11:00:00.000Z'
+    const stats = computeActivityStats(
+      [
+        {
+          position: { lat: 40.4, lng: -3.7 },
+          elevationMeters: 100,
+          recordedAt: startedAt,
+        },
+        {
+          position: { lat: 40.405, lng: -3.7 },
+          elevationMeters: 110,
+          recordedAt: '2026-08-10T10:20:00.000Z',
+        },
+      ],
+      startedAt,
+      finishedAt,
+      { durationSeconds: 1800 },
+    )
+    expect(stats.durationSeconds).toBe(1800)
+    expect(stats.distanceMeters).toBeGreaterThan(400)
+  })
 })

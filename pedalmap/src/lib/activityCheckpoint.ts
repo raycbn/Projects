@@ -11,6 +11,8 @@ export type ActivityCheckpoint = {
   startedAt: string
   status: ActivityStatus
   track: ActivityTrackPoint[]
+  /** Accumulated paused duration so restore keeps Tiempo accurate. */
+  pausedMs?: number
   updatedAt: string
 }
 
