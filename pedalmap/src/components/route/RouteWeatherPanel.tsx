@@ -14,6 +14,7 @@ import {
   isMeteoStampUpcoming,
   meteoDayKey,
 } from '@/lib/weatherFormat'
+import { windRelativePhrase } from '@/lib/wind'
 import clsx from 'clsx'
 
 interface RouteWeatherPanelProps {
@@ -133,9 +134,9 @@ export function RouteWeatherPanel({
   return (
     <section className="space-y-3 p-2">
       <p className="text-xs text-[var(--color-stone)]">
-        Calculamos tramos reales de ~3 h solo con horas futuras (viento, rachas, lluvia y
-        temperatura respecto al rumbo de ida). El mapa usa la mejor hora de ese tramo. Toca otra
-        ventana u hora para actualizarlo.
+        Cada tarjeta resume el mismo cálculo del tramo (~3 h futuros): viento medio + dirección
+        media respecto al rumbo de ida, rachas máximas, lluvia del tramo y temperatura. El mapa
+        usa la mejor hora de ese tramo. Toca otra ventana u hora para actualizarlo.
       </p>
 
       {loading && <p className="text-sm text-[var(--color-stone)]">Calculando viento…</p>}
@@ -258,8 +259,9 @@ export function RouteWeatherPanel({
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-[var(--color-stone)]">
-                      Viento {w.windSpeedKmh} km/h desde {w.windDirLabel} ({w.relative}) ·{' '}
-                      {w.temperatureC}°C · precip {w.precipitationMm} mm
+                      Viento {w.windSpeedKmh} km/h desde {w.windDirLabel} (
+                      {windRelativePhrase(w.relative)}) · {w.temperatureC}°C · precip{' '}
+                      {w.precipitationMm} mm
                       {w.bestHourTime
                         ? ` · mapa ${formatWeatherHour(w.bestHourTime)}`
                         : ''}

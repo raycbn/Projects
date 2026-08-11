@@ -47,6 +47,28 @@ describe('wind helpers', () => {
     expect(good.score).toBeGreaterThan(80)
   })
 
+  it('notes match light tailwind (never "lateral" when factor is cola)', () => {
+    const lightCola = scoreRideWindow({
+      windSpeedKmh: 2,
+      gustKmh: 4,
+      precipMm: 0,
+      tempC: 25,
+      relativeWind: -0.9,
+    })
+    expect(windRelativeLabel(-0.9)).toBe('cola')
+    expect(lightCola.notes.some((n) => /cola|favor/i.test(n))).toBe(true)
+    expect(lightCola.notes.some((n) => /lateral/i.test(n))).toBe(false)
+
+    const lightCross = scoreRideWindow({
+      windSpeedKmh: 4,
+      gustKmh: 5,
+      precipMm: 0,
+      tempC: 22,
+      relativeWind: 0.1,
+    })
+    expect(lightCross.notes).toContain('Viento flojo')
+  })
+
   it('means wind directions across north correctly', () => {
     const mean = meanWindDirectionDeg([350, 10])
     expect(mean < 15 || mean > 345).toBe(true)

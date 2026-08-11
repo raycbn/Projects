@@ -22,7 +22,7 @@ import {
 } from '@/lib/weatherFormat'
 import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
 import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
-import { bearingLabel } from '@/lib/wind'
+import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { applySelectedOption } from '@/lib/routeOptions'
 import type { RouteDraft } from '@/domain/types'
@@ -163,7 +163,7 @@ export function ReadyRoutePage() {
       return `${formatWeatherHourCaption(selectedWindHour.time)} · ${selectedWindHour.windSpeedKmh} km/h ${bearingLabel(selectedWindHour.windDirectionDeg)}`
     }
     if (selectedWindWindow) {
-      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
+      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${windRelativePhrase(selectedWindWindow.relative)})`
     }
     return null
   }, [selectedWindHour, selectedWindWindow])

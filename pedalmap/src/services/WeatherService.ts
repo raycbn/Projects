@@ -129,24 +129,31 @@ export function scoreHourSlice(
   const windSpeedKmh = slice.reduce((s, h) => s + h.windSpeedKmh, 0) / slice.length
   const temperatureC = slice.reduce((s, h) => s + h.temperatureC, 0) / slice.length
   const precipitationMm = slice.reduce((s, h) => s + h.precipitationMm, 0)
+  const gustKmh = Math.max(...slice.map((h) => h.windGustsKmh))
   const windDirectionDeg = meanWindDirectionDeg(slice.map((h) => h.windDirectionDeg))
   const relative =
     routeBearingDeg == null ? 0 : windRelativeFactor(routeBearingDeg, windDirectionDeg)
+  const relativeLabel = windRelativeLabel(relative)
 
-  // Notes from the weakest hour (most actionable warning).
-  const worst = slice[hourScores.indexOf(minScore)]
-  const worstRel =
-    routeBearingDeg == null ? 0 : windRelativeFactor(routeBearingDeg, worst.windDirectionDeg)
+  // Card notes must describe the SAME aggregates shown on the card (mean wind,
+  // vector direction → relative, max gust, total precip). Mixing "worst hour"
+  // notes with window means produced contradictions like "cola" + "lateral".
   const notes = [
     ...scoreRideWindow({
-      windSpeedKmh: worst.windSpeedKmh,
-      gustKmh: worst.windGustsKmh,
+      windSpeedKmh,
+      gustKmh,
       precipMm: precipitationMm,
-      tempC: worst.temperatureC,
-      relativeWind: worstRel,
+      tempC: temperatureC,
+      relativeWind: relative,
     }).notes,
   ]
   if (slice.length === 2) notes.push('Tramo corto (~2 h)')
+  // If the weakest hour is meaningfully worse, add a short caveat (score already
+  // weights minScore — this only clarifies why).
+  if (minScore <= avgScore - 12) {
+    const worst = slice[hourScores.indexOf(minScore)]
+    notes.push(`Hora más dura ${worst.time.slice(11, 16)}`)
+  }
 
   const startHour = slice[0].time
   const endHour = exclusiveEndStamp(slice[slice.length - 1].time)
@@ -159,7 +166,7 @@ export function scoreHourSlice(
     windSpeedKmh: Math.round(windSpeedKmh),
     windDirectionDeg: Math.round(windDirectionDeg),
     windDirLabel: bearingLabel(windDirectionDeg),
-    relative: windRelativeLabel(relative),
+    relative: relativeLabel,
     temperatureC: Math.round(temperatureC),
     precipitationMm: Math.round(precipitationMm * 10) / 10,
     notes,

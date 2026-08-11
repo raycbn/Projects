@@ -158,5 +158,22 @@ describe('WeatherService.buildWindows', () => {
     expect(advice!.endHour).toBe('2026-08-12T14:00')
     expect(advice!.bestHourTime).toBeTruthy()
     expect(advice!.score).toBeGreaterThan(70)
+    // Notes describe the same mean wind/relative shown on the card.
+    expect(advice!.notes.some((n) => /cola|favor|flojo/i.test(n))).toBe(true)
+    expect(advice!.notes.some((n) => /lateral/i.test(n))).toBe(false)
+  })
+
+  it('card notes stay consistent with displayed cola at 2 km/h', () => {
+    const slice = [
+      hour('2026-08-14T06:00', { windSpeedKmh: 2, windDirectionDeg: 45, temperatureC: 24 }),
+      hour('2026-08-14T07:00', { windSpeedKmh: 2, windDirectionDeg: 50, temperatureC: 25 }),
+      hour('2026-08-14T08:00', { windSpeedKmh: 3, windDirectionDeg: 40, temperatureC: 26 }),
+    ]
+    // Travel SW (~225): NE wind (~45) is tailwind.
+    const advice = scoreHourSlice(slice, 225)
+    expect(advice!.relative).toBe('cola')
+    expect(advice!.windSpeedKmh).toBeLessThanOrEqual(3)
+    expect(advice!.notes.join(' ')).toMatch(/cola|favor/i)
+    expect(advice!.notes.join(' ')).not.toMatch(/lateral/i)
   })
 })

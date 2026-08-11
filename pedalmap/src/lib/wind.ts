@@ -114,6 +114,18 @@ export function windRelativeLabel(factor: number): 'cara' | 'cola' | 'lateral' {
   return 'lateral'
 }
 
+/** Spanish phrase for the relative label shown on cards (matches the score). */
+export function windRelativePhrase(relative: 'cara' | 'cola' | 'lateral'): string {
+  switch (relative) {
+    case 'cara':
+      return 'de cara'
+    case 'cola':
+      return 'a favor'
+    default:
+      return 'lateral'
+  }
+}
+
 export function scoreRideWindow(input: {
   windSpeedKmh: number
   gustKmh: number
@@ -124,19 +136,40 @@ export function scoreRideWindow(input: {
   const notes: string[] = []
   let score = 100
 
+  const relative = windRelativeLabel(input.relativeWind)
   // Headwind hurts; moderate tailwind helps; gale-force "favor" is still rough.
   const windEffect = input.relativeWind * input.windSpeedKmh
-  if (windEffect > 8) {
-    score -= Math.min(35, windEffect * 1.2)
-    notes.push('Viento de cara relevante')
-  } else if (windEffect < -6 && input.windSpeedKmh <= 28) {
-    score += Math.min(10, Math.abs(windEffect) * 0.5)
-    notes.push('Viento a favor')
-  } else if (Math.abs(input.relativeWind) < 0.35 && input.windSpeedKmh <= 18) {
+
+  // Notes must match the same relative/speed used for the score — never claim
+  // "lateral" when the factor is clearly cola/cara (old bug with light winds).
+  if (input.windSpeedKmh < 8) {
     score += 4
-    notes.push('Viento flojo')
+    if (relative === 'cola') notes.push('Cola suave')
+    else if (relative === 'cara') notes.push('Cara suave')
+    else notes.push('Viento flojo')
+  } else if (relative === 'cola') {
+    if (windEffect < -6 && input.windSpeedKmh <= 28) {
+      score += Math.min(10, Math.abs(windEffect) * 0.5)
+      notes.push('Viento a favor')
+    } else {
+      notes.push('Viento de cola')
+    }
+  } else if (relative === 'cara') {
+    if (windEffect > 8) {
+      score -= Math.min(35, windEffect * 1.2)
+      notes.push('Viento de cara relevante')
+    } else {
+      score -= Math.min(12, windEffect * 0.8)
+      notes.push('Viento de cara')
+    }
   } else {
-    notes.push('Viento lateral o variable')
+    // Crosswind
+    if (input.windSpeedKmh <= 18) {
+      score += 4
+      notes.push('Viento flojo')
+    } else {
+      notes.push('Viento lateral')
+    }
   }
 
   // Absolute wind: comfort matters more than a hurricane tailwind.
