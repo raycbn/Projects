@@ -317,12 +317,17 @@ export class GeocodingError extends Error {
 
 /** Live GPS activity (Fase 5). */
 export type ActivityStatus = 'recording' | 'paused' | 'finished'
+export type ActivitySource = 'gps' | 'strava' | 'wahoo' | 'igpsport' | 'garmin'
 
 export interface ActivityTrackPoint {
   position: LatLng
   elevationMeters?: number
   recordedAt: string
   accuracyMeters?: number
+  heartRateBpm?: number
+  cadenceRpm?: number
+  powerWatts?: number
+  speedMetersPerSecond?: number
 }
 
 export interface Activity {
@@ -332,13 +337,41 @@ export interface Activity {
   title: string
   status: ActivityStatus
   bikeType: BikeType
+  source?: ActivitySource
+  /** e.g. strava:123456789 — used to avoid duplicate imports */
+  externalId?: string
   startedAt: string
   finishedAt?: string
   track: ActivityTrackPoint[]
   stats: {
     distanceMeters: number
+    /** Elapsed wall-clock time (includes pauses / stops). */
     durationSeconds: number
+    /** Time actually moving — Free analytics. */
+    movingTimeSeconds?: number
+    stoppedTimeSeconds?: number
     elevationGainMeters: number
+    elevationLossMeters?: number
+    elevationHighestMeters?: number
+    elevationLowestMeters?: number
+    averageHeartRateBpm?: number
+    averageCadenceRpm?: number
+    averagePowerWatts?: number
+    estimatedPowerWatts?: number
+    averageSpeedMetersPerSecond?: number
+    maxSpeedMetersPerSecond?: number
+    averageGradePercent?: number
+    maxGradePercent?: number
+    vamMetersPerHour?: number
+    estimatedCaloriesKcal?: number
+    coastingPercent?: number
+    splits?: Array<{
+      index: number
+      distanceMeters: number
+      durationSeconds: number
+      averageSpeedMetersPerSecond: number
+      elevationGainMeters: number
+    }>
   }
   createdAt: string
   updatedAt: string

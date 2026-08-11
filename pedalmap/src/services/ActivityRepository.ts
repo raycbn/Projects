@@ -2,7 +2,9 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -10,8 +12,15 @@ import {
   where,
   type DocumentData,
 } from 'firebase/firestore'
-import type { Activity, ActivityStatus, ActivityTrackPoint, BikeType } from '@/domain/types'
+import type {
+  Activity,
+  ActivitySource,
+  ActivityStatus,
+  ActivityTrackPoint,
+  BikeType,
+} from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
+import { computeActivityStats as computeRichActivityStats } from '@/lib/activityStats'
 import { computeElevationStats, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
 
 function monthKeyNow(): string {
@@ -27,6 +36,8 @@ function mapActivity(id: string, data: DocumentData): Activity {
     title: data.title,
     status: data.status,
     bikeType: data.bikeType,
+    source: data.source as ActivitySource | undefined,
+    externalId: data.externalId ? String(data.externalId) : undefined,
     startedAt: data.startedAt,
     finishedAt: data.finishedAt,
     track: data.track ?? [],
@@ -36,6 +47,7 @@ function mapActivity(id: string, data: DocumentData): Activity {
   }
 }
 
+/** Live-recording stats (supports pause-aware duration override). */
 export function computeActivityStats(
   track: ActivityTrackPoint[],
   startedAt: string,
@@ -56,7 +68,6 @@ export function computeActivityStats(
       ? Math.max(0, Math.round(options.durationSeconds))
       : Math.max(0, Math.round((end - start) / 1000))
 
-  // O(n) cumulative distance for the elevation profile (avoid O(n²) slice scans).
   let cum = 0
   const profile = normalizeCyclingElevationProfile(
     track.map((p, i) => {
@@ -87,14 +98,47 @@ export class ActivityRepository {
     return isFirebaseConfigured()
   }
 
+  async getById(activityId: string): Promise<Activity | null> {
+    const snap = await getDoc(doc(getDb(), 'activities', activityId))
+    if (!snap.exists()) return null
+    return mapActivity(snap.id, snap.data())
+  }
+
   async listForUser(userId: string): Promise<Activity[]> {
-    const q = query(
-      collection(getDb(), 'activities'),
-      where('userId', '==', userId),
-      orderBy('startedAt', 'desc'),
-    )
-    const snap = await getDocs(q)
-    return snap.docs.map((d) => mapActivity(d.id, d.data()))
+    try {
+      const q = query(
+        collection(getDb(), 'activities'),
+        where('userId', '==', userId),
+        orderBy('startedAt', 'desc'),
+      )
+      const snap = await getDocs(q)
+      return snap.docs.map((d) => mapActivity(d.id, d.data()))
+    } catch (err) {
+      console.warn('[activities] listForUser ordered query failed', err)
+      const q = query(collection(getDb(), 'activities'), where('userId', '==', userId))
+      const snap = await getDocs(q)
+      return snap.docs
+        .map((d) => mapActivity(d.id, d.data()))
+        .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
+    }
+  }
+
+  async findByExternalId(userId: string, externalId: string): Promise<Activity | null> {
+    try {
+      const q = query(
+        collection(getDb(), 'activities'),
+        where('userId', '==', userId),
+        where('externalId', '==', externalId),
+        limit(1),
+      )
+      const snap = await getDocs(q)
+      const first = snap.docs[0]
+      if (!first) return null
+      return mapActivity(first.id, first.data())
+    } catch (err) {
+      console.warn('[activities] findByExternalId', err)
+      return null
+    }
   }
 
   async create(input: {
@@ -108,6 +152,7 @@ export class ActivityRepository {
       userId: input.userId,
       title: input.title.slice(0, 120),
       bikeType: input.bikeType,
+      source: 'gps' as ActivitySource,
       status: 'recording' as ActivityStatus,
       startedAt,
       track: [] as ActivityTrackPoint[],
@@ -123,6 +168,48 @@ export class ActivityRepository {
     return mapActivity(ref.id, { ...payload, createdAt: startedAt, updatedAt: startedAt })
   }
 
+  /** Upsert a finished import. Recomputes PedalMap Free analytics from the track. */
+  async importFinished(
+    userId: string,
+    input: Omit<Activity, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
+  ): Promise<{ activity: Activity; created: boolean }> {
+    if (input.externalId) {
+      const existing = await this.findByExternalId(userId, input.externalId)
+      if (existing) return { activity: existing, created: false }
+    }
+    const track = downsampleTrack(input.track, 3500)
+    const now = new Date().toISOString()
+    const computed = computeRichActivityStats(track, input.startedAt, input.finishedAt)
+    const stats: Activity['stats'] = {
+      ...computed,
+      averageHeartRateBpm: computed.averageHeartRateBpm ?? input.stats.averageHeartRateBpm,
+      averageCadenceRpm: computed.averageCadenceRpm ?? input.stats.averageCadenceRpm,
+      averagePowerWatts: computed.averagePowerWatts ?? input.stats.averagePowerWatts,
+    }
+    const payload: Record<string, unknown> = {
+      userId,
+      title: input.title,
+      bikeType: input.bikeType,
+      source: input.source ?? 'strava',
+      status: 'finished' as ActivityStatus,
+      startedAt: input.startedAt,
+      finishedAt: input.finishedAt,
+      track,
+      stats,
+      monthKey: monthKeyNow(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+    if (input.routeId) payload.routeId = input.routeId
+    if (input.externalId) payload.externalId = input.externalId
+
+    const ref = await addDoc(collection(getDb(), 'activities'), payload)
+    return {
+      activity: mapActivity(ref.id, { ...payload, createdAt: now, updatedAt: now }),
+      created: true,
+    }
+  }
+
   async updateTrack(
     activityId: string,
     track: ActivityTrackPoint[],
@@ -130,7 +217,6 @@ export class ActivityRepository {
     status: ActivityStatus,
     finishedAt?: string,
   ): Promise<void> {
-    // Firestore ~1 MiB doc limit — keep a dense-enough but bounded track.
     const capped = downsampleTrack(track, 3500)
     await updateDoc(doc(getDb(), 'activities', activityId), {
       track: capped,

@@ -17,6 +17,7 @@ import { PrivacyPage, CookiesPage, TermsPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
 import { ActivityPage } from '@/pages/ActivityPage'
 import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
+import { ActivityDetailPage } from '@/pages/ActivityDetailPage'
 import { ConnectGpsPage } from '@/pages/ConnectGpsPage'
 import { NavigationPage } from '@/pages/NavigationPage'
 import { BlogIndexPage } from '@/pages/BlogIndexPage'
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="ruta" element={<ReadyRoutePage />} />
               <Route path="my-routes" element={<MyRoutesPage />} />
               <Route path="actividades" element={<MyActivitiesPage />} />
+              <Route path="actividades/:activityId" element={<ActivityDetailPage />} />
               <Route path="actividades/conectar" element={<ConnectGpsPage />} />
               <Route path="actividad" element={<ActivityPage />} />
               <Route path="navegacion" element={<NavigationPage />} />
