@@ -127,7 +127,6 @@ export function scoreHourSlice(
   const score = Math.round(0.45 * avgScore + 0.55 * minScore)
 
   const windSpeedKmh = slice.reduce((s, h) => s + h.windSpeedKmh, 0) / slice.length
-  const windGustsKmh = slice.reduce((s, h) => s + h.windGustsKmh, 0) / slice.length
   const temperatureC = slice.reduce((s, h) => s + h.temperatureC, 0) / slice.length
   const precipitationMm = slice.reduce((s, h) => s + h.precipitationMm, 0)
   const windDirectionDeg = meanWindDirectionDeg(slice.map((h) => h.windDirectionDeg))

@@ -180,7 +180,11 @@ export function RouteWeatherPanel({
                     const first =
                       forecast.windows.find((w) => meteoDayKey(w.startHour) === day) ?? null
                     onSelectWindow(first)
-                    onSelectHour(null)
+                    const hour =
+                      first?.bestHourTime != null
+                        ? (forecast.hours.find((h) => h.time === first.bestHourTime) ?? null)
+                        : null
+                    onSelectHour(hour)
                   }}
                 >
                   {formatWeatherDay(`${day}T12:00`)}
