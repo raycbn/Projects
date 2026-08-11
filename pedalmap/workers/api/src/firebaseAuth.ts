@@ -8,6 +8,7 @@ const jwks = createRemoteJWKSet(
 export type FirebaseIdentity = {
   uid: string
   email?: string
+  isAnonymous: boolean
 }
 
 /** Verify Firebase ID token without Admin SDK (Spark-friendly). */
@@ -26,8 +27,10 @@ export async function verifyFirebaseIdToken(
   })
   const uid = payload.sub
   if (!uid || typeof uid !== 'string') throw new Error('Invalid token subject')
+  const firebaseClaim = payload.firebase as { sign_in_provider?: string } | undefined
   return {
     uid,
     email: typeof payload.email === 'string' ? payload.email : undefined,
+    isAnonymous: firebaseClaim?.sign_in_provider === 'anonymous',
   }
 }

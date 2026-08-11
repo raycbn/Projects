@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInAnonymously,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -15,6 +16,7 @@ import {
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import type { UserProfile } from '@/domain/types'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
+import { needsGoogleAuthBridge, startGoogleAuthBridge } from '@/lib/authBridge'
 import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
 import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
@@ -148,8 +150,19 @@ export class AuthService {
     return result.user
   }
 
-  async signInGoogle(): Promise<User | null> {
-    track('signup_started', { method: 'google' })
+  /** Exchange a Worker-minted custom token for a Firebase session (auth bridge return). */
+  async completeCustomToken(customToken: string): Promise<User> {
+    const result = await signInWithCustomToken(getFirebaseAuth(), customToken)
+    await this.ensureProfile(result.user)
+    track('signup_completed', { method: 'google' })
+    return result.user
+  }
+
+  /**
+   * Google sign-in on the current host (popup or redirect).
+   * Used by the auth bridge page on *.web.app — do not add cross-domain logic here.
+   */
+  async signInGoogleDirect(): Promise<User | null> {
     const auth = getFirebaseAuth()
 
     // Always redirect on coarse/mobile/in-app browsers. Popup leaves a stuck overlay
@@ -180,6 +193,18 @@ export class AuthService {
       }
       throw error
     }
+  }
+
+  async signInGoogle(): Promise<User | null> {
+    track('signup_started', { method: 'google' })
+    // Custom domain + authDomain *.web.app breaks redirect (3P storage). Bridge via web.app.
+    if (typeof window !== 'undefined' && needsGoogleAuthBridge()) {
+      startGoogleAuthBridge(
+        `${window.location.origin}/login`,
+      )
+      return null
+    }
+    return this.signInGoogleDirect()
   }
 
   async registerEmail(email: string, password: string, displayName?: string): Promise<User> {
