@@ -26,12 +26,33 @@ import {
   isGpsProvider,
 } from './gps'
 import { handlePublishRoute } from './publishRoute'
+import {
+  assertRoutingCreateAllowed,
+  bumpRoutesCreatedThisMonth,
+} from './firestore'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
   const cors = corsHeaders(env, request)
   for (const [k, v] of Object.entries(cors)) headers.set(k, String(v))
   return new Response(response.body, { status: response.status, headers })
+}
+
+/** Enforce Free monthly create cap; bump usage after a successful routing response. */
+async function withRoutingCreateQuota(
+  env: Env,
+  identity: FirebaseIdentity,
+  run: () => Promise<Response>,
+): Promise<Response> {
+  const blocked = await assertRoutingCreateAllowed(env, identity.uid)
+  if (blocked) return json(blocked, 403)
+  const response = await run()
+  if (response.ok) {
+    void bumpRoutesCreatedThisMonth(env, identity.uid).catch((err) => {
+      console.warn('[create-quota] bump failed', err)
+    })
+  }
+  return response
 }
 
 async function requireFirebaseUser(
@@ -97,7 +118,13 @@ export default {
           key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
-        return withCors(env, request, await handleOrsProxy(request, env, path))
+        return withCors(
+          env,
+          request,
+          await withRoutingCreateQuota(env, identity, () =>
+            handleOrsProxy(request, env, path),
+          ),
+        )
       }
 
       if (path === '/valhalla/bike-route' && request.method === 'POST') {
@@ -110,7 +137,11 @@ export default {
           key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
-        return withCors(env, request, await handleBikeRoute(request, env))
+        return withCors(
+          env,
+          request,
+          await withRoutingCreateQuota(env, identity, () => handleBikeRoute(request, env)),
+        )
       }
 
       if (path === '/valhalla/route' && request.method === 'POST') {

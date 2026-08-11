@@ -2,6 +2,8 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   getRedirectResult,
+  linkWithCredential,
+  linkWithPopup,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInAnonymously,
@@ -174,8 +176,32 @@ export class AuthService {
 
   /** GIS access token → Firebase session (no /__/auth redirect). */
   async signInGoogleWithAccessToken(accessToken: string): Promise<User> {
+    const auth = getFirebaseAuth()
     const credential = GoogleAuthProvider.credential(null, accessToken)
-    const result = await signInWithCredential(getFirebaseAuth(), credential)
+    const current = auth.currentUser
+    // Guest → Google: link so the anon UID (and Free usage) is preserved.
+    if (current?.isAnonymous) {
+      try {
+        const linked = await linkWithCredential(current, credential)
+        await this.ensureProfile(linked.user)
+        track('signup_completed', { method: 'google_link' })
+        return linked.user
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code?: string }).code || '')
+            : ''
+        if (
+          code !== 'auth/credential-already-in-use' &&
+          code !== 'auth/email-already-in-use' &&
+          code !== 'auth/provider-already-linked'
+        ) {
+          throw error
+        }
+        // Google account already exists — continue with a normal sign-in (new UID).
+      }
+    }
+    const result = await signInWithCredential(auth, credential)
     await this.ensureProfile(result.user)
     track('signup_completed', { method: 'google' })
     return result.user
@@ -187,6 +213,33 @@ export class AuthService {
    */
   async signInGoogleDirect(): Promise<User | null> {
     const auth = getFirebaseAuth()
+    const current = auth.currentUser
+
+    if (current?.isAnonymous) {
+      try {
+        const linked = await linkWithPopup(current, googleProvider)
+        await this.ensureProfile(linked.user)
+        track('signup_completed', { method: 'google_link' })
+        return linked.user
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code?: string }).code || '')
+            : ''
+        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+          throw error
+        }
+        if (
+          code !== 'auth/credential-already-in-use' &&
+          code !== 'auth/email-already-in-use' &&
+          code !== 'auth/provider-already-linked' &&
+          code !== 'auth/popup-blocked'
+        ) {
+          // Unexpected link failure — fall through to normal Google sign-in.
+          console.warn('[auth] linkWithPopup failed, falling back', error)
+        }
+      }
+    }
 
     // Prefer popup even on mobile when authDomain is first-party — redirect + SW
     // historically left users on /login with no session.

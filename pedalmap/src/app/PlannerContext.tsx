@@ -317,18 +317,12 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         persistDraft(result, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)
         setStatus('success')
+        // Monthly create counter is bumped by the Worker on successful routing.
+        // Keep a local guest counter only when the profile has not hydrated yet.
         if (!liveProfile) {
           const nextGuest = guestCreates + 1
           setGuestCreates(nextGuest)
           writeGuestCreates(nextGuest)
-        } else if (user && !user.isAnonymous) {
-          void authService.recordRouteCreated(user.uid).catch((err) => {
-            console.warn('[planner] usage create', err)
-          })
-        } else if (liveProfile && user?.isAnonymous) {
-          void authService.recordRouteCreated(liveProfile.uid).catch((err) => {
-            console.warn('[planner] usage create anon', err)
-          })
         }
         track('route_created', {
           distance_km: Math.round(result.stats.distanceMeters / 1000),
@@ -346,6 +340,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         } else if (error instanceof RoutingError && error.code === 'rate_limited') {
           setErrorMessage(
             'Has hecho demasiadas peticiones de ruta en poco tiempo. Espera un minuto e inténtalo de nuevo.',
+          )
+        } else if (error instanceof RoutingError && error.code === 'create_limit') {
+          setPaywallReason('create_limit')
+          setErrorMessage(
+            'Has alcanzado el límite de creaciones del plan Free este mes. Pasa a Premium para seguir creando rutas.',
           )
         } else if (error instanceof RoutingError && error.code === 'network') {
           setErrorMessage(
@@ -391,6 +390,18 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       canCalculate,
       setRouteType(next) {
         setRouteTypeState(next)
+        // Switching into Trazar with an existing route keeps geometry for "Ajustar en mapa".
+        if (next === 'map_trace' && (draft || editDraft)) {
+          const base = editDraft ?? draft
+          if (base) {
+            setEditDraft({ ...base })
+            setWaypoints(base.waypoints)
+            setWantAlternatives(true)
+            setErrorMessage(null)
+            setStatus('editing')
+            return
+          }
+        }
         setDraft(null)
         persistDraft(null, user && !user.isAnonymous ? user.uid : null)
         setEditDraft(null)

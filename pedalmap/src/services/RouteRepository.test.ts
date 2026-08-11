@@ -9,7 +9,7 @@ import {
 import type { RouteDraft } from '@/domain/types'
 
 describe('toPersistedDraft', () => {
-  it('strips undefined, drops bulky fields, and avoids nested coordinate arrays', () => {
+  it('strips undefined, keeps lean surface/instructions, drops bulky alts', () => {
     const draft = {
       title: 'Test',
       type: 'a_to_b',
@@ -27,6 +27,7 @@ describe('toPersistedDraft', () => {
       },
       description: undefined,
       instructions: undefined,
+      surfaceEdges: [{ length: 12, surface: 'paved', road_class: 'secondary' }],
       routeOptions: [{ id: 'x' }],
       alternatives: [{ id: 'y' }],
     } as unknown as RouteDraft
@@ -36,6 +37,9 @@ describe('toPersistedDraft', () => {
     expect('description' in payload).toBe(false)
     // Instructions are capped (not dropped) so navigate/share stay useful offline.
     expect(payload.instructions).toEqual([])
+    expect(payload.surfaceEdges).toEqual([
+      { length: 12, surface: 'paved', road_class: 'secondary' },
+    ])
     expect('routeOptions' in payload).toBe(false)
     expect('alternatives' in payload).toBe(false)
     expect(stripUndefinedDeep({ a: 1, b: undefined })).toEqual({ a: 1 })

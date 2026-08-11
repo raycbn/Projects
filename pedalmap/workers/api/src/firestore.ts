@@ -166,18 +166,34 @@ export async function readSubscriptionCustomerId(
   return json.fields?.stripeCustomerId?.stringValue
 }
 
+export type UserEntitlements = {
+  plan: 'free' | 'premium'
+  routesSaved: number
+  routesCreatedThisMonth: number
+  monthKey: string
+}
+
+export const FREE_MAX_ROUTES_CREATED_PER_MONTH = 15
+
+export function utcMonthKey(d = new Date()): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
 /** Read users/{uid}.plan + usage via Admin REST. */
 export async function readUserEntitlements(
   env: Env,
   uid: string,
-): Promise<{ plan: 'free' | 'premium'; routesSaved: number } | null> {
+): Promise<UserEntitlements | null> {
   const sa = parseServiceAccount(env)
   if (!sa) return null
   const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
   const token = await getAccessToken(sa)
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (res.status === 404) return { plan: 'free', routesSaved: 0 }
+  const nowKey = utcMonthKey()
+  if (res.status === 404) {
+    return { plan: 'free', routesSaved: 0, routesCreatedThisMonth: 0, monthKey: nowKey }
+  }
   if (!res.ok) return null
   const json = (await res.json()) as {
     fields?: {
@@ -186,6 +202,8 @@ export async function readUserEntitlements(
         mapValue?: {
           fields?: {
             routesSaved?: { integerValue?: string; doubleValue?: number }
+            routesCreatedThisMonth?: { integerValue?: string; doubleValue?: number }
+            monthKey?: { stringValue?: string }
           }
         }
       }
@@ -193,9 +211,86 @@ export async function readUserEntitlements(
   }
   const planRaw = json.fields?.plan?.stringValue
   const plan: 'free' | 'premium' = planRaw === 'premium' ? 'premium' : 'free'
-  const savedField = json.fields?.usage?.mapValue?.fields?.routesSaved
+  const usageFields = json.fields?.usage?.mapValue?.fields
+  const savedField = usageFields?.routesSaved
   const routesSaved = Number(savedField?.integerValue ?? savedField?.doubleValue ?? 0) || 0
-  return { plan, routesSaved }
+  const storedMonth = usageFields?.monthKey?.stringValue || nowKey
+  const rawCreated =
+    Number(
+      usageFields?.routesCreatedThisMonth?.integerValue ??
+        usageFields?.routesCreatedThisMonth?.doubleValue ??
+        0,
+    ) || 0
+  // Stale monthKey → effective creates for the current UTC month are 0.
+  const routesCreatedThisMonth = storedMonth === nowKey ? rawCreated : 0
+  return { plan, routesSaved, routesCreatedThisMonth, monthKey: storedMonth }
+}
+
+/** 403 when Free monthly create cap is exhausted. null = allowed (or cannot read). */
+export async function assertRoutingCreateAllowed(
+  env: Env,
+  uid: string,
+): Promise<{ error: string; code: string } | null> {
+  const ent = await readUserEntitlements(env, uid)
+  if (!ent) return null
+  if (ent.plan === 'premium') return null
+  if (ent.routesCreatedThisMonth >= FREE_MAX_ROUTES_CREATED_PER_MONTH) {
+    return {
+      error: 'Has alcanzado el límite de creaciones del plan Free este mes.',
+      code: 'create_limit',
+    }
+  }
+  return null
+}
+
+/** Admin bump of monthly create counter (source of truth for Free caps). */
+export async function bumpRoutesCreatedThisMonth(env: Env, uid: string): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const nowKey = utcMonthKey()
+  const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+  const usageFields =
+    (
+      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
+        | { mapValue?: { fields?: Record<string, unknown> } }
+        | undefined
+    )?.mapValue?.fields ?? {}
+  const storedMonth =
+    (usageFields.monthKey as { stringValue?: string } | undefined)?.stringValue || nowKey
+  const rawCreated =
+    Number(
+      (usageFields.routesCreatedThisMonth as { integerValue?: string; doubleValue?: number } | undefined)
+        ?.integerValue ??
+        (usageFields.routesCreatedThisMonth as { doubleValue?: number } | undefined)?.doubleValue ??
+        0,
+    ) || 0
+  const next = storedMonth === nowKey ? rawCreated + 1 : 1
+  const merged = {
+    ...usageFields,
+    routesCreatedThisMonth: { integerValue: String(next) },
+    monthKey: { stringValue: nowKey },
+  }
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        usage: { mapValue: { fields: merged } },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`create usage bump failed: ${res.status} ${t.slice(0, 300)}`)
+  }
 }
 
 /** Admin-only: set users.plan (allowlist / Stripe). Client rules freeze plan. */
@@ -608,10 +703,17 @@ export type PublishShareInput = {
   shareSlug?: string
   /** When set, mark this existing route public instead of creating a new one. */
   routeId?: string
+  /** Optional capped turn-by-turn for shared viewers / reopen. */
+  instructions?: string[]
 }
 
+const FREE_MAX_ROUTES_SAVED = 5
+
 /** Firestore rejects nested arrays — normalize LineString coords to {lng,lat}[]. */
-function firestoreSafeGeometry(geometry: unknown): { type: string; coordinates: Array<{ lng: number; lat: number }> } {
+function firestoreSafeGeometry(geometry: unknown): {
+  type: string
+  coordinates: Array<{ lng: number; lat: number }>
+} {
   const raw = (geometry && typeof geometry === 'object' ? geometry : {}) as {
     type?: string
     coordinates?: unknown
@@ -635,9 +737,68 @@ function firestoreSafeGeometry(geometry: unknown): { type: string; coordinates: 
   return { type: 'LineString', coordinates }
 }
 
+async function adminGetDocument(
+  projectId: string,
+  token: string,
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`firestore get failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+  return (await res.json()) as Record<string, unknown>
+}
+
+function fieldString(doc: Record<string, unknown> | null, key: string): string | null {
+  const fields = doc?.fields as Record<string, { stringValue?: string }> | undefined
+  return fields?.[key]?.stringValue ?? null
+}
+
+async function bumpRoutesSaved(
+  projectId: string,
+  token: string,
+  uid: string,
+  currentSaved: number,
+): Promise<void> {
+  const now = new Date().toISOString()
+  const next = currentSaved + 1
+  const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+  const usageFields =
+    (
+      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
+        | { mapValue?: { fields?: Record<string, unknown> } }
+        | undefined
+    )?.mapValue?.fields ?? {}
+  const merged = {
+    ...usageFields,
+    routesSaved: { integerValue: String(next) },
+  }
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        usage: { mapValue: { fields: merged } },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`usage bump failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
 /**
  * Admin publish for WhatsApp / public link sharing.
- * Bypasses client security-rule edge cases (missing usage, stale free plan, etc.).
+ * Enforces ownership on patch, Free save caps on create, and share-slug ownership.
  */
 export async function publishPublicRouteShare(
   env: Env,
@@ -650,8 +811,11 @@ export async function publishPublicRouteShare(
   const token = await getAccessToken(sa)
   const now = new Date().toISOString()
   const title = String(input.title || 'Ruta').slice(0, 120)
-  const shareSlug = (input.shareSlug || createShareSlug(title)).slice(0, 80)
+  let shareSlug = (input.shareSlug || createShareSlug(title)).slice(0, 80)
   const safeGeometry = firestoreSafeGeometry(input.geometry)
+  const instructions = Array.isArray(input.instructions)
+    ? input.instructions.filter((s) => typeof s === 'string').slice(0, 80)
+    : []
 
   const routeFields: Record<string, unknown> = {
     userId: { stringValue: uid },
@@ -667,6 +831,7 @@ export async function publishPublicRouteShare(
     shareSlug: { stringValue: shareSlug },
     updatedAt: { timestampValue: now },
   }
+  if (instructions.length) routeFields.instructions = toFirestoreValue(instructions)
   if (input.description) routeFields.description = { stringValue: String(input.description).slice(0, 500) }
   if (
     typeof input.circularDistanceMeters === 'number' &&
@@ -678,6 +843,11 @@ export async function publishPublicRouteShare(
   let routeId = input.routeId?.trim() || ''
 
   if (routeId) {
+    const existing = await adminGetDocument(projectId, token, `routes/${routeId}`)
+    if (!existing) throw new Error('route_not_found')
+    const owner = fieldString(existing, 'userId')
+    if (owner !== uid) throw new Error('route_forbidden')
+
     const mask = [
       'isPublic',
       'shareSlug',
@@ -692,6 +862,7 @@ export async function publishPublicRouteShare(
       'updatedAt',
       'description',
       'circularDistanceMeters',
+      'instructions',
     ]
       .map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`)
       .join('&')
@@ -709,6 +880,13 @@ export async function publishPublicRouteShare(
       throw new Error(`route patch failed: ${patchRes.status} ${t.slice(0, 400)}`)
     }
   } else {
+    const entitlements = await readUserEntitlements(env, uid)
+    const plan = entitlements?.plan ?? 'free'
+    const saved = entitlements?.routesSaved ?? 0
+    if (plan !== 'premium' && saved >= FREE_MAX_ROUTES_SAVED) {
+      throw new Error('save_limit')
+    }
+
     const createUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routes`
     const createRes = await fetch(createUrl, {
       method: 'POST',
@@ -730,32 +908,64 @@ export async function publishPublicRouteShare(
     const created = (await createRes.json()) as { name?: string }
     routeId = created.name?.split('/').pop() || ''
     if (!routeId) throw new Error('route create missing id')
+    try {
+      await bumpRoutesSaved(projectId, token, uid, saved)
+    } catch (err) {
+      console.warn('[publish] usage bump failed', err)
+    }
   }
 
-  // Public lookup + embedded snapshot (works even if routes/{id} read is flaky).
-  const shareUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routeShares/${encodeURIComponent(shareSlug)}?updateMask.fieldPaths=routeId&updateMask.fieldPaths=userId&updateMask.fieldPaths=createdAt&updateMask.fieldPaths=title&updateMask.fieldPaths=type&updateMask.fieldPaths=bikeType&updateMask.fieldPaths=preferences&updateMask.fieldPaths=waypoints&updateMask.fieldPaths=geometry&updateMask.fieldPaths=elevationProfile&updateMask.fieldPaths=stats&updateMask.fieldPaths=isPublic`
+  // Refuse to hijack another user's public slug; mint a fresh one instead.
+  const existingShare = await adminGetDocument(
+    projectId,
+    token,
+    `routeShares/${encodeURIComponent(shareSlug)}`,
+  )
+  if (existingShare) {
+    const shareOwner = fieldString(existingShare, 'userId')
+    if (shareOwner && shareOwner !== uid) {
+      shareSlug = createShareSlug(title)
+      routeFields.shareSlug = { stringValue: shareSlug }
+      if (routeId) {
+        const slugPatch = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routes/${routeId}?updateMask.fieldPaths=shareSlug`
+        await fetch(slugPatch, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fields: { shareSlug: { stringValue: shareSlug } },
+          }),
+        })
+      }
+    }
+  }
+
+  const shareUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routeShares/${encodeURIComponent(shareSlug)}?updateMask.fieldPaths=routeId&updateMask.fieldPaths=userId&updateMask.fieldPaths=createdAt&updateMask.fieldPaths=title&updateMask.fieldPaths=type&updateMask.fieldPaths=bikeType&updateMask.fieldPaths=preferences&updateMask.fieldPaths=waypoints&updateMask.fieldPaths=geometry&updateMask.fieldPaths=elevationProfile&updateMask.fieldPaths=stats&updateMask.fieldPaths=isPublic&updateMask.fieldPaths=instructions`
+  const shareFields: Record<string, unknown> = {
+    routeId: { stringValue: routeId },
+    userId: { stringValue: uid },
+    createdAt: { timestampValue: now },
+    title: { stringValue: title },
+    type: { stringValue: String(input.type || 'a_to_b') },
+    bikeType: { stringValue: String(input.bikeType || 'road') },
+    preferences: toFirestoreValue(input.preferences ?? []),
+    waypoints: toFirestoreValue(input.waypoints ?? []),
+    geometry: toFirestoreValue(safeGeometry),
+    elevationProfile: toFirestoreValue(input.elevationProfile ?? []),
+    stats: toFirestoreValue(input.stats ?? {}),
+    isPublic: { booleanValue: true },
+  }
+  if (instructions.length) shareFields.instructions = toFirestoreValue(instructions)
+
   const shareRes = await fetch(shareUrl, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      fields: {
-        routeId: { stringValue: routeId },
-        userId: { stringValue: uid },
-        createdAt: { timestampValue: now },
-        title: { stringValue: title },
-        type: { stringValue: String(input.type || 'a_to_b') },
-        bikeType: { stringValue: String(input.bikeType || 'road') },
-        preferences: toFirestoreValue(input.preferences ?? []),
-        waypoints: toFirestoreValue(input.waypoints ?? []),
-        geometry: toFirestoreValue(safeGeometry),
-        elevationProfile: toFirestoreValue(input.elevationProfile ?? []),
-        stats: toFirestoreValue(input.stats ?? {}),
-        isPublic: { booleanValue: true },
-      },
-    }),
+    body: JSON.stringify({ fields: shareFields }),
   })
   if (!shareRes.ok) {
     const t = await shareRes.text()

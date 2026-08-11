@@ -19,6 +19,10 @@ function sanitizePayload(body: unknown): PublishShareInput {
   const coords = (geometry as { coordinates?: unknown }).coordinates
   if (!Array.isArray(coords) || coords.length < 2) throw new Error('invalid_geometry')
 
+  const instructions = Array.isArray(body.instructions)
+    ? body.instructions.filter((s): s is string => typeof s === 'string').slice(0, 80)
+    : undefined
+
   return {
     title,
     description: body.description ? String(body.description).slice(0, 500) : undefined,
@@ -33,6 +37,7 @@ function sanitizePayload(body: unknown): PublishShareInput {
       typeof body.circularDistanceMeters === 'number' ? body.circularDistanceMeters : undefined,
     shareSlug: body.shareSlug ? String(body.shareSlug).slice(0, 80) : undefined,
     routeId: body.routeId ? String(body.routeId).slice(0, 128) : undefined,
+    instructions,
   }
 }
 
@@ -77,6 +82,27 @@ export async function handlePublishRoute(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'publish_failed'
+    if (message === 'save_limit') {
+      return json(
+        {
+          error: 'Has alcanzado el límite de rutas guardadas del plan Free.',
+          code: 'save_limit',
+        },
+        403,
+      )
+    }
+    if (message === 'route_forbidden') {
+      return json(
+        {
+          error: 'No puedes publicar una ruta que no es tuya.',
+          code: 'route_forbidden',
+        },
+        403,
+      )
+    }
+    if (message === 'route_not_found') {
+      return json({ error: 'La ruta no existe.', code: 'route_not_found' }, 404)
+    }
     console.error('[publish-route]', message)
     return json({ error: message, code: 'publish_failed' }, 500)
   }

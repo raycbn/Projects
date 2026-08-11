@@ -240,6 +240,7 @@ export class RoutingError extends Error {
     | 'not_configured'
     | 'no_route'
     | 'rate_limited'
+    | 'create_limit'
     | 'network'
     | 'invalid_request'
     | 'provider_error'
@@ -251,6 +252,7 @@ export class RoutingError extends Error {
       | 'not_configured'
       | 'no_route'
       | 'rate_limited'
+      | 'create_limit'
       | 'network'
       | 'invalid_request'
       | 'provider_error',

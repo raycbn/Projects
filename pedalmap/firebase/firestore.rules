@@ -33,6 +33,11 @@ service cloud.firestore {
       return isPremiumUser() || routesSavedCount() < 5;
     }
 
+    function currentMonthKey() {
+      let m = request.time.month();
+      return string(request.time.year()) + '-' + (m < 10 ? '0' + string(m) : string(m));
+    }
+
     function usageOk() {
       return !('usage' in request.resource.data)
         || !('usage' in resource.data)
@@ -42,13 +47,25 @@ service cloud.firestore {
             <= resource.data.usage.routesSaved + 1
           && request.resource.data.usage.routesSaved
             >= resource.data.usage.routesSaved - 1
+          // monthKey may only stay put or advance to the real UTC calendar month.
           && (
-            request.resource.data.usage.monthKey != resource.data.usage.monthKey
-            || (
-              request.resource.data.usage.routesCreatedThisMonth
+            request.resource.data.usage.monthKey == resource.data.usage.monthKey
+            || request.resource.data.usage.monthKey == currentMonthKey()
+          )
+          && (
+            // Same month: creates may only stay or +1 (recordRouteCreated).
+            (
+              request.resource.data.usage.monthKey == resource.data.usage.monthKey
+              && request.resource.data.usage.routesCreatedThisMonth
                 >= resource.data.usage.routesCreatedThisMonth
               && request.resource.data.usage.routesCreatedThisMonth
                 <= resource.data.usage.routesCreatedThisMonth + 1
+            )
+            // Real month rollover: counter resets to 0, or 1 if combined with first create.
+            || (
+              request.resource.data.usage.monthKey != resource.data.usage.monthKey
+              && request.resource.data.usage.routesCreatedThisMonth >= 0
+              && request.resource.data.usage.routesCreatedThisMonth <= 1
             )
           )
         );
@@ -86,7 +103,11 @@ service cloud.firestore {
 
     match /routeShares/{shareSlug} {
       allow read: if true;
-      allow create, update: if isSignedIn()
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      // Updates must keep the existing owner — prevent public-slug hijack via userId swap.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
         && request.resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn()
         && resource.data.userId == request.auth.uid;

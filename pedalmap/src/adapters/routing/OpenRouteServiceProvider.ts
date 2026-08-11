@@ -393,6 +393,12 @@ export class OpenRouteServiceProvider implements RoutingProvider {
               if (!response.ok) {
                 const text = await response.text()
                 console.error('[ORS]', profile, response.status, text.slice(0, 500))
+                if (
+                  response.status === 403 &&
+                  (text.includes('create_limit') || text.includes('"code":"create_limit"'))
+                ) {
+                  throw new RoutingError('Create limit exceeded', 'create_limit', text)
+                }
                 if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
                   break profileLoop
                 }

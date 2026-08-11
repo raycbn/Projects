@@ -130,6 +130,15 @@ export function geometryFromStored(raw: unknown): SavedRoute['geometry'] {
  */
 export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
   const title = String(draft.title || 'Ruta').slice(0, 120)
+  const surfaceEdges = (draft.surfaceEdges ?? [])
+    .slice(0, 400)
+    .map((e) => ({
+      length: e.length,
+      surface: e.surface,
+      road_class: e.road_class,
+      use: e.use,
+      cycle_lane: e.cycle_lane,
+    }))
   return stripUndefinedDeep({
     title,
     description: draft.description,
@@ -145,6 +154,8 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     circularSeed: draft.circularSeed,
     // Keep turn-by-turn for navigation after Abrir (cap size).
     instructions: (draft.instructions ?? []).slice(0, 120),
+    // Lean surface attrs so Abrir guardada keeps the paint overlay.
+    surfaceEdges: surfaceEdges.length ? surfaceEdges : undefined,
     selectedOptionId: draft.selectedOptionId,
   })
 }

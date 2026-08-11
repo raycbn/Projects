@@ -131,6 +131,16 @@ export class ValhallaProvider implements RoutingProvider {
       if (response.status === 429) {
         throw new RoutingError('Rate limit exceeded', 'rate_limited', text)
       }
+      if (
+        response.status === 403 &&
+        (text.includes('create_limit') || (data as { code?: string }).code === 'create_limit')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Create limit exceeded',
+          'create_limit',
+          text,
+        )
+      }
       throw new RoutingError(
         data.error || 'No route found',
         response.status === 404 ? 'no_route' : 'provider_error',

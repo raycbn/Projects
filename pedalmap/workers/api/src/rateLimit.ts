@@ -43,13 +43,16 @@ export async function enforceRateLimit(
     `https://pedalmap-rl.internal/${opts.prefix}/${encodeURIComponent(id)}/${bucket}`,
   )
 
+  // Always bump the in-memory counter first so concurrent requests in the same
+  // isolate cannot all read the same Cache API value before any write lands.
+  if (!memoryBump(memKey, opts.limit, opts.windowSec)) {
+    return limitedResponse(opts.windowSec)
+  }
+
   try {
     const cache = caches.default
     const hit = await cache.match(cacheKey)
-    let count = 0
-    if (hit) {
-      count = Number(await hit.text()) || 0
-    }
+    let count = Number((hit && (await hit.text())) || 0) || 0
     if (count >= opts.limit) {
       return limitedResponse(opts.windowSec)
     }
@@ -64,11 +67,8 @@ export async function enforceRateLimit(
       }),
     )
   } catch (error) {
-    // Fail closed via in-memory counter so Cache API outages don't burn upstream quota.
-    console.warn('[rateLimit] cache failed — using memory bucket', error)
-    if (!memoryBump(memKey, opts.limit, opts.windowSec)) {
-      return limitedResponse(opts.windowSec)
-    }
+    // Memory bucket already enforced above — Cache sync is best-effort.
+    console.warn('[rateLimit] cache sync failed', error)
   }
   return null
 }
