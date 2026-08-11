@@ -37,6 +37,8 @@ export interface Env {
   /** Instagram Graph API (own PedalMap professional account). */
   INSTAGRAM_ACCESS_TOKEN?: string
   INSTAGRAM_IG_USER_ID?: string
+  /** Default graph.instagram.com (no Facebook Page). Use graph.facebook.com if Page-linked. */
+  INSTAGRAM_GRAPH_HOST?: string
   /** Shared secret for ops publish endpoint (header X-PedalMap-Ops-Token). */
   INSTAGRAM_OPS_TOKEN?: string
 }

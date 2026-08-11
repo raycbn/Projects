@@ -1,7 +1,16 @@
 import type { Env } from './types'
 import { json } from './types'
 
-const GRAPH = 'https://graph.facebook.com/v21.0'
+/**
+ * Prefer Instagram API with Instagram Login (no Facebook Page):
+ *   host graph.instagram.com + Instagram user token
+ * Legacy Page-linked path still works with graph.facebook.com + Page token.
+ */
+function graphBase(env: Env): string {
+  const host = (env.INSTAGRAM_GRAPH_HOST || 'graph.instagram.com').replace(/\/+$/, '')
+  if (host.includes('facebook.com')) return `https://${host.replace(/^https?:\/\//, '')}/v21.0`
+  return `https://${host.replace(/^https?:\/\//, '')}`
+}
 
 export type InstagramPublishInput = {
   imageUrl: string
@@ -26,7 +35,7 @@ async function graphJson(url: string, init?: RequestInit): Promise<Record<string
   return data
 }
 
-/** Create container → wait briefly → publish. Image URL must be publicly reachable by Meta. */
+/** Create container → wait → publish. Image URL must be publicly reachable by Meta. */
 export async function publishInstagramPhoto(
   env: Env,
   input: InstagramPublishInput,
@@ -37,7 +46,8 @@ export async function publishInstagramPhoto(
     throw new Error('Missing INSTAGRAM_IG_USER_ID or INSTAGRAM_ACCESS_TOKEN')
   }
 
-  const createUrl = new URL(`${GRAPH}/${igUserId}/media`)
+  const base = graphBase(env)
+  const createUrl = new URL(`${base}/${igUserId}/media`)
   createUrl.searchParams.set('image_url', input.imageUrl)
   createUrl.searchParams.set('caption', input.caption)
   createUrl.searchParams.set('access_token', token)
@@ -46,9 +56,8 @@ export async function publishInstagramPhoto(
   const containerId = String(created.id || '')
   if (!containerId) throw new Error('No container id from Instagram')
 
-  // Meta needs a moment to fetch/process the image.
   for (let i = 0; i < 8; i++) {
-    const statusUrl = new URL(`${GRAPH}/${containerId}`)
+    const statusUrl = new URL(`${base}/${containerId}`)
     statusUrl.searchParams.set('fields', 'status_code')
     statusUrl.searchParams.set('access_token', token)
     const status = await graphJson(statusUrl.toString())
@@ -58,7 +67,7 @@ export async function publishInstagramPhoto(
     await new Promise((r) => setTimeout(r, 2000))
   }
 
-  const publishUrl = new URL(`${GRAPH}/${igUserId}/media_publish`)
+  const publishUrl = new URL(`${base}/${igUserId}/media_publish`)
   publishUrl.searchParams.set('creation_id', containerId)
   publishUrl.searchParams.set('access_token', token)
   const published = await graphJson(publishUrl.toString(), { method: 'POST' })
@@ -105,5 +114,6 @@ export async function handleInstagramStatus(request: Request, env: Env): Promise
     configured: Boolean(env.INSTAGRAM_IG_USER_ID && env.INSTAGRAM_ACCESS_TOKEN),
     igUserIdSet: Boolean(env.INSTAGRAM_IG_USER_ID),
     tokenSet: Boolean(env.INSTAGRAM_ACCESS_TOKEN),
+    graphHost: env.INSTAGRAM_GRAPH_HOST || 'graph.instagram.com',
   })
 }
