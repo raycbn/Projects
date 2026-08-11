@@ -18,9 +18,9 @@ describe('siteConfig', () => {
     expect(publicSiteUrl('/ruta')).toBe(`${window.location.origin}/ruta`)
   })
 
-  it('treats custom domain as first-party authDomain host', () => {
-    expect(shouldUseHostAsAuthDomain('pedalmap.es')).toBe(true)
-    expect(shouldUseHostAsAuthDomain('www.pedalmap.es')).toBe(true)
+  it('uses Firebase Hosting hosts for authDomain, not custom domain yet', () => {
+    expect(shouldUseHostAsAuthDomain('pedalmap.es')).toBe(false)
+    expect(shouldUseHostAsAuthDomain('www.pedalmap.es')).toBe(false)
     expect(shouldUseHostAsAuthDomain('pedalmap-79b3a.web.app')).toBe(true)
     expect(shouldUseHostAsAuthDomain('localhost')).toBe(false)
   })

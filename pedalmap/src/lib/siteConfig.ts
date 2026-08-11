@@ -43,10 +43,8 @@ export function canonicalSiteUrl(path = '/'): string {
 
 /** Hosts where Firebase authDomain should follow the page hostname. */
 export function shouldUseHostAsAuthDomain(hostname: string): boolean {
-  return (
-    hostname === 'pedalmap.es' ||
-    hostname === 'www.pedalmap.es' ||
-    hostname.endsWith('.web.app') ||
-    hostname.endsWith('.firebaseapp.com')
-  )
+  // Only Firebase Hosting defaults — custom domains (pedalmap.es) need the
+  // Google OAuth redirect URI registered first or login fails with
+  // redirect_uri_mismatch. Keep authDomain = *.web.app / *.firebaseapp.com.
+  return hostname.endsWith('.web.app') || hostname.endsWith('.firebaseapp.com')
 }

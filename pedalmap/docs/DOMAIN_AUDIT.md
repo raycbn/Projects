@@ -25,11 +25,14 @@ Que **toda** la superficie de producto trate `https://pedalmap.es` como origen c
 ## Checklist manual (tú)
 
 1. **Firebase Auth → Authorized domains**: `pedalmap.es`, `www.pedalmap.es` ✅ (ya lo hiciste).
-2. **Google Cloud OAuth** (si login Google falla en el dominio nuevo):  
-   En el cliente OAuth de Firebase, asegúrate de que existen redirect URIs:
-   - `https://pedalmap.es/__/auth/handler`
-   - `https://www.pedalmap.es/__/auth/handler`  
-   (Firebase suele gestionarlos al añadir el dominio autorizado; verifica si Google login rompe).
+2. **Google login en `pedalmap.es`:** el código usa `authDomain` = `*.web.app` /
+   `*.firebaseapp.com` (ya autorizado en Google). Si más adelante quieres
+   first-party en el dominio propio, en Google Cloud → Credenciales → cliente
+   OAuth de Firebase añade:
+   - Orígenes JS: `https://pedalmap.es`, `https://www.pedalmap.es`
+   - Redirect URIs: `https://pedalmap.es/__/auth/handler`,
+     `https://www.pedalmap.es/__/auth/handler`
+   y entonces se puede volver a poner `authDomain = pedalmap.es`.
 3. **Stripe** Checkout success/cancel usan `APP_URL` del Worker → ya `https://pedalmap.es/premium?...`.
 4. Opcional: en Firebase Hosting, redirigir `www` → apex (o al revés) para una sola URL canónica.
 

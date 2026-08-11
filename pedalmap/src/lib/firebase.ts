@@ -6,8 +6,10 @@ import { getStorage, type FirebaseStorage } from 'firebase/storage'
 import { shouldUseHostAsAuthDomain } from '@/lib/siteConfig'
 
 /**
- * On production hosts (custom domain + Firebase Hosting), use the current
+ * On Firebase Hosting (*.web.app / *.firebaseapp.com), use the current
  * hostname as authDomain so signInWithRedirect stays first-party.
+ * Custom domain (pedalmap.es) keeps VITE_FIREBASE_AUTH_DOMAIN until the
+ * Google OAuth client lists https://pedalmap.es/__/auth/handler.
  */
 function resolveAuthDomain(): string {
   const configured = String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '')
