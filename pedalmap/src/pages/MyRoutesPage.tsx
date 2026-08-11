@@ -107,8 +107,10 @@ export function MyRoutesPage() {
           !wasAlertEmailSent(best.routeId, best.startHour)
         ) {
           try {
-            await alertService.sendWindAlertEmail(best)
-            markAlertEmailSent(best.routeId, best.startHour)
+            const mail = await alertService.sendWindAlertEmail(best)
+            if (mail.sent) {
+              markAlertEmailSent(best.routeId, best.startHour)
+            }
           } catch (error) {
             console.warn('[my-routes] alert email', error)
           }
@@ -255,9 +257,23 @@ export function MyRoutesPage() {
           onToggleWindAlert={(route) => void toggleWindAlert(route)}
           onShare={async (route) => {
             if (!user) return
-            const slug = await routeRepository.makePublic(route.id, user.uid)
-            const url = `${window.location.origin}/route/${slug}`
-            setShare({ url, title: route.title })
+            try {
+              const published = await routeRepository.publishForShare(user.uid, route, {
+                routeId: route.id,
+              })
+              const url = `${window.location.origin}/route/${published.shareSlug}`
+              setShare({ url, title: route.title })
+              setRoutes((prev) =>
+                prev.map((r) =>
+                  r.id === route.id
+                    ? { ...r, isPublic: true, shareSlug: published.shareSlug }
+                    : r,
+                ),
+              )
+            } catch (error) {
+              console.error('[my-routes] share', error)
+              setAlertHint('No se pudo crear el enlace público. Inténtalo de nuevo.')
+            }
           }}
           onDuplicate={async (route) => {
             if (!user) return

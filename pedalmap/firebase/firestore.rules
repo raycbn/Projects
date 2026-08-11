@@ -73,9 +73,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId);
+      // Clients may only start as Free — Worker/Admin/Stripe alone may set premium.
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
-        && isValidPlan(request.resource.data.plan);
+        && request.resource.data.plan == 'free';
       // Plan is frozen for clients (Worker/Admin + Stripe only).
       // Usage may change by at most ±1 on routesSaved (save/delete).
       allow update: if isOwner(userId)

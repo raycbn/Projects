@@ -50,8 +50,7 @@ export function PrivacyPage() {
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Conservación y derechos</h2>
         <p>
           Conservamos la cuenta y rutas mientras mantengas el servicio activo. Puedes solicitar
-          acceso, rectificación o borrado escribiendo a {contact}. También puedes eliminar tu cuenta
-          desde el perfil cuando la opción esté disponible.
+          acceso, rectificación o borrado escribiendo a {contact}.
         </p>
         <p>
           Más detalle sobre cookies en <Link className="underline" to="/cookies">/cookies</Link> y

@@ -74,6 +74,27 @@ async function requireFirebaseUser(
   }
 }
 
+/** Per-uid limit, plus a tighter shared IP bucket for anonymous churn. */
+async function enforceRoutingRateLimit(
+  request: Request,
+  identity: FirebaseIdentity,
+  opts: { limit: number; windowSec: number; prefix: string; anonIpLimit?: number },
+): Promise<Response | null> {
+  const uidLimited = await enforceRateLimit(request, {
+    limit: opts.limit,
+    windowSec: opts.windowSec,
+    prefix: opts.prefix,
+    key: identity.uid,
+  })
+  if (uidLimited) return uidLimited
+  if (!identity.isAnonymous) return null
+  return enforceRateLimit(request, {
+    limit: opts.anonIpLimit ?? Math.min(20, opts.limit),
+    windowSec: opts.windowSec,
+    prefix: `${opts.prefix}-anon-ip`,
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -112,11 +133,11 @@ export default {
       if (path.startsWith('/v2/directions/') && request.method === 'POST') {
         const identity = await requireFirebaseUser(env, request)
         if (identity instanceof Response) return withCors(env, request, identity)
-        const limited = await enforceRateLimit(request, {
+        const limited = await enforceRoutingRateLimit(request, identity, {
           limit: 40,
           windowSec: 60,
           prefix: 'ors',
-          key: identity.uid,
+          anonIpLimit: 20,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(
@@ -131,11 +152,11 @@ export default {
       if (path === '/valhalla/bike-route' && request.method === 'POST') {
         const identity = await requireFirebaseUser(env, request)
         if (identity instanceof Response) return withCors(env, request, identity)
-        const limited = await enforceRateLimit(request, {
+        const limited = await enforceRoutingRateLimit(request, identity, {
           limit: 30,
           windowSec: 60,
           prefix: 'valhalla-bike',
-          key: identity.uid,
+          anonIpLimit: 15,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(
@@ -148,11 +169,11 @@ export default {
       if (path === '/valhalla/route' && request.method === 'POST') {
         const identity = await requireFirebaseUser(env, request)
         if (identity instanceof Response) return withCors(env, request, identity)
-        const limited = await enforceRateLimit(request, {
+        const limited = await enforceRoutingRateLimit(request, identity, {
           limit: 40,
           windowSec: 60,
           prefix: 'valhalla',
-          key: identity.uid,
+          anonIpLimit: 20,
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleValhallaProxy(request, env, 'route'))
@@ -406,7 +427,16 @@ export default {
       const message = error instanceof Error ? error.message : 'Unhandled error'
       const status = message.includes('Bearer') || message.includes('token') ? 401 : 500
       console.error('[worker]', message)
-      return withCors(env, request, json({ error: message }, status))
+      return withCors(
+        env,
+        request,
+        json(
+          status === 401
+            ? { error: 'Authentication required', code: 'auth_required' }
+            : { error: 'Internal error', code: 'internal' },
+          status,
+        ),
+      )
     }
   },
 }

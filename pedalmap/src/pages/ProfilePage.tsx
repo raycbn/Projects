@@ -141,8 +141,8 @@ export function ProfilePage() {
               </h2>
               <p className="text-sm leading-relaxed text-[var(--color-stone)]">
                 Te avisamos en Mis rutas cuando una ruta marcada tenga una ventana excelente
-                (próximas {WIND_ALERT.maxHoursAhead} h). Free: {FREE_TRIALS.windAlertRoutes} ruta ·
-                Premium: todas.
+                (próximas {WIND_ALERT.maxHoursAhead} h; al abrir la app). Free:{' '}
+                {FREE_TRIALS.windAlertRoutes} ruta · Premium: todas.
               </p>
               <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--color-forest)]">
                 <input
@@ -178,7 +178,8 @@ export function ProfilePage() {
                 <span>
                   También por email
                   <span className="block text-xs text-[var(--color-stone)]">
-                    Te llega desde {BRAND_EMAILS.alerts} cuando haya una ventana excelente.
+                    Te llega desde {BRAND_EMAILS.alerts} al abrir Mis rutas si hay una ventana
+                    excelente.
                   </span>
                 </span>
               </label>

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
-import { FREE_LIMITS } from '@/domain/types'
+import { FREE_LIMITS, FREE_TRIALS, ANNUAL_TRIAL_DAYS } from '@/domain/types'
 
 const faqs = [
   {
@@ -118,6 +118,7 @@ export function LandingPage() {
               <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
                 <li>· Hasta {FREE_LIMITS.maxRoutesSaved} rutas guardadas</li>
                 <li>· {FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes</li>
+                <li>· {FREE_TRIALS.gpxPerWeek} GPX / semana · {FREE_TRIALS.circularPerMonth} Objetivo / mes</li>
                 <li>· {FREE_LIMITS.maxActivePreferences} filtros a la vez</li>
                 <li>· A→B, ida-vuelta, viento y superficie</li>
               </ul>
@@ -129,9 +130,10 @@ export function LandingPage() {
               <h3 className="font-display text-2xl font-bold">Premium</h3>
               <ul className="mt-4 space-y-2 text-sm text-white/85">
                 <li>· Rutas y filtros ilimitados</li>
-                <li>· Modo Objetivo (circular km + desnivel)</li>
-                <li>· Exportación / compartir GPX</li>
-                <li>· 4,99 €/mes o 39,99 €/año</li>
+                <li>· Objetivo y GPX ilimitados</li>
+                <li>· Avisos de viento en todas tus rutas</li>
+                <li>· {ANNUAL_TRIAL_DAYS} días de prueba con el anual · 39,99 €/año</li>
+                <li>· o 4,99 €/mes</li>
               </ul>
               <Link to="/premium" className="mt-6 inline-block">
                 <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">

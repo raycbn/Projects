@@ -52,8 +52,9 @@ export async function handleCheckout(request: Request, env: Env): Promise<Respon
   }
 
   const appUrl = resolveAppUrl(env, request)
-  // Annual plan: 7-day trial (webhook already treats `trialing` as premium).
-  const trialDays = interval === 'year' ? '7' : undefined
+  // Annual plan trial (webhook already treats `trialing` as premium).
+  const ANNUAL_TRIAL_DAYS = '7'
+  const trialDays = interval === 'year' ? ANNUAL_TRIAL_DAYS : undefined
   const sessionRes = await stripeForm(env, 'checkout/sessions', {
     mode: 'subscription',
     customer: customerId,
@@ -112,11 +113,13 @@ function toHex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Verify Stripe-Signature header (v1). */
+/** Verify Stripe-Signature header (v1) with timestamp skew check. */
 export async function verifyStripeSignature(
   payload: string,
   header: string | null,
   secret: string,
+  nowSec = Math.floor(Date.now() / 1000),
+  toleranceSec = 300,
 ): Promise<boolean> {
   if (!header) return false
   const parts = Object.fromEntries(
@@ -126,6 +129,8 @@ export async function verifyStripeSignature(
     }),
   ) as { t?: string; v1?: string }
   if (!parts.t || !parts.v1) return false
+  const ts = Number(parts.t)
+  if (!Number.isFinite(ts) || Math.abs(nowSec - ts) > toleranceSec) return false
   const signed = `${parts.t}.${payload}`
   const digest = toHex(await hmacSha256(secret, signed))
   // Stripe may send multiple v1 signatures

@@ -645,7 +645,7 @@ export function RoutePlanner() {
             </label>
             <label className="block text-sm">
               <span className="font-semibold text-[var(--color-forest)]">
-                Desnivel objetivo (Premium)
+                Desnivel objetivo (opcional)
               </span>
               <input
                 type="range"
