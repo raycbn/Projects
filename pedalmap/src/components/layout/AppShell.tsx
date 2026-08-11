@@ -3,7 +3,6 @@ import clsx from 'clsx'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { CookieBanner } from '@/components/legal/CookieBanner'
-import { BrandLogo } from '@/components/brand/BrandLogo'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   clsx(
@@ -25,7 +24,12 @@ export function AppShell() {
     <div className={clsx('min-h-dvh', wash && 'page-wash')}>
       <header className="sticky top-0 z-40 h-[var(--header-h)] border-b border-[var(--color-fog)]/80 bg-[color-mix(in_oklab,var(--color-mist)_88%,white)]/95 backdrop-blur-md">
         <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-2 px-3 md:gap-4 md:px-6">
-          <BrandLogo size="sm" className="md:h-9" />
+          <Link
+            to="/"
+            className="font-display text-lg font-extrabold tracking-tight text-[var(--color-forest)] md:text-xl"
+          >
+            Pedal<span className="text-[var(--color-trail)]">Map</span>
+          </Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Principal">
             <NavLink to="/route-planner" className={navClass}>
               Crear ruta
@@ -73,8 +77,10 @@ export function AppShell() {
         <footer className="border-t border-[var(--color-fog)] bg-[color-mix(in_oklab,var(--color-mist)_70%,white)] px-4 py-8 pb-24 md:pb-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-[var(--color-stone)] md:flex-row md:items-center md:justify-between">
             <div>
-              <BrandLogo size="sm" />
-              <p className="mt-1 text-xs">Planifica con el suelo y el viento a tu favor.</p>
+              <p className="font-display text-lg font-bold text-[var(--color-forest)]">
+                Pedal<span className="text-[var(--color-trail)]">Map</span>
+              </p>
+              <p className="mt-0.5 text-xs">Planifica con el suelo y el viento a tu favor.</p>
             </div>
             <nav className="flex flex-wrap gap-4" aria-label="Legal">
               <Link className="hover:text-[var(--color-forest)]" to="/privacidad">

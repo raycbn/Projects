@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
-import { BrandLogo } from '@/components/brand/BrandLogo'
 import { FREE_LIMITS } from '@/domain/types'
 
 const faqs = [
@@ -52,11 +51,11 @@ export function LandingPage() {
           aria-label="Ciclistas en carretera entre paisaje abierto"
         />
         <div className="relative mx-auto flex min-h-[88vh] max-w-6xl flex-col justify-end px-4 pb-16 pt-24 md:justify-center md:px-6">
-          <div className="animate-rise inline-flex max-w-full rounded-2xl bg-white/95 p-3 shadow-lg ring-1 ring-white/40 backdrop-blur-sm md:p-4">
-            <BrandLogo to={null} size="lg" className="max-w-[min(100%,22rem)] md:max-w-md" />
-          </div>
+          <p className="animate-rise font-display text-[clamp(2.5rem,11vw,4.5rem)] font-extrabold leading-[0.95] tracking-[-0.03em] text-white drop-shadow md:text-7xl">
+            PEDALMAP
+          </p>
           <h1
-            className="mt-6 max-w-2xl animate-rise text-balance text-3xl font-semibold text-white md:text-4xl"
+            className="mt-4 max-w-2xl animate-rise text-balance text-3xl font-semibold text-white md:text-4xl"
             style={{ animationDelay: '80ms' }}
           >
             Crea tu próxima ruta en bici.

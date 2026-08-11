@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { canonicalSiteUrl, SITE_ORIGIN } from '@/lib/siteConfig'
+import { canonicalSiteUrl } from '@/lib/siteConfig'
 
 interface PageMeta {
   title: string
@@ -31,18 +31,19 @@ function upsertCanonical(href: string) {
 export function usePageMeta({ title, description, path, image }: PageMeta) {
   useEffect(() => {
     const url = canonicalSiteUrl(path)
-    const ogImage = image?.startsWith('http')
-      ? image
-      : image
-        ? canonicalSiteUrl(image)
-        : `${SITE_ORIGIN}/brand/logo-horizontal.png`
     document.title = title
     upsertMeta('name', 'description', description)
     upsertMeta('property', 'og:title', title)
     upsertMeta('property', 'og:description', description)
     upsertMeta('property', 'og:url', url)
     upsertMeta('property', 'og:type', 'website')
-    upsertMeta('property', 'og:image', ogImage)
+    if (image) {
+      upsertMeta(
+        'property',
+        'og:image',
+        image.startsWith('http') ? image : canonicalSiteUrl(image),
+      )
+    }
     upsertMeta('name', 'twitter:card', 'summary_large_image')
     upsertCanonical(url)
   }, [title, description, path, image])
