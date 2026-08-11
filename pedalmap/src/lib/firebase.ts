@@ -3,19 +3,17 @@ import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 import { getFunctions, type Functions } from 'firebase/functions'
 import { getStorage, type FirebaseStorage } from 'firebase/storage'
+import { shouldUseHostAsAuthDomain } from '@/lib/siteConfig'
 
 /**
- * On Firebase Hosting, use the current hostname as authDomain so
- * signInWithRedirect stays first-party (avoids mobile 3P storage failures
- * between *.web.app and *.firebaseapp.com).
+ * On production hosts (custom domain + Firebase Hosting), use the current
+ * hostname as authDomain so signInWithRedirect stays first-party.
  */
 function resolveAuthDomain(): string {
   const configured = String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '')
   if (typeof window !== 'undefined') {
     const host = window.location.hostname
-    if (host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')) {
-      return host
-    }
+    if (shouldUseHostAsAuthDomain(host)) return host
   }
   return configured
 }

@@ -1,6 +1,12 @@
 /* PedalMap service worker — cache app shell + last API health for offline reopen */
-const CACHE = 'pedalmap-shell-v3'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
+const CACHE = 'pedalmap-shell-v4'
+const SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/brand/logo-120.png',
+  '/brand/logo-horizontal.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))

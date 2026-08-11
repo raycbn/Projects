@@ -24,6 +24,7 @@ import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare
 import { shareRouteCard } from '@/lib/shareCard'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { fetchServerEntitlements } from '@/lib/planSync'
+import { publicSiteUrl } from '@/lib/siteConfig'
 import {
   formatWeatherHourCaption,
   formatWeatherWindowCaption,
@@ -243,7 +244,7 @@ export function RoutePlanner() {
     if (!activeDraft) return
     setShareBusy(true)
     try {
-      let url = `${window.location.origin}/route-planner`
+      let url = publicSiteUrl('/route-planner')
       if (user && !user.isAnonymous && firebaseReady && routeRepository.isConfigured()) {
         try {
           let routeId = lastSavedRouteId
@@ -262,7 +263,7 @@ export function RoutePlanner() {
             routeId = saved.id
             slug = saved.shareSlug
           }
-          if (slug) url = `${window.location.origin}/route/${slug}`
+          if (slug) url = publicSiteUrl(`/route/${slug}`)
         } catch (error) {
           console.warn('[share-card] public link', error)
           setSaveMessage('No se pudo crear el enlace público; se comparte la tarjeta igual.')

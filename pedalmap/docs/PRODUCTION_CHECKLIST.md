@@ -1,48 +1,22 @@
-# PRODUCTION_CHECKLIST — PedalMap
+# Production checklist — PedalMap
 
-Estado actual (2026-08-10):
-
-| Pieza | URL / estado |
-|-------|----------------|
-| App Hosting | ✅ https://pedalmap-79b3a.web.app |
-| Mirror | ✅ https://pedalmap-79b3a.firebaseapp.com |
+| Recurso | Estado |
+|---------|--------|
+| App canónica | ✅ https://pedalmap.es |
+| www | ✅ https://www.pedalmap.es (mismo Hosting) |
+| Mirror Firebase | ✅ https://pedalmap-79b3a.web.app (respaldo) |
 | Worker API | ✅ https://pedalmap-api.broken-dietician.workers.dev |
-| Health | ✅ ORS + Stripe + Firestore admin |
-| Google Auth (`web.app` OAuth redirect) | ✅ login Google OK en producción |
-| Worker `APP_URL` → Hosting | ✅ |
-| Legales | ✅ `/privacidad` `/cookies` `/terminos` + footer |
-| Consentimiento analítica | ✅ banner + `pedalmap_consent` |
-| Rate limit Worker | ✅ 40 req/min ORS · 20/min Stripe (Cache API) |
-| Superficie por modalidad | ✅ scoring + multi-strategy ORS |
-| Explorar vacío | ✅ demos Madrid/Sierra |
-| Stripe | ⚠️ **test/sandbox** (no live hasta cobrar) |
-| Dominio propio | ⏳ `pedalmap.es` — ver `docs/DOMAIN_PEDALMAP_ES.md` (IONOS DNS + Firebase custom domain) |
-| Rules/indexes deploy owner | ✅ publicadas por owner (2026-08-10) |
+| Worker `APP_URL` | ✅ `https://pedalmap.es` |
+| CORS `ALLOWED_ORIGINS` | ✅ apex + www + legacy + localhost |
+| Sitemap / robots | ✅ `pedalmap.es` (ver `docs/DOMAIN_AUDIT.md`) |
+| Auth authorized domains | ✅ incluye `pedalmap.es` / `www` |
+| Wahoo secrets | ✅ CLIENT_ID / SECRET / WEBHOOK_TOKEN |
+| iGPSPORT / Garmin | ⏳ pendiente aprobación API |
+| Dominio setup | ✅ `docs/DOMAIN_PEDALMAP_ES.md` |
 
-## Soft-launch gate
+## Notas
 
-1. QA embudo: Google → ruta → paywall → Stripe test → `users.plan=premium` → portal
-2. Owner deploy rules/indexes/storage si aún no:
-```bash
-cd pedalmap
-npx firebase login
-npx firebase deploy --only firestore:rules,firestore:indexes,storage --project pedalmap-79b3a
-```
-3. Hard-refresh Hosting tras cada release
-4. Dominio custom cuando exista: Auth authorized domains + Worker `APP_URL`/`ALLOWED_ORIGINS` + OAuth client
-5. Stripe **live** solo cuando quieras cobrar (`pk_live`/`sk_live`/webhook live)
-
-## Rebuild + redeploy
-
-```bash
-cd pedalmap
-./scripts/build-production.sh
-npx firebase deploy --only hosting --project pedalmap-79b3a
-cd workers/api && npm run deploy
-```
-
-## No hacer
-
-- Blaze / Cloud Functions
-- Stripe **live** sin querer cobrar
-- Meter `ORS_API_KEY` / `sk_*` en Vite
+1. Redeploy Worker tras cambiar `wrangler.toml` vars.
+2. Redeploy Hosting tras sitemap/robots/logo.
+3. Login Google en dominio custom: ver checklist en `docs/DOMAIN_AUDIT.md`.
+4. OAuth client GPS: website `https://pedalmap.es`; callbacks siguen en el Worker.
