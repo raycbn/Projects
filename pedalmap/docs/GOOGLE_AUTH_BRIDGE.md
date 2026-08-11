@@ -1,28 +1,28 @@
 # Google login en `pedalmap.es`
 
-## Problema
+## Estado (2026-08-11)
 
-En móvil, "Continuar con Google" vuelve a `/login` sin sesión.
-
-Causa: la app vive en `pedalmap.es` pero `authDomain` es `*.web.app` (el redirect
-URI de Google OAuth aún no incluye `https://pedalmap.es/__/auth/handler`).
-Los navegadores modernos bloquean el almacenamiento de terceros, así que
-`signInWithRedirect` + `getRedirectResult` no recuperan la sesión.
-
-## Solución temporal (código)
-
-Puente same-origin en Hosting:
-
-1. En `pedalmap.es` → redirige a `https://pedalmap-79b3a.web.app/auth/bridge?return=…`
-2. Ahí Google redirect funciona (`authDomain` = host).
-3. El Worker `POST /auth/custom-token` emite un custom token (service account).
-4. Vuelve a `pedalmap.es/login#pm_ct=…` y `signInWithCustomToken` restaura la sesión.
-
-## Solución permanente (consola)
-
-En Google Cloud → Credenciales → cliente OAuth web de Firebase, añade:
+En Google Cloud Console el cliente OAuth de Firebase ya incluye:
 
 - Orígenes JS: `https://pedalmap.es`, `https://www.pedalmap.es`
 - Redirect URIs: `https://pedalmap.es/__/auth/handler`, `https://www.pedalmap.es/__/auth/handler`
 
-Después se puede poner `authDomain = pedalmap.es` y retirar el puente.
+El SDK usa `authDomain = window.location.hostname` en esos hosts (first-party),
+así que `signInWithRedirect` funciona en móvil sin puente.
+
+## Puente de emergencia
+
+El flujo vía `https://pedalmap-79b3a.web.app/auth/bridge` + custom token del Worker
+sigue en el código. Solo se activa con:
+
+```bash
+VITE_FORCE_GOOGLE_AUTH_BRIDGE=true
+```
+
+Úsalo si alguien quita los redirect URIs de la consola y el login vuelve a fallar.
+
+## Problema original
+
+Con `authDomain = *.web.app` y app en `pedalmap.es`, los navegadores bloquean el
+almacenamiento de terceros: tras elegir la cuenta de Google el usuario volvía a
+`/login` sin sesión.

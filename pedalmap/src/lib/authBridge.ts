@@ -19,11 +19,14 @@ function apiBase(): string {
   ).replace(/\/+$/, '')
 }
 
-/** True when the page origin cannot complete Google redirect (3P storage / OAuth URI). */
+/** True when Google login must hop through *.web.app (legacy / emergency). */
 export function needsGoogleAuthBridge(hostname = window.location.hostname): boolean {
+  // OAuth redirect URIs for pedalmap.es are registered → first-party authDomain.
+  // Keep an escape hatch if Console config regresses.
+  if (String(import.meta.env.VITE_FORCE_GOOGLE_AUTH_BRIDGE || '') !== 'true') {
+    return false
+  }
   if (hostname === AUTH_BRIDGE_HOST || hostname.endsWith('.firebaseapp.com')) return false
-  // Custom domains (and any non-Firebase host) need the bridge until OAuth
-  // redirect URIs include https://<host>/__/auth/handler.
   return hostname === 'pedalmap.es' || hostname === 'www.pedalmap.es'
 }
 

@@ -7,14 +7,20 @@ import {
 } from '@/lib/authBridge'
 
 describe('needsGoogleAuthBridge', () => {
-  it('bridges custom product domains', () => {
-    expect(needsGoogleAuthBridge('pedalmap.es')).toBe(true)
-    expect(needsGoogleAuthBridge('www.pedalmap.es')).toBe(true)
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
-  it('skips Firebase Hosting hosts where redirect already works', () => {
+  it('is off by default now that OAuth URIs include pedalmap.es', () => {
+    expect(needsGoogleAuthBridge('pedalmap.es')).toBe(false)
+    expect(needsGoogleAuthBridge('www.pedalmap.es')).toBe(false)
     expect(needsGoogleAuthBridge('pedalmap-79b3a.web.app')).toBe(false)
-    expect(needsGoogleAuthBridge('pedalmap-79b3a.firebaseapp.com')).toBe(false)
+  })
+
+  it('can be forced back on for emergency', () => {
+    vi.stubEnv('VITE_FORCE_GOOGLE_AUTH_BRIDGE', 'true')
+    expect(needsGoogleAuthBridge('pedalmap.es')).toBe(true)
+    expect(needsGoogleAuthBridge('pedalmap-79b3a.web.app')).toBe(false)
   })
 })
 

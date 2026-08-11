@@ -197,11 +197,9 @@ export class AuthService {
 
   async signInGoogle(): Promise<User | null> {
     track('signup_started', { method: 'google' })
-    // Custom domain + authDomain *.web.app breaks redirect (3P storage). Bridge via web.app.
+    // Emergency only: VITE_FORCE_GOOGLE_AUTH_BRIDGE=true hops via *.web.app.
     if (typeof window !== 'undefined' && needsGoogleAuthBridge()) {
-      startGoogleAuthBridge(
-        `${window.location.origin}/login`,
-      )
+      startGoogleAuthBridge(`${window.location.origin}/login`)
       return null
     }
     return this.signInGoogleDirect()
