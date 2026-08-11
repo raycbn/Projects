@@ -3,30 +3,69 @@ import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { FREE_LIMITS } from '@/domain/types'
 
-const faqs = [
+const faqs: Array<{ q: string; a: string[] }> = [
   {
-    q: '¿Cómo crear una ruta en bicicleta?',
-    a: 'Abre el planificador, busca dónde empiezas y dónde quieres llegar, elige el tipo de bici y pulsa Crear ruta. PedalMap calcula un recorrido real con distancia, tiempo, desnivel y composición de superficie.',
+    q: '¿Cómo creo mi primera ruta?',
+    a: [
+      'Entra en Crear una ruta. Escribe dónde sales y dónde quieres llegar (o toca el mapa), elige tu tipo de bici y pulsa Crear ruta.',
+      'En unos segundos verás el recorrido en el mapa, con kilómetros, tiempo estimado, desnivel y qué tipo de suelo vas a pisar.',
+    ],
   },
   {
-    q: '¿Qué cambia según el tipo de bici?',
-    a: 'Carretera, urbana, gravel, MTB y e-bike usan Valhalla (tipo de bici + superficie en el cálculo). Circulares siguen con ORS. Verás un % de idoneidad de la mejor ruta encontrada.',
+    q: '¿Para qué sirve elegir el tipo de bici?',
+    a: [
+      'No es solo una etiqueta: cambia cómo PedalMap busca el camino. Carretera prioriza asfalto; gravel y MTB admiten más pista o tierra; urbana busca un trayecto práctico en ciudad; e-bike adapta el ritmo.',
+      'También verás si la ruta encaja bien con tu modalidad (por ejemplo, mucha tierra en una bici de carretera).',
+    ],
   },
   {
-    q: '¿Cómo crear una ruta GPX?',
-    a: 'Tras calcular la ruta, en el panel de exportación puedes descargar o compartir el GPX (Premium). En Free puedes planificar y guardar con límites.',
+    q: '¿Qué es el modo Objetivo (ruta circular)?',
+    a: [
+      'Sirve cuando no tienes un destino concreto, solo quieres rodar X kilómetros o un desnivel concreto y volver al mismo sitio.',
+      'Indicas el punto de salida, los km (y el desnivel si quieres) y PedalMap propone una circular lo más cercana a ese objetivo. Esta opción forma parte de Premium.',
+    ],
   },
   {
-    q: '¿Cómo calcular el desnivel?',
-    a: 'Al calcular la ruta pedimos elevación al motor de routing y mostramos desnivel positivo/negativo y un gráfico interactivo.',
+    q: '¿Cómo veo el desnivel de la ruta?',
+    a: [
+      'Al calcular la ruta, PedalMap pide el perfil de elevación del recorrido. Verás el desnivel positivo y negativo, y un gráfico que puedes seguir junto al mapa.',
+      'Así sabes si la salida es suave o si hay un puerto antes de salir de casa.',
+    ],
   },
   {
-    q: '¿Cómo crear una ruta circular u Objetivo?',
-    a: 'Elige el modo Objetivo, indica el punto de partida, los km y el desnivel deseado. Generamos una circular con Valhalla (perfil de bici + superficie) buscando el mejor ajuste.',
+    q: '¿Qué pasa con el viento?',
+    a: [
+      'PedalMap consulta el viento previsto a lo largo de la línea de la ruta. Te ayuda a decidir si ese día conviene otro sentido, otra hora u otra alternativa.',
+      'Es una ayuda de planificación: el tiempo real puede cambiar, sobre todo en montaña.',
+    ],
   },
   {
-    q: '¿Free o Premium?',
-    a: `Free: hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones/mes y ${FREE_LIMITS.maxActivePreferences} filtros a la vez. Premium: ilimitado, GPX y más.`,
+    q: '¿Puedo descargar la ruta en GPX?',
+    a: [
+      'Sí, con Premium: cuando la ruta esté calculada, en el panel de exportación puedes descargar el archivo GPX o compartirlo.',
+      'Así la abres en el GPS del manillar, OsmAnd, Organic Maps, Garmin Connect, Wahoo y otras apps compatibles. En Free puedes planificar y guardar rutas con los límites del plan.',
+    ],
+  },
+  {
+    q: '¿Necesito cuenta para empezar?',
+    a: [
+      'No. Puedes abrir el planificador y probar sin registrarte.',
+      'Crea una cuenta (email o Google) cuando quieras guardar rutas en la nube, sincronizar entre dispositivos o pasar a Premium.',
+    ],
+  },
+  {
+    q: '¿Qué incluye Free y qué aporta Premium?',
+    a: [
+      `Free es para empezar de verdad: hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes y hasta ${FREE_LIMITS.maxActivePreferences} filtros a la vez. Incluye rutas de A a B, ida y vuelta, viento y superficie.`,
+      'Premium quita esos techos, añade el modo Objetivo (circular por km/desnivel), la exportación GPX y más filtros. Cuesta 4,99 €/mes o 39,99 €/año. Puedes probar Free sin tarjeta.',
+    ],
+  },
+  {
+    q: '¿Funciona en el móvil?',
+    a: [
+      'Sí. PedalMap es una web pensada para usarla en el teléfono: planificas, guardas y, si quieres, inicias el seguimiento GPS de la salida.',
+      'Para navegar con el archivo en un GPS dedicado, exporta el GPX (Premium) y ábrelo en tu dispositivo o app favorita.',
+    ],
   },
 ]
 
@@ -181,16 +220,31 @@ export function LandingPage() {
         <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
           Preguntas frecuentes
         </h2>
+        <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
+          Respuestas cortas a lo que más suelen preguntar antes de la primera salida.
+        </p>
         <div className="mt-6 space-y-3">
           {faqs.map((item) => (
             <details
               key={item.q}
-              className="group rounded-2xl bg-white/80 p-4 ring-1 ring-[var(--color-fog)]"
+              className="group rounded-2xl bg-white/80 p-4 ring-1 ring-[var(--color-fog)] open:ring-[var(--color-trail)]/35"
             >
-              <summary className="cursor-pointer list-none font-semibold text-[var(--color-forest)]">
-                {item.q}
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3 font-semibold text-[var(--color-forest)]">
+                <span>{item.q}</span>
+                <span
+                  aria-hidden
+                  className="mt-0.5 shrink-0 text-[var(--color-stone)] transition group-open:rotate-45"
+                >
+                  +
+                </span>
               </summary>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--color-stone)]">{item.a}</p>
+              <div className="mt-3 space-y-3 border-t border-[var(--color-fog)] pt-3">
+                {item.a.map((paragraph) => (
+                  <p key={paragraph} className="text-sm leading-relaxed text-[var(--color-stone)]">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
             </details>
           ))}
         </div>
