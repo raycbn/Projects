@@ -32,6 +32,7 @@ export function NavigationPage() {
     title: 'Navegación | PedalMap',
     description: 'Sigue tu ruta PedalMap con GPS, indicaciones y aviso si te sales.',
     path: '/navegacion',
+    noindex: true,
   })
 
   const [packet, setPacket] = useState<GpsRoutePacket | null>(null)

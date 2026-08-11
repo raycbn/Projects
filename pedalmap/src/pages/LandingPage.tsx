@@ -1,42 +1,29 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { useJsonLd } from '@/hooks/useJsonLd'
 import { FREE_LIMITS, FREE_TRIALS, ANNUAL_TRIAL_DAYS } from '@/domain/types'
-
-const faqs = [
-  {
-    q: '¿Cómo crear una ruta en bicicleta?',
-    a: 'Abre el planificador, busca dónde empiezas y dónde quieres llegar, elige el tipo de bici y pulsa Crear ruta. PedalMap calcula un recorrido real con distancia, tiempo, desnivel y composición de superficie.',
-  },
-  {
-    q: '¿Qué cambia según el tipo de bici?',
-    a: 'Carretera, urbana, gravel, MTB y e-bike usan Valhalla primero (tipo de bici + superficie en el cálculo), con ORS solo como respaldo. Verás un % de idoneidad de la mejor ruta encontrada.',
-  },
-  {
-    q: '¿Cómo crear una ruta GPX?',
-    a: 'Tras calcular la ruta, exporta GPX (1 gratis por semana en Free; ilimitado en Premium).',
-  },
-  {
-    q: '¿Cómo calcular el desnivel?',
-    a: 'Al calcular la ruta pedimos elevación al motor de routing y mostramos desnivel positivo/negativo y un gráfico interactivo.',
-  },
-  {
-    q: '¿Cómo crear una ruta circular u Objetivo?',
-    a: 'Objetivo incluye 1 prueba Free al mes. Elige el modo Objetivo, indica el punto de partida, los km y el desnivel. Generamos una circular con Valhalla primero (perfil de bici + superficie). Premium = Objetivo ilimitado.',
-  },
-  {
-    q: '¿Free o Premium?',
-    a: `Free: hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones/mes, 1 GPX/semana, 1 Objetivo/mes y ${FREE_LIMITS.maxActivePreferences} filtros a la vez. Premium: sin techos.`,
-  },
-]
+import { landingFaqs } from '@/content/faqs'
+import {
+  faqPageJsonLd,
+  organizationJsonLd,
+  softwareApplicationJsonLd,
+} from '@/lib/jsonLd'
 
 export function LandingPage() {
   usePageMeta({
     title: 'PedalMap — Crea tu próxima ruta en bici',
     description:
-      'Planifica rutas ciclistas reales con mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
+      'Planifica rutas ciclistas reales en España con mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
     path: '/',
   })
+
+  const jsonLd = useMemo(
+    () => [organizationJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(landingFaqs)],
+    [],
+  )
+  useJsonLd('landing', jsonLd)
 
   return (
     <main>
@@ -184,7 +171,7 @@ export function LandingPage() {
           Preguntas frecuentes
         </h2>
         <div className="mt-6 space-y-3">
-          {faqs.map((item) => (
+          {landingFaqs.map((item) => (
             <details
               key={item.q}
               className="group rounded-2xl bg-white/80 p-4 ring-1 ring-[var(--color-fog)]"

@@ -28,6 +28,7 @@ export function ActivityPage() {
     title: 'Actividad GPS | PedalMap',
     description: 'Graba tu salida en bici con GPS y guarda la actividad en PedalMap.',
     path: '/actividad',
+    noindex: true,
   })
 
   const { user, firebaseReady } = useAuth()

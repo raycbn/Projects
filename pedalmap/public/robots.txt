@@ -1,4 +1,15 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://pedalmap.app/sitemap.xml
+# App / private surfaces — prefer noindex via meta; disallow as belt-and-suspenders
+Disallow: /my-routes
+Disallow: /perfil
+Disallow: /actividades
+Disallow: /actividad
+Disallow: /navegacion
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /auth/
+
+Sitemap: https://pedalmap.es/sitemap.xml

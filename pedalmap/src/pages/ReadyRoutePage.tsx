@@ -88,6 +88,7 @@ export function ReadyRoutePage() {
       ? `${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)}`
       : 'Tu ruta lista para salir, guardar o compartir.',
     path: '/ruta',
+    noindex: true,
   })
 
   // Abrir desde Mis rutas: routeId gana siempre (no mezclar con draft del planner).

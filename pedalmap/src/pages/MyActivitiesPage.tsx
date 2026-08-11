@@ -25,6 +25,7 @@ export function MyActivitiesPage() {
     title: 'Mis rodadas | PedalMap',
     description: 'Historial suave de salidas GPS con PedalMap.',
     path: '/actividades',
+    noindex: true,
   })
 
   const { user, firebaseReady } = useAuth()

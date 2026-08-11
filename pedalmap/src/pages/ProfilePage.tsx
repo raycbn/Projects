@@ -15,6 +15,7 @@ export function ProfilePage() {
     title: 'Perfil | PedalMap',
     description: 'Gestiona tu cuenta y preferencias de ciclismo en PedalMap.',
     path: '/perfil',
+    noindex: true,
   })
   const { user, profile, logout, updateBikePreferences, updateNotifications } = useAuth()
   const [bikeType, setBikeType] = useState<BikeType>(profile?.bikePreferences.bikeType ?? 'road')

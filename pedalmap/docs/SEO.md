@@ -1,43 +1,46 @@
-# SEO — PedalMap
+# SEO & GEO — PedalMap
 
-## Principios
+## Objetivo
 
-- Contenido útil para ciclistas reales
-- **No** keyword stuffing ni miles de páginas vacías
-- Meta title/description/canonical/OG por página
-- `robots.txt` + `sitemap.xml`
+Salir en Google (España, ciclismo) y ser citables por motores generativos (ChatGPT, Perplexity, Gemini, AI Overviews) como **el planificador de rutas bici en España** (mapa + desnivel + viento + superficie + GPX).
 
-## Páginas Fase 1
+## Hecho en código (esta fase)
 
-| Ruta | Intención |
-|------|-----------|
-| `/` | Brand + conversión a planificador |
-| `/route-planner` | Herramienta (indexable con cuidado) |
-| `/crear-ruta-bicicleta` | Long-tail |
-| `/planificador-rutas-bici` | Long-tail |
-| `/crear-ruta-gpx` | Long-tail |
-| `/rutas-bicicleta-madrid` | Local |
-| `/rutas-mtb-madrid` | Local MTB |
-| `/rutas-gravel-madrid` | Local gravel |
-| `/premium` | Monetización |
-| `/privacidad` | Confianza / RGPD |
+- Dominio canónico unificado: **https://pedalmap.es** (`index.html`, `robots.txt`, `sitemap.xml`, `usePageMeta`)
+- OG/Twitter + imagen `/og-default.jpg`
+- JSON-LD: `Organization` + `SoftwareApplication` + `FAQPage` (landing) y `WebPage` (guías)
+- `noindex` en rutas privadas + `Disallow` en robots
+- Guías enriquecidas + hubs locales: Madrid (bici/MTB/gravel), Barcelona, Valencia, Sevilla
+- Enlaces internos en footer, Explorar → Guías y “Sigue explorando”
 
-## Implementación actual
+## Qué hacer tú (cuenta / ads) — orden
 
-- SPA React + `usePageMeta` actualiza title/meta/canonical en cliente
-- FAQ en landing con preguntas reales
-- Sitemap estático en `public/sitemap.xml`
+1. **Google Search Console** → propiedad `pedalmap.es` → verificar DNS o meta → enviar `https://pedalmap.es/sitemap.xml`
+2. **Bing Webmaster** (opcional, barato) con el mismo sitemap
+3. Redirección 301 de `pedalmap-79b3a.web.app` → `pedalmap.es` (Firebase Hosting / DNS) si aún no está
+4. **Publicidad** (después de GSC midiendo):
+   - Google Ads Search: campañas exactas en “crear ruta bicicleta”, “planificador rutas bici”, “crear ruta GPX” → landing `/crear-ruta-bicicleta` etc.
+   - Presupuesto bajo al inicio; landing = página SEO, no solo `/`
+   - Meta/Instagram solo cuando haya creatividades de producto (mapa real), no genéricas
+5. **GEO / autoridad**: 2–4 artículos reales al mes (salidas, cómo exportar a Garmin/Wahoo, viento en ruta) cuando haya blog; hasta entonces, guías + FAQ claras
 
-## Mejoras futuras (recomendadas)
+## No hacer
 
-1. Prerender/SSG de landing + páginas SEO (vite-plugin-ssr / prerender)
-2. JSON-LD `FAQPage` / `SoftwareApplication`
-3. Blog de salidas reales (contenido editorial)
-4. Páginas de rutas públicas indexables `/route/{slug}` con meta dinámica server-side
+- Miles de páginas vacías por pueblo
+- Keyword stuffing
+- Comprar backlinks basura
+- Indexar `/my-routes`, login, navegación
 
-## Keywords objetivo (no spam)
+## Siguiente fase técnica (código)
 
-- creador / planificador rutas bicicleta
-- crear ruta GPX
-- rutas bicicleta / MTB / gravel Madrid
+1. Prerender/SSG de `/` + guías (máximo impacto crawl)
+2. Analytics real (Plausible o GA4) detrás del consentimiento
+3. Blog editorial ligero + rutas públicas indexables `/route/{slug}`
+4. Verification meta GSC cuando tengas el código
+
+## Keywords (calidad > volumen)
+
+- crear ruta bicicleta / planificador rutas bici / crear ruta GPX
+- rutas bicicleta Madrid | Barcelona | Valencia | Sevilla
+- rutas MTB / gravel Madrid
 - calcular desnivel ruta bici

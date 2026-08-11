@@ -29,6 +29,7 @@ export function MyRoutesPage() {
     title: 'Mis rutas | PedalMap',
     description: 'Consulta, edita, comparte y exporta tus rutas ciclistas guardadas.',
     path: '/my-routes',
+    noindex: true,
   })
 
   const { user, profile, firebaseReady } = useAuth()

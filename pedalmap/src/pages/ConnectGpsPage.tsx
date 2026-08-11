@@ -12,6 +12,7 @@ export function ConnectGpsPage() {
     title: 'Conectar GPS | PedalMap',
     description: 'Graba en el móvil o trae salidas desde tu ciclocomputador a PedalMap.',
     path: '/actividades/conectar',
+    noindex: true,
   })
 
   const { user } = useAuth()

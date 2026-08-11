@@ -290,7 +290,7 @@ export function ExplorePage() {
               <section className="space-y-3">
                 <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Guías</h2>
                 <div className="grid gap-3">
-                  {seoPages.slice(0, 4).map((page) => (
+                  {seoPages.map((page) => (
                     <Link
                       key={page.path}
                       to={page.path}

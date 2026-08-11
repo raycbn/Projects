@@ -1,10 +1,13 @@
 import { useEffect } from 'react'
+import { absoluteUrl, DEFAULT_OG_IMAGE, SITE_NAME } from '@/lib/site'
 
 interface PageMeta {
   title: string
   description: string
   path: string
   image?: string
+  /** When true, ask crawlers not to index (private/app routes). */
+  noindex?: boolean
 }
 
 function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
@@ -27,18 +30,24 @@ function upsertCanonical(href: string) {
   link.href = href
 }
 
-export function usePageMeta({ title, description, path, image }: PageMeta) {
+export function usePageMeta({ title, description, path, image, noindex = false }: PageMeta) {
   useEffect(() => {
-    const origin = window.location.origin
-    const url = `${origin}${path}`
+    const url = absoluteUrl(path)
+    const ogImage = image || DEFAULT_OG_IMAGE
     document.title = title
     upsertMeta('name', 'description', description)
+    upsertMeta('name', 'robots', noindex ? 'noindex,nofollow' : 'index,follow')
+    upsertMeta('property', 'og:site_name', SITE_NAME)
     upsertMeta('property', 'og:title', title)
     upsertMeta('property', 'og:description', description)
     upsertMeta('property', 'og:url', url)
     upsertMeta('property', 'og:type', 'website')
-    if (image) upsertMeta('property', 'og:image', image)
+    upsertMeta('property', 'og:locale', 'es_ES')
+    upsertMeta('property', 'og:image', ogImage)
     upsertMeta('name', 'twitter:card', 'summary_large_image')
+    upsertMeta('name', 'twitter:title', title)
+    upsertMeta('name', 'twitter:description', description)
+    upsertMeta('name', 'twitter:image', ogImage)
     upsertCanonical(url)
-  }, [title, description, path, image])
+  }, [title, description, path, image, noindex])
 }
