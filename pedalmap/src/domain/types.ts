@@ -279,14 +279,19 @@ export class GeocodingError extends Error {
   }
 }
 
-/** Live GPS activity (Fase 5). */
+/** Live GPS activity (Fase 5) + Strava imports. */
 export type ActivityStatus = 'recording' | 'paused' | 'finished'
+export type ActivitySource = 'gps' | 'strava' | 'wahoo' | 'igpsport' | 'garmin'
 
 export interface ActivityTrackPoint {
   position: LatLng
   elevationMeters?: number
   recordedAt: string
   accuracyMeters?: number
+  heartRateBpm?: number
+  cadenceRpm?: number
+  powerWatts?: number
+  speedMetersPerSecond?: number
 }
 
 export interface Activity {
@@ -296,13 +301,44 @@ export interface Activity {
   title: string
   status: ActivityStatus
   bikeType: BikeType
+  source?: ActivitySource
+  /** e.g. strava:123456789 — used to avoid duplicate imports */
+  externalId?: string
   startedAt: string
   finishedAt?: string
   track: ActivityTrackPoint[]
   stats: {
     distanceMeters: number
+    /** Elapsed wall-clock time (includes pauses / stops). */
     durationSeconds: number
+    /** Time actually moving — Free (Strava Free often only shows elapsed). */
+    movingTimeSeconds?: number
+    stoppedTimeSeconds?: number
     elevationGainMeters: number
+    elevationLossMeters?: number
+    elevationHighestMeters?: number
+    elevationLowestMeters?: number
+    averageHeartRateBpm?: number
+    averageCadenceRpm?: number
+    averagePowerWatts?: number
+    /** Modelled power when no meter — Free analytics. */
+    estimatedPowerWatts?: number
+    averageSpeedMetersPerSecond?: number
+    maxSpeedMetersPerSecond?: number
+    averageGradePercent?: number
+    maxGradePercent?: number
+    /** Vertical ascent metres per hour while moving. */
+    vamMetersPerHour?: number
+    estimatedCaloriesKcal?: number
+    coastingPercent?: number
+    /** Per-km splits — Free (Strava locks richer split tooling behind Premium). */
+    splits?: Array<{
+      index: number
+      distanceMeters: number
+      durationSeconds: number
+      averageSpeedMetersPerSecond: number
+      elevationGainMeters: number
+    }>
   }
   createdAt: string
   updatedAt: string
