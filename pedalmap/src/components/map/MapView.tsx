@@ -755,13 +755,7 @@ export function MapView({
   }, [showUserLocation, followUser])
 
   return (
-    <div
-      className={
-        className
-          ? `relative w-full min-h-[240px] ${className}`
-          : 'relative h-full min-h-[320px] w-full'
-      }
-    >
+    <div className={className ?? 'relative h-full min-h-[320px] w-full'}>
       <div
         ref={containerRef}
         className="absolute inset-0 h-full w-full"

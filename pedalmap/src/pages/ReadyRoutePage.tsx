@@ -309,7 +309,7 @@ export function ReadyRoutePage() {
           }
         >
           <MapView
-            className="h-full w-full"
+            className="absolute inset-0 h-full w-full"
             waypoints={draft.waypoints}
             geometry={draft.geometry}
             windOverlay={windOverlay}

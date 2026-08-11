@@ -530,8 +530,9 @@ export function RoutePlanner() {
 
       <section
         className={clsx(
-          'relative order-1 min-h-[42vh] flex-1 bg-[var(--color-fog)] lg:order-2 lg:min-h-0',
-          mapExpanded && 'max-lg:min-h-0 max-lg:flex-1',
+          // Explicit mobile height so MapLibre always gets a real box; desktop stretches in the row.
+          'relative order-1 h-[min(42vh,22rem)] w-full flex-1 bg-[var(--color-fog)] lg:order-2 lg:h-auto lg:min-h-0',
+          mapExpanded && 'max-lg:!h-full max-lg:min-h-0 max-lg:flex-1',
         )}
       >
         <Suspense
