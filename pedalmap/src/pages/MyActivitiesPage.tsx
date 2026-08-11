@@ -143,77 +143,160 @@ export function MyActivitiesPage() {
         </Link>
       </div>
 
-      <section className="mt-6 rounded-2xl bg-[var(--color-mist)]/50 p-4 ring-1 ring-[var(--color-fog)]">
+      <section
+        id="wahoo"
+        className="mt-6 scroll-mt-24 rounded-2xl bg-[var(--color-mist)]/50 p-4 ring-1 ring-[var(--color-fog)]"
+      >
         <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
           Conectar tu GPS
         </h2>
         <p className="mt-1 text-sm text-[var(--color-stone)]">
-          APIs oficiales (iGPSPORT, Wahoo, Garmin). Una vez conectado, el auto-upload llega por
-          webhook al Worker — sin pasos manuales.
+          Wahoo ya está listo: al terminar una salida en el ELEMNT / app Wahoo, PedalMap la recibe
+          sola. iGPSPORT y Garmin llegarán cuando aprueben la API.
         </p>
         {!user || user.isAnonymous ? (
           <p className="mt-3 text-sm text-[var(--color-stone)]">
             <Link to="/login" className="font-semibold text-[var(--color-trail)]">
               Inicia sesión
             </Link>{' '}
-            con una cuenta real para vincular el GPS.
+            con una cuenta real para vincular Wahoo.
           </p>
         ) : (
-          <ul className="mt-4 space-y-3">
-            {(providers.length
-              ? providers
-              : ([
-                  { id: 'igpsport', label: 'iGPSPORT', configured: false, connected: false, externalUserId: null },
-                  { id: 'wahoo', label: 'Wahoo', configured: false, connected: false, externalUserId: null },
-                  { id: 'garmin', label: 'Garmin', configured: false, connected: false, externalUserId: null },
-                ] as GpsProviderStatus[])
-            ).map((p) => (
-              <li
-                key={p.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/90 px-3 py-2 ring-1 ring-[var(--color-fog)]"
-              >
-                <div>
-                  <p className="font-semibold text-[var(--color-forest)]">{p.label}</p>
-                  <p className="text-xs text-[var(--color-stone)]">
-                    {!p.configured
-                      ? 'Pendiente de API / secrets (ver docs)'
-                      : p.connected
-                        ? 'Conectado · auto-upload activo'
-                        : 'Listo para conectar'}
-                  </p>
+          (() => {
+            const list: GpsProviderStatus[] =
+              providers.length > 0
+                ? providers
+                : [
+                    {
+                      id: 'wahoo',
+                      label: 'Wahoo',
+                      configured: true,
+                      connected: false,
+                      externalUserId: null,
+                    },
+                    {
+                      id: 'igpsport',
+                      label: 'iGPSPORT',
+                      configured: false,
+                      connected: false,
+                      externalUserId: null,
+                    },
+                    {
+                      id: 'garmin',
+                      label: 'Garmin',
+                      configured: false,
+                      connected: false,
+                      externalUserId: null,
+                    },
+                  ]
+            const wahoo =
+              list.find((p) => p.id === 'wahoo') ??
+              ({
+                id: 'wahoo' as const,
+                label: 'Wahoo',
+                configured: true,
+                connected: false,
+                externalUserId: null,
+              } satisfies GpsProviderStatus)
+            const others = list.filter((p) => p.id !== 'wahoo')
+
+            return (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-2xl bg-[var(--color-forest)] px-4 py-4 text-white">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-xl font-bold">Wahoo</p>
+                      <p className="mt-1 text-sm text-white/80">
+                        {wahoo.connected
+                          ? 'Conectado · las nuevas salidas se cargan solas'
+                          : 'API oficial activa · conecta tu cuenta Wahoo'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {wahoo.connected ? (
+                        <>
+                          <Button
+                            size="sm"
+                            className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
+                            disabled={busyProvider === 'wahoo'}
+                            onClick={() => void syncNow('wahoo')}
+                          >
+                            Sincronizar ahora
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="!border-white/40 !text-white"
+                            disabled={busyProvider === 'wahoo'}
+                            onClick={() => void disconnect('wahoo')}
+                          >
+                            Quitar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
+                          disabled={busyProvider === 'wahoo'}
+                          onClick={() => void connect('wahoo')}
+                        >
+                          {busyProvider === 'wahoo' ? 'Abriendo…' : 'Conectar Wahoo'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {!p.configured ? null : !p.connected ? (
-                    <Button
-                      size="sm"
-                      disabled={busyProvider === p.id}
-                      onClick={() => void connect(p.id)}
+
+                <ul className="space-y-2">
+                  {others.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/90 px-3 py-2 ring-1 ring-[var(--color-fog)]"
                     >
-                      Conectar
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        size="sm"
-                        disabled={busyProvider === p.id}
-                        onClick={() => void syncNow(p.id)}
-                      >
-                        Sincronizar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={busyProvider === p.id}
-                        onClick={() => void disconnect(p.id)}
-                      >
-                        Quitar
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                      <div>
+                        <p className="font-semibold text-[var(--color-forest)]">{p.label}</p>
+                        <p className="text-xs text-[var(--color-stone)]">
+                          {!p.configured
+                            ? 'Próximamente (pendiente de API)'
+                            : p.connected
+                              ? 'Conectado · auto-upload activo'
+                              : 'Listo para conectar'}
+                        </p>
+                      </div>
+                      {p.configured && !p.connected && (
+                        <Button
+                          size="sm"
+                          disabled={busyProvider === p.id}
+                          onClick={() => void connect(p.id)}
+                        >
+                          Conectar
+                        </Button>
+                      )}
+                      {p.configured && p.connected && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            disabled={busyProvider === p.id}
+                            onClick={() => void syncNow(p.id)}
+                          >
+                            Sincronizar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busyProvider === p.id}
+                            onClick={() => void disconnect(p.id)}
+                          >
+                            Quitar
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()
         )}
       </section>
 

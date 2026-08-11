@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { track } from '@/lib/analytics'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useAuth } from '@/app/AuthContext'
+import { isPremiumUser } from '@/lib/plan'
 import { stripeService } from '@/services/StripeService'
 import { fetchServerEntitlements, syncServerPlan } from '@/lib/planSync'
 
@@ -27,7 +28,7 @@ export function PremiumPage() {
     return null
   })
   const stripeReady = stripeService.isConfigured()
-  const isPremium = profile?.plan === 'premium'
+  const isPremium = isPremiumUser(profile)
 
   // After Stripe success, poll Worker entitlements until plan flips (webhook lag).
   useEffect(() => {
@@ -65,6 +66,7 @@ export function PremiumPage() {
   }, [params, user])
 
   async function startCheckout(interval: 'month' | 'year') {
+    if (isPremium) return
     if (!user || user.isAnonymous) {
       setMessage('Inicia sesión para suscribirte.')
       return
@@ -113,6 +115,45 @@ export function PremiumPage() {
     }
   }
 
+  if (isPremium) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-12 pb-24">
+        <p className="label-caps text-[var(--color-trail)]">Tu plan</p>
+        <h1 className="mt-2 font-display text-4xl font-extrabold text-[var(--color-forest)]">
+          Premium activo
+        </h1>
+        <p className="mt-3 text-[var(--color-stone)]">
+          Tienes rutas, filtros, Objetivo y GPX sin límites
+          {profile?.email ? ` en ${profile.email}` : ''}.
+        </p>
+        <ul className="mt-6 space-y-2 text-sm text-[var(--color-stone)]">
+          <li>· Rutas y guardados ilimitados</li>
+          <li>· Exportación GPX</li>
+          <li>· Filtros sin techo</li>
+          <li>· Modo Objetivo (circular km + desnivel)</li>
+        </ul>
+        <div className="mt-8 flex flex-wrap gap-2">
+          <Link to="/route-planner">
+            <Button>Crear una ruta</Button>
+          </Link>
+          <Button variant="secondary" disabled={busy} onClick={() => void openPortal()}>
+            Gestionar suscripción
+          </Button>
+          <Link to="/perfil">
+            <Button variant="ghost">Ir al perfil</Button>
+          </Link>
+        </div>
+        {(message || syncingPlan) && (
+          <p className="mt-6 rounded-2xl bg-[var(--color-mist)] px-4 py-3 text-sm text-[var(--color-forest)]">
+            {syncingPlan && !message?.includes('activado')
+              ? 'Esperando confirmación del webhook Stripe…'
+              : message}
+          </p>
+        )}
+      </main>
+    )
+  }
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-12 pb-24">
       <p className="label-caps text-[var(--color-trail)]">Premium</p>
@@ -123,12 +164,6 @@ export function PremiumPage() {
         Quita los límites Free: rutas, filtros y GPX sin techo. Empieza gratis y sube cuando lo
         necesites.
       </p>
-
-      {isPremium && (
-        <p className="mt-4 rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_28%,white)] px-4 py-3 text-sm font-semibold text-[var(--color-forest)]">
-          Tu cuenta es Premium{profile?.email ? ` (${profile.email})` : ''}.
-        </p>
-      )}
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <div className="rounded-3xl bg-white/90 p-6 ring-1 ring-[var(--color-fog)]">
@@ -154,24 +189,16 @@ export function PremiumPage() {
             <li>Sin paywall en el planificador</li>
           </ul>
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button disabled={busy || isPremium} onClick={() => void startCheckout('year')}>
+            <Button disabled={busy} onClick={() => void startCheckout('year')}>
               Anual 39,99 €
             </Button>
             <Button
               variant="ghost"
               className="!border-white/40 !text-white"
-              disabled={busy || isPremium}
+              disabled={busy}
               onClick={() => void startCheckout('month')}
             >
               Mensual 4,99 €
-            </Button>
-            <Button
-              variant="ghost"
-              className="!border-white/40 !text-white"
-              disabled={busy}
-              onClick={() => void openPortal()}
-            >
-              Gestionar
             </Button>
           </div>
           <p className="mt-3 text-xs text-white/50">
