@@ -85,7 +85,12 @@ export function RouteWeatherPanel({
         const day = best ? meteoDayKey(best.startHour) : null
         setSelectedDay(day)
         onSelectWindow(best)
-        onSelectHour(null)
+        // Map uses the best hour inside that window (real sample, not a bad average).
+        const bestHour =
+          best?.bestHourTime != null
+            ? (data.hours.find((h) => h.time === best.bestHourTime) ?? null)
+            : null
+        onSelectHour(bestHour)
         track('weather_forecast_loaded', { windows: data.windows.length, geometryKey: identity })
       })
       .catch((err) => {
@@ -128,9 +133,9 @@ export function RouteWeatherPanel({
   return (
     <section className="space-y-3 p-2">
       <p className="text-xs text-[var(--color-stone)]">
-        El mapa colorea la ruta al cargar el viento (verde cola · azul lateral · naranja cara) y dibuja
-        flechas hacia dónde sopla. Solo mostramos ventanas y horas futuras. Toca otra para actualizar el
-        mapa.
+        Calculamos tramos reales de ~3 h solo con horas futuras (viento, rachas, lluvia y
+        temperatura respecto al rumbo de ida). El mapa usa la mejor hora de ese tramo. Toca otra
+        ventana u hora para actualizarlo.
       </p>
 
       {loading && <p className="text-sm text-[var(--color-stone)]">Calculando viento…</p>}
@@ -201,11 +206,7 @@ export function RouteWeatherPanel({
                         ? 'bg-[var(--color-forest)] text-white'
                         : 'bg-white ring-1 ring-[var(--color-fog)] text-[var(--color-forest)]',
                     )}
-                    onClick={() => {
-                      // Parent clears the window when an hour is set — don't call
-                      // onSelectWindow(null) here or it wipes the hour selection.
-                      onSelectHour(h)
-                    }}
+                    onClick={() => onSelectHour(h)}
                     title={`${formatWeatherDay(h.time)} · ${Math.round(h.windSpeedKmh)} km/h`}
                   >
                     {formatWeatherHour(h.time)}
@@ -218,7 +219,6 @@ export function RouteWeatherPanel({
           <ul className="space-y-2">
             {(dayWindows ?? []).map((w) => {
               const active =
-                !selectedHour &&
                 selectedWindow?.startHour === w.startHour &&
                 selectedWindow?.endHour === w.endHour
               return (
@@ -233,7 +233,11 @@ export function RouteWeatherPanel({
                     )}
                     onClick={() => {
                       onSelectWindow(w)
-                      onSelectHour(null)
+                      const hour =
+                        w.bestHourTime != null
+                          ? (forecast?.hours.find((h) => h.time === w.bestHourTime) ?? null)
+                          : null
+                      onSelectHour(hour)
                     }}
                   >
                     <div className="flex flex-wrap items-center gap-2">
@@ -252,6 +256,9 @@ export function RouteWeatherPanel({
                     <p className="mt-1 text-xs text-[var(--color-stone)]">
                       Viento {w.windSpeedKmh} km/h desde {w.windDirLabel} ({w.relative}) ·{' '}
                       {w.temperatureC}°C · precip {w.precipitationMm} mm
+                      {w.bestHourTime
+                        ? ` · mapa ${formatWeatherHour(w.bestHourTime)}`
+                        : ''}
                     </p>
                     {w.notes.length > 0 && (
                       <p className="mt-0.5 text-[11px] text-[var(--color-stone)]">

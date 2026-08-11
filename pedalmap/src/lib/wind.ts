@@ -22,29 +22,78 @@ export function bearingLabel(degrees: number): string {
  * segment bearings weighted by distance (cheap proxy for head/tail wind).
  */
 export function dominantRouteBearing(geometry: RouteGeometry): number | null {
+  return bearingAlongProgress(geometry, 0, 1)
+}
+
+/**
+ * Bearing for the outbound portion (first ~45% of distance).
+ * More honest for circular / ida-vuelta than a full-loop average (which cancels).
+ */
+export function outboundRouteBearing(geometry: RouteGeometry): number | null {
+  return bearingAlongProgress(geometry, 0, 0.45)
+}
+
+function bearingAlongProgress(
+  geometry: RouteGeometry,
+  fromProgress: number,
+  toProgress: number,
+): number | null {
   const coords = geometry.coordinates
   if (coords.length < 2) return null
+
+  // Build cumulative distance weights in degree-space (same as before).
+  const segWeights: number[] = []
+  let total = 0
+  for (let i = 0; i + 1 < coords.length; i += 1) {
+    const a = { lng: coords[i][0], lat: coords[i][1] }
+    const b = { lng: coords[i + 1][0], lat: coords[i + 1][1] }
+    const w = Math.hypot(b.lat - a.lat, b.lng - a.lng)
+    segWeights.push(w)
+    total += w
+  }
+  if (total <= 0) return null
+
+  const startD = total * Math.max(0, Math.min(1, fromProgress))
+  const endD = total * Math.max(0, Math.min(1, toProgress))
+  if (endD - startD < 1e-12) return null
 
   let sinSum = 0
   let cosSum = 0
   let weight = 0
+  let acc = 0
   const step = Math.max(1, Math.floor(coords.length / 40))
 
   for (let i = 0; i + step < coords.length; i += step) {
     const a = { lng: coords[i][0], lat: coords[i][1] }
     const b = { lng: coords[i + step][0], lat: coords[i + step][1] }
+    let segW = 0
+    for (let k = i; k < i + step && k < segWeights.length; k += 1) segW += segWeights[k]
+    const midD = acc + segW / 2
+    acc += segW
+    if (midD < startD || midD > endD) continue
     const brng = bearingDegrees(a, b)
-    // Approximate segment length in degrees (enough for weighting)
-    const w = Math.hypot(b.lat - a.lat, b.lng - a.lng)
-    if (w < 1e-9) continue
+    if (segW < 1e-9) continue
     const rad = (brng * Math.PI) / 180
-    sinSum += Math.sin(rad) * w
-    cosSum += Math.cos(rad) * w
-    weight += w
+    sinSum += Math.sin(rad) * segW
+    cosSum += Math.cos(rad) * segW
+    weight += segW
   }
 
   if (weight <= 0) return null
   return ((Math.atan2(sinSum, cosSum) * 180) / Math.PI + 360) % 360
+}
+
+/** Circular mean of meteorological wind-from directions (degrees). */
+export function meanWindDirectionDeg(degrees: number[]): number {
+  if (!degrees.length) return 0
+  let sinSum = 0
+  let cosSum = 0
+  for (const d of degrees) {
+    const rad = (d * Math.PI) / 180
+    sinSum += Math.sin(rad)
+    cosSum += Math.cos(rad)
+  }
+  return ((Math.atan2(sinSum / degrees.length, cosSum / degrees.length) * 180) / Math.PI + 360) % 360
 }
 
 /**
@@ -75,23 +124,37 @@ export function scoreRideWindow(input: {
   const notes: string[] = []
   let score = 100
 
-  // Headwind penalty / Tailwind bonus
+  // Headwind hurts; moderate tailwind helps; gale-force "favor" is still rough.
   const windEffect = input.relativeWind * input.windSpeedKmh
   if (windEffect > 8) {
     score -= Math.min(35, windEffect * 1.2)
     notes.push('Viento de cara relevante')
-  } else if (windEffect < -6) {
-    score += Math.min(12, Math.abs(windEffect) * 0.6)
+  } else if (windEffect < -6 && input.windSpeedKmh <= 28) {
+    score += Math.min(10, Math.abs(windEffect) * 0.5)
     notes.push('Viento a favor')
+  } else if (Math.abs(input.relativeWind) < 0.35 && input.windSpeedKmh <= 18) {
+    score += 4
+    notes.push('Viento flojo')
   } else {
-    notes.push('Viento lateral o flojo')
+    notes.push('Viento lateral o variable')
+  }
+
+  // Absolute wind: comfort matters more than a hurricane tailwind.
+  if (input.windSpeedKmh >= 40) {
+    score -= 22
+    notes.push('Viento muy fuerte')
+  } else if (input.windSpeedKmh >= 28) {
+    score -= 12
+    notes.push('Viento fuerte')
+  } else if (input.windSpeedKmh >= 20) {
+    score -= 5
   }
 
   if (input.gustKmh > 45) {
     score -= 20
     notes.push('Rachas fuertes')
   } else if (input.gustKmh > 30) {
-    score -= 8
+    score -= 10
     notes.push('Rachas moderadas')
   }
 

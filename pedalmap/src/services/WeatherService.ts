@@ -2,11 +2,13 @@ import type { LatLng, RouteGeometry } from '@/domain/types'
 import {
   bearingLabel,
   dominantRouteBearing,
+  meanWindDirectionDeg,
+  outboundRouteBearing,
   scoreRideWindow,
   windRelativeFactor,
   windRelativeLabel,
 } from '@/lib/wind'
-import { isMeteoStampUpcoming } from '@/lib/weatherFormat'
+import { isMeteoStampUpcoming, normalizeMeteoStamp } from '@/lib/weatherFormat'
 
 export interface HourlyWeatherPoint {
   time: string // ISO local-ish from Open-Meteo
@@ -29,6 +31,8 @@ export interface RideWindowAdvice {
   temperatureC: number
   precipitationMm: number
   notes: string[]
+  /** Best single hour inside the window (for map overlay). */
+  bestHourTime?: string
 }
 
 export interface RouteWeatherForecast {
@@ -41,6 +45,15 @@ export interface RouteWeatherForecast {
   windows: RideWindowAdvice[]
   attribution: string
 }
+
+/** Daylight ride hours considered for recommendations. */
+const RIDE_HOUR_START = 6
+const RIDE_HOUR_END = 21 // inclusive last start hour
+/** Prefer ~3 h blocks (typical salida); allow 2 h near end of day. */
+const PREFERRED_WINDOW_HOURS = 3
+const MIN_WINDOW_HOURS = 2
+/** When scores are within this margin, prefer the sooner window. */
+const SCORE_TIE_MARGIN = 3
 
 function midpoint(geometry: RouteGeometry): LatLng {
   const coords = geometry.coordinates
@@ -59,6 +72,112 @@ function dayKey(iso: string): string {
   return iso.slice(0, 10)
 }
 
+function hourOf(iso: string): number {
+  return Number(iso.slice(11, 13))
+}
+
+/** Exclusive end stamp one hour after the last included hour start. */
+function exclusiveEndStamp(lastHourStart: string): string {
+  const day = lastHourStart.slice(0, 10)
+  const h = hourOf(lastHourStart) + 1
+  if (h >= 24) {
+    // Ride windows never cross midnight in our daylight model.
+    return `${day}T23:59`
+  }
+  return `${day}T${String(h).padStart(2, '0')}:00`
+}
+
+function overlaps(a: RideWindowAdvice, b: RideWindowAdvice): boolean {
+  return (
+    normalizeMeteoStamp(a.startHour) < normalizeMeteoStamp(b.endHour) &&
+    normalizeMeteoStamp(b.startHour) < normalizeMeteoStamp(a.endHour)
+  )
+}
+
+export function scoreHourSlice(
+  slice: HourlyWeatherPoint[],
+  routeBearingDeg: number | null,
+): RideWindowAdvice | null {
+  if (slice.length < MIN_WINDOW_HOURS) return null
+
+  const hourScores: number[] = []
+  let bestHour = slice[0]
+  let bestHourScore = -Infinity
+
+  for (const h of slice) {
+    const rel =
+      routeBearingDeg == null ? 0 : windRelativeFactor(routeBearingDeg, h.windDirectionDeg)
+    const s = scoreRideWindow({
+      windSpeedKmh: h.windSpeedKmh,
+      gustKmh: h.windGustsKmh,
+      precipMm: h.precipitationMm,
+      tempC: h.temperatureC,
+      relativeWind: rel,
+    }).score
+    hourScores.push(s)
+    if (s > bestHourScore) {
+      bestHourScore = s
+      bestHour = h
+    }
+  }
+
+  // Window is only as rideable as its weaker hours — averaging alone hid gales.
+  const avgScore = hourScores.reduce((a, b) => a + b, 0) / hourScores.length
+  const minScore = Math.min(...hourScores)
+  const score = Math.round(0.45 * avgScore + 0.55 * minScore)
+
+  const windSpeedKmh = slice.reduce((s, h) => s + h.windSpeedKmh, 0) / slice.length
+  const windGustsKmh = slice.reduce((s, h) => s + h.windGustsKmh, 0) / slice.length
+  const temperatureC = slice.reduce((s, h) => s + h.temperatureC, 0) / slice.length
+  const precipitationMm = slice.reduce((s, h) => s + h.precipitationMm, 0)
+  const windDirectionDeg = meanWindDirectionDeg(slice.map((h) => h.windDirectionDeg))
+  const relative =
+    routeBearingDeg == null ? 0 : windRelativeFactor(routeBearingDeg, windDirectionDeg)
+
+  // Notes from the weakest hour (most actionable warning).
+  const worst = slice[hourScores.indexOf(minScore)]
+  const worstRel =
+    routeBearingDeg == null ? 0 : windRelativeFactor(routeBearingDeg, worst.windDirectionDeg)
+  const notes = [
+    ...scoreRideWindow({
+      windSpeedKmh: worst.windSpeedKmh,
+      gustKmh: worst.windGustsKmh,
+      precipMm: precipitationMm,
+      tempC: worst.temperatureC,
+      relativeWind: worstRel,
+    }).notes,
+  ]
+  if (slice.length === 2) notes.push('Tramo corto (~2 h)')
+
+  const startHour = slice[0].time
+  const endHour = exclusiveEndStamp(slice[slice.length - 1].time)
+
+  return {
+    startHour,
+    endHour,
+    score: Math.max(0, Math.min(100, score)),
+    label: labelForScore(score),
+    windSpeedKmh: Math.round(windSpeedKmh),
+    windDirectionDeg: Math.round(windDirectionDeg),
+    windDirLabel: bearingLabel(windDirectionDeg),
+    relative: windRelativeLabel(relative),
+    temperatureC: Math.round(temperatureC),
+    precipitationMm: Math.round(precipitationMm * 10) / 10,
+    notes,
+    bestHourTime: bestHour.time,
+  }
+}
+
+function compareWindows(a: RideWindowAdvice, b: RideWindowAdvice): number {
+  const scoreDiff = b.score - a.score
+  if (Math.abs(scoreDiff) > SCORE_TIE_MARGIN) return scoreDiff
+  // Prefer sooner when nearly tied — more actionable for the rider.
+  const byStart = a.startHour.localeCompare(b.startHour)
+  if (byStart !== 0) return byStart
+  // Prefer longer (~3 h) over short when same start/score.
+  return b.endHour.localeCompare(a.endHour)
+}
+
 export class WeatherService {
   private readonly baseUrl = 'https://api.open-meteo.com/v1/forecast'
 
@@ -67,7 +186,9 @@ export class WeatherService {
     opts?: { forecastDays?: number; signal?: AbortSignal; now?: Date },
   ): Promise<RouteWeatherForecast> {
     const center = midpoint(geometry)
-    const routeBearingDeg = dominantRouteBearing(geometry)
+    // Outbound bearing: for circular/ida-vuelta a full-loop average cancels and lies.
+    const routeBearingDeg =
+      outboundRouteBearing(geometry) ?? dominantRouteBearing(geometry)
     const days = Math.min(16, Math.max(1, opts?.forecastDays ?? 7))
 
     const url = new URL(this.baseUrl)
@@ -134,9 +255,9 @@ export class WeatherService {
   }
 
   /**
-   * Score morning (7–10) and afternoon (16–19) windows per day.
-   * Past windows (already ended in the forecast timezone) are dropped so
-   * "best window" never suggests this morning at 16:00.
+   * Build real ride windows from upcoming daylight hours:
+   * rolling ~3 h blocks (2 h near dusk), scored with vector-mean wind,
+   * past hours excluded, near-ties prefer the sooner start.
    */
   buildWindows(
     hours: HourlyWeatherPoint[],
@@ -145,8 +266,8 @@ export class WeatherService {
   ): RideWindowAdvice[] {
     const timeZone = opts?.timeZone ?? 'UTC'
     const now = opts?.now ?? new Date()
-    // Keep a window if ≥30 min remain before its end (still rideable).
-    const minRemaining = opts?.minRemainingMinutes ?? 30
+    // Hour must not have started yet (strict) — avoids "best = 07:00" at 16:22.
+    const minRemaining = opts?.minRemainingMinutes ?? 0
 
     const byDay = new Map<string, HourlyWeatherPoint[]>()
     for (const h of hours) {
@@ -156,63 +277,43 @@ export class WeatherService {
       byDay.set(key, list)
     }
 
-    const slots: Array<{ start: number; end: number; name: string }> = [
-      { start: 7, end: 10, name: 'mañana' },
-      { start: 16, end: 19, name: 'tarde' },
-    ]
+    const picked: RideWindowAdvice[] = []
 
-    const out: RideWindowAdvice[] = []
-    for (const [day, dayHours] of byDay) {
-      for (const slot of slots) {
-        const endStamp = `${day}T${String(slot.end).padStart(2, '0')}:00`
-        if (!isMeteoStampUpcoming(endStamp, timeZone, now, minRemaining)) {
-          continue
+    for (const [, dayHoursRaw] of byDay) {
+      const upcoming = dayHoursRaw
+        .filter((h) => {
+          const hr = hourOf(h.time)
+          if (hr < RIDE_HOUR_START || hr > RIDE_HOUR_END) return false
+          return isMeteoStampUpcoming(h.time, timeZone, now, minRemaining)
+        })
+        .sort((a, b) => a.time.localeCompare(b.time))
+
+      if (upcoming.length < MIN_WINDOW_HOURS) continue
+
+      const candidates: RideWindowAdvice[] = []
+      for (const len of [PREFERRED_WINDOW_HOURS, MIN_WINDOW_HOURS]) {
+        if (upcoming.length < len) continue
+        for (let i = 0; i + len <= upcoming.length; i += 1) {
+          const advice = scoreHourSlice(upcoming.slice(i, i + len), routeBearingDeg)
+          if (advice) candidates.push(advice)
         }
-
-        const slice = dayHours.filter((h) => {
-          const hour = Number(h.time.slice(11, 13))
-          return hour >= slot.start && hour < slot.end
-        })
-        if (!slice.length) continue
-
-        const avg = (pick: (h: HourlyWeatherPoint) => number) =>
-          slice.reduce((s, h) => s + pick(h), 0) / slice.length
-
-        const windSpeedKmh = avg((h) => h.windSpeedKmh)
-        const windDirectionDeg = avg((h) => h.windDirectionDeg)
-        const windGustsKmh = avg((h) => h.windGustsKmh)
-        const temperatureC = avg((h) => h.temperatureC)
-        const precipitationMm = slice.reduce((s, h) => s + h.precipitationMm, 0)
-
-        const relative =
-          routeBearingDeg == null
-            ? 0
-            : windRelativeFactor(routeBearingDeg, windDirectionDeg)
-        const scored = scoreRideWindow({
-          windSpeedKmh,
-          gustKmh: windGustsKmh,
-          precipMm: precipitationMm,
-          tempC: temperatureC,
-          relativeWind: relative,
-        })
-
-        out.push({
-          startHour: `${day}T${String(slot.start).padStart(2, '0')}:00`,
-          endHour: endStamp,
-          score: scored.score,
-          label: labelForScore(scored.score),
-          windSpeedKmh: Math.round(windSpeedKmh),
-          windDirectionDeg: Math.round(windDirectionDeg),
-          windDirLabel: bearingLabel(windDirectionDeg),
-          relative: windRelativeLabel(relative),
-          temperatureC: Math.round(temperatureC),
-          precipitationMm: Math.round(precipitationMm * 10) / 10,
-          notes: scored.notes,
-        })
       }
+
+      candidates.sort(compareWindows)
+
+      // Keep up to 2 non-overlapping windows per day (e.g. mañana + tarde).
+      const dayPicked: RideWindowAdvice[] = []
+      for (const c of candidates) {
+        if (dayPicked.some((p) => overlaps(p, c))) continue
+        // Prefer 3 h: skip a 2 h candidate that sits inside a better 3 h already considered
+        // (candidates are sorted; first wins).
+        dayPicked.push(c)
+        if (dayPicked.length >= 2) break
+      }
+      picked.push(...dayPicked)
     }
 
-    return out.sort((a, b) => b.score - a.score)
+    return picked.sort(compareWindows)
   }
 }
 

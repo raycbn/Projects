@@ -5,6 +5,7 @@ import {
   windRelativeFactor,
   windRelativeLabel,
   scoreRideWindow,
+  meanWindDirectionDeg,
 } from '@/lib/wind'
 
 describe('wind helpers', () => {
@@ -44,5 +45,10 @@ describe('wind helpers', () => {
     })
     expect(bad.score).toBeLessThan(55)
     expect(good.score).toBeGreaterThan(80)
+  })
+
+  it('means wind directions across north correctly', () => {
+    const mean = meanWindDirectionDeg([350, 10])
+    expect(mean < 15 || mean > 345).toBe(true)
   })
 })

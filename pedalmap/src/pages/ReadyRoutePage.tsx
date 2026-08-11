@@ -448,11 +448,9 @@ export function ReadyRoutePage() {
               }}
               onSelectWindow={(w) => {
                 setSelectedWindWindow(w)
-                if (w) setSelectedWindHour(null)
               }}
               onSelectHour={(h) => {
                 setSelectedWindHour(h)
-                if (h) setSelectedWindWindow(null)
               }}
             />
           </div>
