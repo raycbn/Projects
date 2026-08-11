@@ -43,7 +43,7 @@ interface MapViewProps {
   showUserLocation?: LatLng | null
   /** Keep the camera on the user (navigation / recording). */
   followUser?: boolean
-  /** When false, hide wind barbs/chevrons/icons (colored segments stay). */
+  /** When false, hide wind arrow icons (colored route segments stay). */
   showWindArrows?: boolean
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
