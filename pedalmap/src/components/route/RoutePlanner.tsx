@@ -242,51 +242,59 @@ export function RoutePlanner() {
   async function handleShareCard() {
     if (!activeDraft) return
     setShareBusy(true)
+    setSaveMessage('Publicando ruta para compartir…')
     try {
       if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
         setSaveMessage('Inicia sesión con una cuenta real para compartir la ruta completa (/route/…).')
         return
       }
 
-      let slug: string | undefined
-      try {
+      const publish = async (): Promise<string> => {
         let routeId = lastSavedRouteId
         if (routeId) {
-          slug = await routeRepository.makePublic(routeId, user.uid)
-        } else {
-          const entitlement = canSaveRoute(profile)
-          if (!entitlement.ok) {
-            showPaywall(entitlement.reason ?? 'save_limit')
-            setSaveMessage('Guarda la ruta (o libera hueco Free) para obtener el enlace público.')
-            return
-          }
-          const saved = await routeRepository.save(user.uid, activeDraft, { isPublic: true })
-          setLastSavedRouteId(saved.id)
-          slug = saved.shareSlug
+          return routeRepository.makePublic(routeId, user.uid)
         }
-      } catch (error) {
-        console.error('[share-card] public link', error)
-        setSaveMessage(
-          error instanceof Error && error.message === 'save_limit'
-            ? 'Límite de rutas guardadas. Borra una o pasa a Premium para compartir.'
-            : 'No se pudo publicar la ruta. Revisa la conexión e inténtalo de nuevo.',
-        )
-        return
+        const entitlement = canSaveRoute(profile)
+        if (!entitlement.ok) {
+          showPaywall(entitlement.reason ?? 'save_limit')
+          throw new Error('save_limit')
+        }
+        const saved = await routeRepository.save(user.uid, activeDraft, { isPublic: true })
+        setLastSavedRouteId(saved.id)
+        if (!saved.shareSlug) throw new Error('missing_slug')
+        return saved.shareSlug
       }
 
-      if (!slug) {
-        setSaveMessage('No se pudo crear el enlace público de la ruta.')
+      let slug: string
+      try {
+        slug = await Promise.race([
+          publish(),
+          new Promise<string>((_, reject) =>
+            window.setTimeout(() => reject(new Error('publish_timeout')), 20000),
+          ),
+        ])
+      } catch (error) {
+        console.error('[share-card] public link', error)
+        const msg = error instanceof Error ? error.message : ''
+        if (msg === 'save_limit') {
+          setSaveMessage('Límite de rutas guardadas. Borra una o pasa a Premium para compartir.')
+        } else if (msg === 'publish_timeout') {
+          setSaveMessage('La publicación tardó demasiado. Revisa la conexión e inténtalo de nuevo.')
+        } else {
+          setSaveMessage('No se pudo publicar la ruta. Revisa la conexión e inténtalo de nuevo.')
+        }
         return
       }
 
       const url = `${window.location.origin}/route/${slug}`
+      setSaveMessage('Abriendo WhatsApp…')
       const result = await shareRouteCard(activeDraft, url)
       setSaveMessage(
-        result === 'shared'
-          ? 'Ruta compartida con enlace para ver mapa y datos en PedalMap.'
+        result === 'whatsapp' || result === 'shared'
+          ? `WhatsApp listo · enlace de la ruta: ${url}`
           : result === 'copied'
-            ? `Imagen lista · mensaje copiado con el enlace: ${url}`
-            : `Tarjeta descargada. Enlace: ${url}`,
+            ? `Mensaje copiado · enlace: ${url}`
+            : `Enlace de la ruta: ${url}`,
       )
       track('route_shared', { via: 'share_card', public: true })
     } catch (error) {

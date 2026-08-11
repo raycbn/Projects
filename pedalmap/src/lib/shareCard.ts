@@ -19,11 +19,10 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
   ctx.fillStyle = grad
   ctx.fillRect(0, 0, size, size)
 
-  // soft signal blob
-  const blob = ctx.createRadialGradient(820, 180, 20, 820, 180, 320)
-  blob.addColorStop(0, 'rgba(214,255,75,0.35)')
-  blob.addColorStop(1, 'rgba(214,255,75,0)')
-  ctx.fillStyle = blob
+  const blobGrad = ctx.createRadialGradient(820, 180, 20, 820, 180, 320)
+  blobGrad.addColorStop(0, 'rgba(214,255,75,0.35)')
+  blobGrad.addColorStop(1, 'rgba(214,255,75,0)')
+  ctx.fillStyle = blobGrad
   ctx.fillRect(0, 0, size, size)
 
   ctx.fillStyle = '#d6ff4b'
@@ -82,56 +81,62 @@ export function buildRouteShareText(draft: RouteDraft, url: string): string {
   return lines.join('\n')
 }
 
+export function buildWhatsAppShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`
+}
+
+/**
+ * After an async Firestore publish, the browser user-gesture is usually gone and
+ * `navigator.share` can hang or no-op on mobile. Prefer WhatsApp deep link.
+ */
 export async function shareRouteCard(
   draft: RouteDraft,
   url: string,
-): Promise<'shared' | 'copied' | 'downloaded'> {
+): Promise<'whatsapp' | 'shared' | 'copied' | 'downloaded'> {
   if (!url.includes('/route/')) {
     throw new Error('Se necesita un enlace público /route/… para compartir la ruta')
   }
 
   const text = buildRouteShareText(draft, url)
-  const blob = await renderRouteShareCard(draft, url)
-  const file = new File([blob], 'pedalmap-ruta.png', { type: 'image/png' })
+  const waUrl = buildWhatsAppShareUrl(text)
 
-  // Prefer sharing the public link (recipient opens full route). Attach card when the
-  // browser allows files — text still carries the /route/ URL for WhatsApp.
-  if (typeof navigator.share === 'function') {
-    try {
-      if (navigator.canShare?.({ files: [file], text, title: draft.title, url })) {
-        await navigator.share({
-          files: [file],
-          title: draft.title,
-          text,
-          url,
-        })
-        return 'shared'
-      }
-    } catch (error) {
-      // User abort should bubble; other share errors fall through to link-only.
-      if (error instanceof DOMException && error.name === 'AbortError') throw error
+  // 1) Open WhatsApp with the public route link (reliable after await).
+  let openedWhatsApp = false
+  try {
+    const popup = window.open(waUrl, '_blank', 'noopener,noreferrer')
+    openedWhatsApp = Boolean(popup)
+    if (!openedWhatsApp) {
+      // Popup blocked (common in in-app browsers) — navigate this tab.
+      window.location.assign(waUrl)
+      openedWhatsApp = true
     }
-
-    try {
-      await navigator.share({ title: draft.title, text, url })
-      return 'shared'
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') throw error
-    }
+  } catch {
+    openedWhatsApp = false
   }
 
-  // Fallback: download image + copy the public route link
-  const objectUrl = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = objectUrl
-  a.download = 'pedalmap-ruta.png'
-  a.click()
-  URL.revokeObjectURL(objectUrl)
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return 'copied'
+  // 2) Best-effort clipboard so the user always has the link.
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)
+  } catch {
+    // ignore
   }
-  return 'downloaded'
+
+  // 3) Optional card download in the background (don't block WhatsApp).
+  void renderRouteShareCard(draft, url)
+    .then((blob) => {
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = 'pedalmap-ruta.png'
+      a.rel = 'noopener'
+      // Soft download — some mobile browsers ignore this without gesture.
+      a.click()
+      URL.revokeObjectURL(objectUrl)
+    })
+    .catch(() => undefined)
+
+  if (openedWhatsApp) return 'whatsapp'
+  return 'copied'
 }
 
 function bikeLabel(bike: BikeType): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRouteShareText } from '@/lib/shareCard'
+import { buildRouteShareText, buildWhatsAppShareUrl } from '@/lib/shareCard'
 import type { RouteDraft } from '@/domain/types'
 
 describe('buildRouteShareText', () => {
@@ -19,5 +19,9 @@ describe('buildRouteShareText', () => {
     expect(text).toContain('https://pedalmap.es/route/daganzo-abc123')
     expect(text).toContain('Daganzo loop')
     expect(text).toMatch(/Ábrela en PedalMap/)
+    expect(buildWhatsAppShareUrl(text)).toContain('wa.me')
+    expect(buildWhatsAppShareUrl(text)).toContain(
+      encodeURIComponent('https://pedalmap.es/route/daganzo-abc123'),
+    )
   })
 })
