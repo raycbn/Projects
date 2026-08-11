@@ -117,17 +117,26 @@ export function MyActivitiesPage() {
         setLoading(false)
         return
       }
-      try {
-        const list = await activityRepository.listForUser(user.uid)
-        if (!cancelled) setItems(list)
-        if (gpsSyncService.isApiReady()) {
-          const st = await gpsSyncService.status()
-          if (!cancelled) setProviders(st)
+      // Keep GPS / cloud status independent of the activities query so a missing
+      // Firestore index never hides the sync button.
+      void (async () => {
+        try {
+          if (gpsSyncService.isApiReady()) {
+            const st = await gpsSyncService.status()
+            if (!cancelled) setProviders(st)
+          }
+        } catch (err) {
+          console.warn('[activities] gps status', err)
         }
         if (!cancelled) await refreshCloudStatus()
         if (!cancelled && params.get('strava') === 'connected') {
           await pullCloudRides(false)
         }
+      })()
+
+      try {
+        const list = await activityRepository.listForUser(user.uid)
+        if (!cancelled) setItems(list)
       } catch (err) {
         console.error('[activities]', err)
         if (!cancelled) setError('No se pudieron cargar las actividades.')

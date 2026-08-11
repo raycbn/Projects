@@ -60,13 +60,23 @@ export class ActivityRepository {
   }
 
   async listForUser(userId: string): Promise<Activity[]> {
-    const q = query(
-      collection(getDb(), 'activities'),
-      where('userId', '==', userId),
-      orderBy('startedAt', 'desc'),
-    )
-    const snap = await getDocs(q)
-    return snap.docs.map((d) => mapActivity(d.id, d.data()))
+    try {
+      const q = query(
+        collection(getDb(), 'activities'),
+        where('userId', '==', userId),
+        orderBy('startedAt', 'desc'),
+      )
+      const snap = await getDocs(q)
+      return snap.docs.map((d) => mapActivity(d.id, d.data()))
+    } catch (err) {
+      // Composite index userId+startedAt may still be building — fall back.
+      console.warn('[activities] listForUser ordered query failed', err)
+      const q = query(collection(getDb(), 'activities'), where('userId', '==', userId))
+      const snap = await getDocs(q)
+      return snap.docs
+        .map((d) => mapActivity(d.id, d.data()))
+        .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
+    }
   }
 
   async findByExternalId(userId: string, externalId: string): Promise<Activity | null> {
