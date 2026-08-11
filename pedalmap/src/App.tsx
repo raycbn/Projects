@@ -4,6 +4,7 @@ import { PlannerProvider } from '@/app/PlannerContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { LandingPage } from '@/pages/LandingPage'
 import { RoutePlannerPage } from '@/pages/RoutePlannerPage'
+import { ReadyRoutePage } from '@/pages/ReadyRoutePage'
 import { MyRoutesPage } from '@/pages/MyRoutesPage'
 import { LoginPage, RegisterPage, ForgotPasswordPage } from '@/pages/AuthPages'
 import { AuthBridgePage } from '@/pages/AuthBridgePage'
@@ -15,6 +16,7 @@ import { PrivacyPage, CookiesPage, TermsPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
 import { ActivityPage } from '@/pages/ActivityPage'
 import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
+import { ConnectGpsPage } from '@/pages/ConnectGpsPage'
 import { NavigationPage } from '@/pages/NavigationPage'
 import { seoPages } from '@/content/seoPages'
 
@@ -27,8 +29,10 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route index element={<LandingPage />} />
               <Route path="route-planner" element={<RoutePlannerPage />} />
+              <Route path="ruta" element={<ReadyRoutePage />} />
               <Route path="my-routes" element={<MyRoutesPage />} />
               <Route path="actividades" element={<MyActivitiesPage />} />
+              <Route path="actividades/conectar" element={<ConnectGpsPage />} />
               <Route path="actividad" element={<ActivityPage />} />
               <Route path="navegacion" element={<NavigationPage />} />
               <Route path="explorar" element={<ExplorePage />} />

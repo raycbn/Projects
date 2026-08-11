@@ -21,12 +21,12 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="premium-title"
     >
-      <div className="w-full max-w-md animate-rise rounded-3xl bg-[var(--color-panel)] p-6 text-white shadow-2xl">
+      <div className="w-full max-w-md animate-rise rounded-t-3xl bg-[var(--color-panel)] p-6 text-white shadow-2xl safe-pb sm:rounded-3xl">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
           PedalMap Premium
         </p>
@@ -39,16 +39,11 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             : reason === 'filter_limit'
               ? 'Desactiva un filtro o pasa a Premium para combinar más de 2.'
               : reason === 'guest_limit'
-                ? 'Entra o crea cuenta (también vale anónimo) para seguir creando rutas Free este mes.'
-                : 'Desbloquea PedalMap Premium y planifica sin fricciones.'}
+                ? 'Entra o crea cuenta para seguir creando rutas Free este mes.'
+                : 'Desbloquea lo que necesitas en el momento del valor.'}
         </p>
         <ul className="mt-4 space-y-2 text-sm">
-          {[
-            'Rutas ilimitadas',
-            'Exportación GPX',
-            'Más de 2 filtros a la vez',
-            'Modo Objetivo (circular con km/desnivel)',
-          ].map((item) => (
+          {['Rutas ilimitadas', 'GPX a tu GPS', 'Objetivo avanzado'].map((item) => (
             <li key={item} className="flex gap-2">
               <span className="text-[var(--color-signal)]" aria-hidden>
                 ✓
@@ -57,22 +52,24 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             </li>
           ))}
         </ul>
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 space-y-2">
           <Link
             to="/premium"
+            className="block"
             onClick={() => track('premium_clicked', { reason: reason ?? 'unknown' })}
           >
-            <Button>Probar Premium</Button>
+            <Button className="w-full">Ver Premium</Button>
           </Link>
           {onClose && (
-            <Button variant="ghost" className="!text-white !border-white/20" onClick={onClose}>
-              Seguir explorando
+            <Button
+              variant="ghost"
+              className="w-full !border-white/20 !text-white"
+              onClick={onClose}
+            >
+              Ahora no
             </Button>
           )}
         </div>
-        <p className="mt-4 text-xs text-white/50">
-          Stripe test vía Cloudflare Workers (sin Blaze). Free: hasta 2 filtros a la vez.
-        </p>
       </div>
     </div>
   )

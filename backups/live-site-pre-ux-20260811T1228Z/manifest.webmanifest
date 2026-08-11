@@ -1,0 +1,18 @@
+{
+  "name": "PedalMap",
+  "short_name": "PedalMap",
+  "description": "Crea rutas de bici con suelo, viento y desnivel a tu medida.",
+  "start_url": "/route-planner",
+  "display": "standalone",
+  "background_color": "#eef5f1",
+  "theme_color": "#0d3b2b",
+  "lang": "es-ES",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

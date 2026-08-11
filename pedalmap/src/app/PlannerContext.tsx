@@ -60,8 +60,8 @@ interface PlannerContextValue {
   handleMapTap: (position: LatLng) => void
   useMyLocationAsStart: () => Promise<void>
   canCalculate: boolean
-  calculate: () => Promise<void>
-  calculateAnotherVariant: () => Promise<void>
+  calculate: () => Promise<RouteDraft | null>
+  calculateAnotherVariant: () => Promise<RouteDraft | null>
   startEditing: () => void
   cancelEditing: () => void
   saveEdits: () => Promise<void>
@@ -246,7 +246,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const canCalculate = canCalculateRoute(routeType, waypoints)
 
   const value = useMemo<PlannerContextValue>(() => {
-    async function runCalculate(seed = circularSeed) {
+    async function runCalculate(seed = circularSeed): Promise<RouteDraft | null> {
       // Prefer anonymous Free quota over the offline guest counter.
       if (!profile && isFirebaseConfigured()) {
         try {
@@ -259,11 +259,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       const entitlement = canCreateRoute(liveProfile, guestCreates)
       if (!entitlement.ok) {
         setPaywallReason(entitlement.reason ?? 'create_limit')
-        return
+        return null
       }
       if (routeType === 'circular' && !canUseAdvancedCircular(liveProfile)) {
         setPaywallReason('circular_premium')
-        return
+        return null
       }
       if (!canCalculateRoute(routeType, waypoints)) {
         setErrorMessage(
@@ -272,7 +272,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             : 'Indica inicio y destino antes de crear la ruta.',
         )
         setStatus('error')
-        return
+        return null
       }
 
       setStatus('calculating')
@@ -322,6 +322,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           bike_type: bikeType,
           route_type: routeType,
         })
+        return result
       } catch (error) {
         console.error('[planner] calculate', error)
         setStatus('error')
@@ -354,6 +355,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             'No hemos podido calcular la ruta. Prueba a cambiar el tipo de bicicleta, bajar filtros o mover el punto de inicio.',
           )
         }
+        return null
       }
     }
 
@@ -566,12 +568,12 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         })
       },
       async calculate() {
-        await runCalculate(circularSeed)
+        return runCalculate(circularSeed)
       },
       async calculateAnotherVariant() {
         const nextSeed = circularSeed + 1
         setCircularSeed(nextSeed)
-        await runCalculate(nextSeed)
+        return runCalculate(nextSeed)
       },
       startEditing() {
         if (!draft) return

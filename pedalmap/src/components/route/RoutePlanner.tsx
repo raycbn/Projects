@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
 import { SearchLocation } from '@/components/route/SearchLocation'
@@ -7,28 +7,14 @@ import { BikeSelector } from '@/components/route/BikeSelector'
 import { BikeComparePanel } from '@/components/route/BikeComparePanel'
 import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { RouteSummary } from '@/components/route/RouteSummary'
-import { ElevationChart } from '@/components/route/ElevationChart'
 import { PremiumCard } from '@/components/premium/PremiumCard'
 import { Button } from '@/components/ui/Button'
 import { GPXImporter } from '@/components/gpx/GPXImporter'
-import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
-import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
-import { routeRepository } from '@/services/RouteRepository'
-import { canSaveRoute } from '@/services/EntitlementService'
 import { track } from '@/lib/analytics'
-import { routeService } from '@/services/RouteService'
 import { formatDistance, formatElevation } from '@/lib/stats'
-import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
 import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
 import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
-import { shareRouteCard } from '@/lib/shareCard'
-import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
-import { fetchServerEntitlements } from '@/lib/planSync'
-import {
-  formatWeatherHourCaption,
-  formatWeatherWindowCaption,
-} from '@/lib/weatherFormat'
-import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
+import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 import clsx from 'clsx'
 
 const MapView = lazy(() =>
@@ -36,6 +22,7 @@ const MapView = lazy(() =>
 )
 
 export function RoutePlanner() {
+  const navigate = useNavigate()
   const {
     status,
     errorMessage,
@@ -54,7 +41,6 @@ export function RoutePlanner() {
     draft,
     editDraft,
     hoverPoint,
-    setHoverPoint,
     calculate,
     calculateAnotherVariant,
     startEditing,
@@ -77,39 +63,23 @@ export function RoutePlanner() {
     useMyLocationAsStart,
     canCalculate,
   } = usePlanner()
-  const { user, profile, firebaseReady } = useAuth()
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [viaQueryOpen, setViaQueryOpen] = useState(false)
+  const { profile } = useAuth()
   const [locating, setLocating] = useState(false)
   const [mapExpanded, setMapExpanded] = useState(false)
   const [compareBusy, setCompareBusy] = useState(false)
   const [compareRows, setCompareRows] = useState<BikeCompareRow[] | null>(null)
-  const [shareBusy, setShareBusy] = useState(false)
-  const [lastSavedRouteId, setLastSavedRouteId] = useState<string | null>(null)
-  const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
-  const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
-  const [showWindArrows, setShowWindArrows] = useState(true)
+  const [goingToReady, setGoingToReady] = useState(false)
+  const [viaQueryOpen, setViaQueryOpen] = useState(false)
 
   const activeDraft = editDraft ?? draft
-  const vias = waypoints.filter((w) => w.kind === 'via')
+
   const fitKey = useMemo(
     () =>
       activeDraft
         ? `${activeDraft.stats.distanceMeters}-${activeDraft.geometry.coordinates.length}-${activeDraft.selectedOptionId ?? 'main'}`
-        : '',
-    [activeDraft],
+        : `empty-${waypoints.length}`,
+    [activeDraft, waypoints.length],
   )
-
-  const windOverlay = useMemo(() => {
-    if (!activeDraft?.geometry) return null
-    if (!selectedWindHour && !selectedWindWindow) return null
-    return buildRouteWindOverlay(activeDraft.geometry, {
-      routeType: activeDraft.type,
-      hour: selectedWindHour,
-      window: selectedWindHour ? null : selectedWindWindow,
-      sampleCount: 18,
-    })
-  }, [activeDraft, selectedWindHour, selectedWindWindow])
 
   const surfaceOverlay = useMemo(() => {
     if (!activeDraft?.geometry) return null
@@ -148,50 +118,19 @@ export function RoutePlanner() {
     return parts.length ? parts.join(' · ') : null
   }, [activeDraft])
 
-  const windCaption = useMemo(() => {
-    if (selectedWindHour) {
-      return `${formatWeatherHourCaption(selectedWindHour.time)} · ${Math.round(selectedWindHour.windSpeedKmh)} km/h desde ${Math.round(selectedWindHour.windDirectionDeg)}° · ida/vuelta según tramo`
-    }
-    if (selectedWindWindow) {
-      return `${formatWeatherWindowCaption(selectedWindWindow.startHour, selectedWindWindow.endHour)} · ${selectedWindWindow.windSpeedKmh} km/h ${selectedWindWindow.windDirLabel} (${selectedWindWindow.relative})`
-    }
-    return null
-  }, [selectedWindHour, selectedWindWindow])
+  function goToReady(result = activeDraft) {
+    if (!result) return
+    stashReadyRoute({ draft: result })
+    navigate('/ruta')
+  }
 
-  async function handleSave() {
-    if (!draft) return
-    if (!user || user.isAnonymous) {
-      setSaveMessage('Inicia sesión para guardar esta ruta.')
-      return
-    }
-    const entitlement = canSaveRoute(profile)
-    if (!entitlement.ok) {
-      showPaywall(entitlement.reason ?? 'save_limit')
-      return
-    }
-    if (!firebaseReady || !routeRepository.isConfigured()) {
-      setSaveMessage('Firebase no está configurado. No se pueden guardar rutas todavía.')
-      return
-    }
+  async function handleCreate() {
+    setGoingToReady(true)
     try {
-      // Server-side check (Worker) before transactional save.
-      const server = await fetchServerEntitlements()
-      if (server && server.canSaveRoute === false) {
-        showPaywall('save_limit')
-        return
-      }
-      const saved = await routeRepository.save(user.uid, draft, { isPublic: false })
-      setLastSavedRouteId(saved.id)
-      track('route_saved', { distance_m: draft.stats.distanceMeters })
-      setSaveMessage('Ruta guardada en Mis rutas.')
-    } catch (error) {
-      console.error('[save]', error)
-      const msg = error instanceof Error ? error.message : ''
-      if (msg === 'save_limit' || msg.includes('permission')) {
-        showPaywall('save_limit')
-        return
-      }
-      setSaveMessage('No se pudo guardar la ruta. Inténtalo de nuevo.')
+      const result = await calculate()
+      if (result) goToReady(result)
+    } finally {
+      setGoingToReady(false)
     }
   }
 
@@ -224,7 +163,6 @@ export function RoutePlanner() {
       track('route_created', { bike_type: 'compare', route_type: routeType })
     } catch (error) {
       console.error('[compare]', error)
-      setSaveMessage('No se pudo comparar bicis. Revisa puntos o red.')
     } finally {
       setCompareBusy(false)
     }
@@ -237,181 +175,75 @@ export function RoutePlanner() {
     })
     setBikeType(row.bikeType)
     setCompareRows(null)
+    stashReadyRoute({ draft: row.draft })
+    navigate('/ruta')
   }
 
-  async function handleShareCard() {
-    if (!activeDraft) return
-    setShareBusy(true)
-    setSaveMessage('Publicando ruta para compartir…')
-    try {
-      if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
-        setSaveMessage('Inicia sesión con una cuenta real para compartir la ruta completa (/route/…).')
-        return
-      }
-
-      const publish = async (): Promise<string> => {
-        const published = await routeRepository.publishForShare(user.uid, activeDraft, {
-          routeId: lastSavedRouteId,
-        })
-        setLastSavedRouteId(published.routeId)
-        return published.shareSlug
-      }
-
-      let slug: string
-      try {
-        slug = await Promise.race([
-          publish(),
-          new Promise<string>((_, reject) =>
-            window.setTimeout(() => reject(new Error('publish_timeout')), 25000),
-          ),
-        ])
-      } catch (error) {
-        console.error('[share-card] public link', error)
-        const msg =
-          error instanceof Error
-            ? error.message
-            : typeof error === 'object' && error && 'message' in error
-              ? String((error as { message: unknown }).message || '')
-              : String(error || '')
-        if (msg === 'save_limit') {
-          setSaveMessage('Límite de rutas guardadas. Borra una o pasa a Premium para compartir.')
-        } else if (msg === 'publish_timeout') {
-          setSaveMessage('La publicación tardó demasiado. Revisa la conexión e inténtalo de nuevo.')
-        } else if (msg.startsWith('save_failed:') || msg.startsWith('worker_publish:')) {
-          const detail = msg.replace(/^(save_failed:|worker_publish:)/, '')
-          setSaveMessage(`No se pudo publicar la ruta (${detail || 'error'}).`)
-        } else {
-          setSaveMessage(
-            msg
-              ? `No se pudo publicar la ruta (${msg}).`
-              : 'No se pudo publicar la ruta. Revisa la conexión e inténtalo de nuevo.',
-          )
-        }
-        return
-      }
-
-      const url = `${window.location.origin}/route/${slug}`
-      setSaveMessage('Abriendo WhatsApp…')
-      const result = await shareRouteCard(activeDraft, url)
-      setSaveMessage(
-        result === 'whatsapp' || result === 'shared'
-          ? `WhatsApp listo · enlace de la ruta: ${url}`
-          : result === 'copied'
-            ? `Mensaje copiado · enlace: ${url}`
-            : `Enlace de la ruta: ${url}`,
-      )
-      track('route_shared', { via: 'share_card', public: true })
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setSaveMessage(null)
-        return
-      }
-      console.error('[share-card]', error)
-      setSaveMessage('No se pudo compartir la ruta.')
-    } finally {
-      setShareBusy(false)
-    }
-  }
-
-  function stashForRide() {
-    if (!activeDraft) return
-    const instructionAtMeters = buildInstructionAtMeters(
-      activeDraft.instructions,
-      activeDraft.stats.distanceMeters,
-    )
-    stashGpsRoute({
-      title: activeDraft.title || 'Salida PedalMap',
-      bikeType,
-      geometry: activeDraft.geometry,
-      instructions: activeDraft.instructions,
-      instructionAtMeters,
-      surfaceEdges: activeDraft.surfaceEdges,
-    })
-  }
-
-  const ctaDisabled = status === 'calculating' || !canCalculate
+  const ctaDisabled = status === 'calculating' || goingToReady || !canCalculate
   const ctaLabel =
-    status === 'calculating'
-      ? routeType === 'out_and_back'
-        ? 'Calculando ida y vuelta…'
-        : routeType === 'circular'
-          ? 'Buscando circular Objetivo…'
-          : 'Calculando ruta…'
-      : !canCalculate
-        ? routeType === 'circular'
-          ? 'Falta el punto de partida'
-          : 'Falta inicio o destino'
+    status === 'calculating' || goingToReady
+      ? 'Calculando…'
+      : activeDraft
+        ? 'Recalcular ruta'
         : 'Crear ruta'
 
   return (
     <div
       className={clsx(
-        'planner-shell flex flex-col overflow-hidden lg:grid lg:grid-cols-2',
-        mapExpanded && 'max-lg:!grid max-lg:grid-rows-[1fr_0]',
+        'flex min-h-[calc(100dvh-var(--header-h,3.5rem))] flex-col lg:flex-row',
+        mapExpanded && 'max-lg:fixed max-lg:inset-0 max-lg:z-50 max-lg:bg-white',
       )}
     >
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
 
       <aside
         className={clsx(
-          'order-2 flex min-h-0 flex-[1.15] flex-col overflow-hidden border-t border-[var(--color-fog)] bg-white lg:order-1 lg:flex-1 lg:border-r lg:border-t-0',
+          'order-2 flex w-full flex-col border-[var(--color-fog)] bg-white lg:order-1 lg:max-w-md lg:border-r',
           mapExpanded && 'max-lg:hidden',
         )}
       >
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-28 lg:p-5 lg:pb-28">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 pb-28 md:px-5">
           <div>
-            <p className="label-caps text-[var(--color-trail)]">PedalMap</p>
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-[var(--color-forest)]">
+            <h1 className="font-display text-2xl font-extrabold text-[var(--color-forest)]">
               Crear ruta
             </h1>
-            {!routeService.isRoutingConfigured() && (
-              <p className="mt-1 text-xs text-amber-800">
-                Routing no configurado: falta el proxy Worker (VITE_PEDALMAP_API_URL).
-              </p>
-            )}
-            <p className="mt-1 text-xs text-[var(--color-stone)]">
-              Toca el mapa para poner inicio y destino, o usa búsqueda / Estoy aquí.
+            <p className="mt-1 text-sm text-[var(--color-stone)]">
+              Calcula aquí. Luego decides salir, guardar o compartir en una pantalla limpia.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de ruta">
+          <div className="flex flex-wrap gap-2">
             {(
               [
-                ['a_to_b', 'A → B', 'Punto a punto'],
-                ['out_and_back', 'Ida y vuelta', 'Ida y retorno'],
-                ['circular', 'Objetivo', 'Km / desnivel'],
+                ['a_to_b', 'A → B'],
+                ['out_and_back', 'Ida y vuelta'],
+                ['circular', 'Objetivo'],
               ] as const
-            ).map(([id, label, hint]) => (
+            ).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
-                role="tab"
-                aria-selected={routeType === id}
-                title={hint}
                 className={clsx(
-                  'min-h-11 rounded-xl px-3 py-2 text-left text-sm font-semibold transition',
+                  'rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition',
                   routeType === id
-                    ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
-                    : 'bg-[var(--color-mist)] text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]',
+                    ? 'bg-[var(--color-signal)] text-[var(--color-ink)] ring-[var(--color-trail)]'
+                    : 'bg-[var(--color-mist)] text-[var(--color-forest)] ring-[var(--color-fog)]',
                 )}
                 onClick={() => setRouteType(id)}
               >
-                <span className="block leading-tight">{label}</span>
-                <span className="block text-[10px] font-medium opacity-70">{hint}</span>
+                {label}
               </button>
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={locating}
-              onClick={() => void handleLocate()}
-            >
-              {locating ? 'Localizando…' : 'Estoy aquí'}
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={locating}
+            onClick={() => void handleLocate()}
+          >
+            {locating ? 'Localizando…' : 'Estoy aquí'}
+          </Button>
 
           <SearchLocation
             label="Inicio"
@@ -420,58 +252,35 @@ export function RoutePlanner() {
             onSelect={(place) => setStart(place.position, place.label)}
           />
 
-          {vias.length > 0 && (
-            <ul className="space-y-2" aria-label="Puntos intermedios">
-              {vias.map((via, index) => (
-                <li
-                  key={via.id}
-                  className="flex items-start justify-between gap-2 rounded-xl bg-[var(--color-mist)]/60 px-3 py-2 text-sm"
-                >
-                  <span>
-                    <span className="font-semibold text-[var(--color-forest)]">Via {index + 1}</span>
-                    <br />
-                    <span className="text-[var(--color-stone)]">{via.name}</span>
-                  </span>
-                  <span className="flex flex-col items-end gap-1">
-                    <span className="flex gap-1">
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-[var(--color-trail)]"
-                        onClick={() => moveWaypoint(via.id, -1)}
-                        disabled={index === 0}
-                      >
-                        Subir
-                      </button>
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-[var(--color-trail)]"
-                        onClick={() => moveWaypoint(via.id, 1)}
-                        disabled={index === vias.length - 1}
-                      >
-                        Bajar
-                      </button>
-                    </span>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-[var(--color-danger)]"
-                      onClick={() => removeWaypoint(via.id)}
-                    >
-                      Eliminar
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-
           {routeType !== 'circular' && (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setViaQueryOpen((v) => !v)}
-                aria-expanded={viaQueryOpen}
-              >
+              {waypoints
+                .filter((w) => w.kind === 'via')
+                .map((w) => (
+                  <div key={w.id} className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <SearchLocation
+                        label="Waypoint"
+                        placeholder="Punto intermedio"
+                        valueLabel={w.name}
+                        onSelect={(place) => {
+                          removeWaypoint(w.id)
+                          addVia(place.position, place.label)
+                        }}
+                      />
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => removeWaypoint(w.id)}>
+                      Quitar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => moveWaypoint(w.id, -1)}>
+                      ↑
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => moveWaypoint(w.id, 1)}>
+                      ↓
+                    </Button>
+                  </div>
+                ))}
+              <Button size="sm" variant="ghost" onClick={() => setViaQueryOpen((v) => !v)}>
                 {viaQueryOpen ? 'Cerrar waypoint' : 'Añadir waypoint'}
               </Button>
               {viaQueryOpen && (
@@ -494,107 +303,61 @@ export function RoutePlanner() {
           )}
 
           {routeType === 'circular' && (
-            <div className="space-y-3 rounded-xl bg-[var(--color-mist)]/70 px-3 py-3 text-sm">
-              <p className="text-xs text-[var(--color-stone)]">
-                Indica partida, km y desnivel. Generamos una circular con el suelo según tu bici.
-                Premium desbloquea Objetivo en cuentas Free.
-              </p>
-              <label className="block">
-                <span className="label-caps">Distancia objetivo</span>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
-                    aria-label="Bajar 1 km"
-                    onClick={() =>
-                      setCircularDistanceMeters(Math.max(5000, circularDistanceMeters - 1000))
-                    }
-                  >
-                    −
-                  </button>
-                  <input
-                    type="range"
-                    min={5000}
-                    max={80000}
-                    step={1000}
-                    value={circularDistanceMeters}
-                    onChange={(e) => setCircularDistanceMeters(Number(e.target.value))}
-                    className="w-full accent-[var(--color-trail)]"
-                  />
-                  <button
-                    type="button"
-                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
-                    aria-label="Subir 1 km"
-                    onClick={() =>
-                      setCircularDistanceMeters(Math.min(80000, circularDistanceMeters + 1000))
-                    }
-                  >
-                    +
-                  </button>
-                  <strong className="min-w-16 text-right text-[var(--color-forest)]">
-                    {formatDistance(circularDistanceMeters)}
-                  </strong>
-                </div>
+            <div className="space-y-3 rounded-2xl bg-[var(--color-mist)]/60 p-3">
+              <label className="block text-sm">
+                <span className="font-semibold text-[var(--color-forest)]">Distancia objetivo</span>
+                <input
+                  type="range"
+                  min={5000}
+                  max={120000}
+                  step={1000}
+                  value={circularDistanceMeters}
+                  onChange={(e) => setCircularDistanceMeters(Number(e.target.value))}
+                  className="mt-2 w-full accent-[var(--color-trail)]"
+                />
+                <span className="text-xs text-[var(--color-stone)]">
+                  {formatDistance(circularDistanceMeters)}
+                </span>
               </label>
-              <label className="block">
-                <span className="label-caps">Desnivel positivo objetivo</span>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
-                    aria-label="Bajar 50 m de desnivel"
-                    onClick={() =>
-                      setTargetElevationGainMeters(Math.max(0, targetElevationGainMeters - 50))
-                    }
-                  >
-                    −
-                  </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={2500}
-                    step={50}
-                    value={targetElevationGainMeters}
-                    onChange={(e) => setTargetElevationGainMeters(Number(e.target.value))}
-                    className="w-full accent-[var(--color-trail)]"
-                  />
-                  <button
-                    type="button"
-                    className="min-h-11 min-w-11 rounded-xl bg-white text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
-                    aria-label="Subir 50 m de desnivel"
-                    onClick={() =>
-                      setTargetElevationGainMeters(Math.min(2500, targetElevationGainMeters + 50))
-                    }
-                  >
-                    +
-                  </button>
-                  <strong className="min-w-16 text-right text-[var(--color-forest)]">
-                    {targetElevationGainMeters === 0 ? 'Libre' : `${targetElevationGainMeters} m`}
-                  </strong>
-                </div>
+              <label className="block text-sm">
+                <span className="font-semibold text-[var(--color-forest)]">
+                  Desnivel objetivo (Premium)
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={2500}
+                  step={50}
+                  value={targetElevationGainMeters}
+                  onChange={(e) => setTargetElevationGainMeters(Number(e.target.value))}
+                  className="mt-2 w-full accent-[var(--color-trail)]"
+                />
+                <span className="text-xs text-[var(--color-stone)]">
+                  {targetElevationGainMeters > 0 ? `${targetElevationGainMeters} m` : 'Sin objetivo'}
+                </span>
               </label>
             </div>
           )}
 
           <BikeSelector value={bikeType} onChange={setBikeType} />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!canCalculate || compareBusy || status === 'calculating'}
-              onClick={() => void handleCompare()}
-            >
-              {compareBusy ? 'Comparando…' : 'Comparar Carretera / Gravel / MTB'}
-            </Button>
-          </div>
-          {(compareBusy || (compareRows && compareRows.length > 0)) && (
+
+          <Button
+            variant="ghost"
+            className="w-full"
+            disabled={compareBusy || !canCalculate}
+            onClick={() => void handleCompare()}
+          >
+            {compareBusy ? 'Comparando…' : 'Comparar Carretera / Gravel / MTB'}
+          </Button>
+          {compareRows && (
             <BikeComparePanel
-              rows={compareRows ?? []}
+              rows={compareRows}
               busy={compareBusy}
               onPick={handlePickCompare}
               onClose={() => setCompareRows(null)}
             />
           )}
+
           <RoutePreferencesPanel
             value={preferences}
             onChange={setPreferences}
@@ -624,7 +387,7 @@ export function RoutePlanner() {
           )}
 
           {activeDraft && (
-            <div className="space-y-4 border-t border-[var(--color-fog)] pt-4">
+            <div className="space-y-3 border-t border-[var(--color-fog)] pt-4">
               <RouteSummary stats={activeDraft.stats} />
               {surfaceAlert && (
                 <p
@@ -639,129 +402,76 @@ export function RoutePlanner() {
                   Objetivo · {objetivoFeedback}
                 </p>
               )}
-              <div>
-                <h2 className="mb-2 font-display text-lg font-bold text-[var(--color-forest)]">
-                  Elevación
-                </h2>
-                <ElevationChart
-                  profile={activeDraft.elevationProfile}
-                  onHover={(point) => setHoverPoint(point)}
-                />
-              </div>
-
-              {activeDraft.instructions && activeDraft.instructions.length > 0 && (
-                <details className="rounded-2xl bg-[var(--color-mist)]/50">
-                  <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-[var(--color-forest)]">
-                    Indicaciones ({activeDraft.instructions.length})
-                  </summary>
-                  <ol className="max-h-48 space-y-1.5 overflow-y-auto border-t border-[var(--color-fog)] px-3 py-2 text-xs text-[var(--color-stone)]">
-                    {activeDraft.instructions.map((step, i) => (
-                      <li key={`${i}-${step.slice(0, 24)}`} className="flex gap-2">
-                        <span className="font-semibold text-[var(--color-forest)]">{i + 1}.</span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </details>
-              )}
 
               {(draft?.routeOptions?.length ?? 0) > 1 && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-                    Opciones de ruta ({draft!.routeOptions!.length})
+                    Opciones ({draft!.routeOptions!.length})
                   </p>
-                  <div className="flex flex-col gap-2">
-                    {draft!.routeOptions!.map((opt) => {
-                      const active = (draft!.selectedOptionId ?? draft!.routeOptions![0]?.id) === opt.id
-                      const score = opt.stats.surfaceStats?.suitability?.score
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          className={clsx(
-                            'rounded-xl px-3 py-2 text-left text-xs ring-1 transition',
-                            active
-                              ? 'bg-[var(--color-signal)] font-semibold text-[var(--color-ink)] ring-[var(--color-trail)]'
-                              : 'bg-[var(--color-mist)] font-semibold text-[var(--color-forest)] ring-[var(--color-fog)]',
-                          )}
-                          onClick={() => selectRouteOption(opt.id)}
-                        >
-                          <span className="block">
-                            {opt.label}
-                            {active ? ' · activa' : ''}
-                          </span>
-                          <span className="mt-0.5 block font-medium text-[var(--color-stone)]">
-                            {formatDistance(opt.stats.distanceMeters)} ·{' '}
-                            {formatElevation(opt.stats.elevationGainMeters)}
-                            {score != null ? ` · aptitud ${Math.round(score)}` : ''}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                  {draft!.routeOptions!.map((opt) => {
+                    const active =
+                      (draft!.selectedOptionId ?? draft!.routeOptions![0]?.id) === opt.id
+                    const score = opt.stats.surfaceStats?.suitability?.score
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={clsx(
+                          'w-full rounded-xl px-3 py-2 text-left text-xs ring-1 transition',
+                          active
+                            ? 'bg-[var(--color-signal)] font-semibold ring-[var(--color-trail)]'
+                            : 'bg-[var(--color-mist)] font-semibold ring-[var(--color-fog)]',
+                        )}
+                        onClick={() => selectRouteOption(opt.id)}
+                      >
+                        {opt.label}
+                        {active ? ' · activa' : ''} · {formatDistance(opt.stats.distanceMeters)} ·{' '}
+                        {formatElevation(opt.stats.elevationGainMeters)}
+                        {score != null ? ` · aptitud ${Math.round(score)}` : ''}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
 
-              {!draft?.routeOptions?.length && draft?.alternatives && draft.alternatives.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-xl bg-[var(--color-signal)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink)]"
-                    onClick={() => void calculate()}
-                  >
-                    Principal
-                  </button>
-                  {draft.alternatives.map((alt, index) => (
+              {!draft?.routeOptions?.length &&
+                draft?.alternatives &&
+                draft.alternatives.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
                     <button
-                      key={alt.id}
                       type="button"
-                      className="rounded-xl bg-[var(--color-mist)] px-3 py-1.5 text-xs font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
-                      onClick={() => selectAlternative(index + 1)}
+                      className="rounded-xl bg-[var(--color-signal)] px-3 py-1.5 text-xs font-semibold"
+                      onClick={() => void calculate()}
                     >
-                      {alt.label} · {formatDistance(alt.stats.distanceMeters)}
+                      Principal
                     </button>
-                  ))}
-                </div>
-              )}
+                    {draft.alternatives.map((alt, index) => (
+                      <button
+                        key={alt.id}
+                        type="button"
+                        className="rounded-xl bg-[var(--color-mist)] px-3 py-1.5 text-xs font-semibold ring-1 ring-[var(--color-fog)]"
+                        onClick={() => selectAlternative(index + 1)}
+                      >
+                        {alt.label} · {formatDistance(alt.stats.distanceMeters)}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
               {routeType === 'circular' && (
                 <Button
                   variant="secondary"
                   className="w-full"
                   disabled={status === 'calculating' || !canCalculate}
-                  onClick={() => void calculateAnotherVariant()}
+                  onClick={() => void calculateAnotherVariant().then((r) => r && goToReady(r))}
                 >
                   Otra variante
                 </Button>
               )}
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button className="w-full" onClick={() => void handleSave()}>
-                  Guardar ruta
-                </Button>
-                <Link className="w-full" to="/navegacion" onClick={stashForRide}>
-                  <Button variant="secondary" className="w-full">
-                    Navegar
-                  </Button>
-                </Link>
-                <Link
-                  className="w-full sm:col-span-2"
-                  to={`/actividad?title=${encodeURIComponent(activeDraft.title || 'Salida PedalMap')}&bike=${bikeType}`}
-                  onClick={stashForRide}
-                >
-                  <Button variant="ghost" className="w-full">
-                    Iniciar GPS / grabar
-                  </Button>
-                </Link>
-                <Button
-                  className="w-full sm:col-span-2"
-                  variant="secondary"
-                  disabled={shareBusy}
-                  onClick={() => void handleShareCard()}
-                >
-                  {shareBusy ? 'Preparando enlace…' : 'Compartir ruta (WhatsApp)'}
-                </Button>
-              </div>
+              <Button className="w-full !py-3" onClick={() => goToReady()}>
+                Ver ruta lista
+              </Button>
 
               <div className="flex flex-wrap gap-2">
                 {status === 'editing' ? (
@@ -775,77 +485,28 @@ export function RoutePlanner() {
                   </>
                 ) : (
                   <Button size="sm" variant="ghost" onClick={startEditing}>
-                    Editar ruta
+                    Editar en mapa
                   </Button>
                 )}
                 <GPXImporter onImported={setDraftFromImport} />
               </div>
-
-              <details open className="rounded-2xl bg-[var(--color-mist)]/50 open:bg-[var(--color-mist)]/70">
-                <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-[var(--color-forest)]">
-                  Viento y mejor salida
-                </summary>
-                <div className="border-t border-[var(--color-fog)] px-1 pb-2 pt-1">
-                  <RouteWeatherPanel
-                    route={activeDraft}
-                    selectedWindow={selectedWindWindow}
-                    selectedHour={selectedWindHour}
-                    onSelectWindow={(w) => {
-                      setSelectedWindWindow(w)
-                      // Only clear hour when picking a real window (not a null sync call).
-                      if (w) setSelectedWindHour(null)
-                    }}
-                    onSelectHour={(h) => {
-                      setSelectedWindHour(h)
-                      if (h) setSelectedWindWindow(null)
-                    }}
-                  />
-                </div>
-              </details>
-
-              <details className="rounded-2xl bg-[var(--color-mist)]/50">
-                <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-[var(--color-forest)]">
-                  Exportar GPX / apps GPS
-                </summary>
-                <div className="border-t border-[var(--color-fog)] px-1 pb-2 pt-1">
-                  <GpsExportPanel
-                    route={activeDraft}
-                    onPremiumRequired={() => showPaywall('gpx_export')}
-                  />
-                </div>
-              </details>
-
-              {activeDraft.type === 'circular' &&
-                activeDraft.targetElevationGainMeters &&
-                activeDraft.targetElevationGainMeters > 0 && (
-                  <p className="text-xs text-[var(--color-stone)]">
-                    Objetivo desnivel {activeDraft.targetElevationGainMeters} m · conseguido{' '}
-                    {Math.round(activeDraft.stats.elevationGainMeters)} m · distancia{' '}
-                    {formatDistance(activeDraft.stats.distanceMeters)}
-                  </p>
-                )}
-
-              {saveMessage && (
-                <p className="text-sm text-[var(--color-trail)]">
-                  {saveMessage}{' '}
-                  {saveMessage.includes('Inicia sesión') && (
-                    <Link className="underline" to="/login">
-                      Ir a login
-                    </Link>
-                  )}
-                </p>
-              )}
             </div>
           )}
 
           {!activeDraft && (
             <div className="rounded-2xl border border-dashed border-[var(--color-fog)] bg-[var(--color-mist)]/40 px-4 py-5">
               <p className="text-sm text-[var(--color-stone)]">
-                Elige inicio y destino (o Objetivo), pulsa <strong>Crear ruta</strong> y verás
-                distancia, desnivel, superficie e idoneidad del perfil.
+                Elige inicio y destino (o Objetivo), pulsa <strong>Crear ruta</strong>. Te llevamos a
+                la pantalla de ruta lista.
               </p>
               <div className="mt-3">
-                <GPXImporter onImported={setDraftFromImport} />
+                <GPXImporter
+                  onImported={(d) => {
+                    setDraftFromImport(d)
+                    stashReadyRoute({ draft: d })
+                    navigate('/ruta')
+                  }}
+                />
               </div>
             </div>
           )}
@@ -855,7 +516,7 @@ export function RoutePlanner() {
           <Button
             className="w-full !py-3 text-base"
             disabled={ctaDisabled}
-            onClick={() => void calculate()}
+            onClick={() => void handleCreate()}
           >
             {ctaLabel}
           </Button>
@@ -880,9 +541,6 @@ export function RoutePlanner() {
             waypoints={waypoints}
             geometry={activeDraft?.geometry}
             hoverPoint={hoverPoint}
-            windOverlay={windOverlay}
-            windCaption={windCaption}
-            showWindArrows={showWindArrows}
             surfaceOverlay={surfaceOverlay}
             fitKey={fitKey}
             onMapClick={handleMapTap}
@@ -901,21 +559,11 @@ export function RoutePlanner() {
           >
             {mapExpanded ? 'Ver formulario' : 'Ampliar mapa'}
           </button>
-          {windOverlay?.features?.length ? (
-            <button
-              type="button"
-              className="rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]"
-              aria-pressed={showWindArrows}
-              onClick={() => setShowWindArrows((v) => !v)}
-            >
-              {showWindArrows ? 'Ocultar flechas' : 'Mostrar flechas'}
-            </button>
-          ) : null}
         </div>
         {status === 'calculating' && (
           <p className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
             {routeType === 'out_and_back'
-              ? 'Calculando ida y vuelta (puede tardar unos segundos)…'
+              ? 'Calculando ida y vuelta…'
               : routeType === 'circular'
                 ? 'Buscando circular Objetivo…'
                 : 'Calculando la mejor ruta ciclista…'}

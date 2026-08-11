@@ -92,6 +92,30 @@ export function ProfilePage() {
             {message && <p className="text-sm text-[var(--color-trail)]">{message}</p>}
           </div>
 
+          <div className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+            <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Atajos</h2>
+            <div className="flex flex-col gap-2 text-sm">
+              <Link
+                to="/actividades/conectar"
+                className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
+              >
+                Conectar GPS
+              </Link>
+              <Link
+                to="/premium"
+                className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
+              >
+                Premium
+              </Link>
+              <Link
+                to="/ruta"
+                className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
+              >
+                Última ruta lista
+              </Link>
+            </div>
+          </div>
+
           <Button variant="ghost" onClick={() => void logout()}>
             Cerrar sesión
           </Button>

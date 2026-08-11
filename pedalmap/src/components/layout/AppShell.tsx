@@ -16,9 +16,10 @@ export function AppShell() {
   const { user, profile, logout, firebaseReady } = useAuth()
   const { pathname } = useLocation()
   const isPlanner = pathname.startsWith('/route-planner')
+  const isReadyRoute = pathname.startsWith('/ruta')
   const isNav = pathname.startsWith('/navegacion')
-  const hideTabbar = isPlanner || isNav
-  const wash = !isPlanner && !isNav
+  const hideTabbar = isPlanner || isReadyRoute || isNav
+  const wash = !isPlanner && !isReadyRoute && !isNav
 
   return (
     <div className={clsx('min-h-dvh', wash && 'page-wash')}>

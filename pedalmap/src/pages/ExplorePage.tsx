@@ -11,7 +11,7 @@ import { seoPages } from '@/content/seoPages'
 import { DEMO_PUBLIC_ROUTES } from '@/content/demoPublicRoutes'
 import { track } from '@/lib/analytics'
 
-type Tab = 'rutas' | 'ciclistas' | 'segmentos' | 'retos' | 'rankings' | 'guias'
+type Tab = 'rutas' | 'ciclistas' | 'mas'
 
 export function ExplorePage() {
   usePageMeta({
@@ -26,10 +26,9 @@ export function ExplorePage() {
   const [people, setPeople] = useState<PublicProfile[]>([])
   const [segments, setSegments] = useState<Segment[]>([])
   const [challenges, setChallenges] = useState<Challenge[]>([])
-  const [rankings, setRankings] = useState<Array<{ userId: string; displayName?: string; score: number; rank: number }>>([])
+  const [, setRankings] = useState<Array<{ userId: string; displayName?: string; score: number; rank: number }>>([])
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-
   const ready = firebaseReady && communityService.isConfigured()
 
   useEffect(() => {
@@ -71,10 +70,7 @@ export function ExplorePage() {
       [
         ['rutas', 'Rutas'],
         ['ciclistas', 'Ciclistas'],
-        ['segmentos', 'Segmentos'],
-        ['retos', 'Retos'],
-        ['rankings', 'Rankings'],
-        ['guias', 'Guías'],
+        ['mas', 'Más'],
       ] as const,
     [],
   )
@@ -131,8 +127,8 @@ export function ExplorePage() {
       })
       setChallenges(await communityService.listChallenges(20))
       setRankings(await communityService.listRankingBoard('weekly_distance', 20))
-      setMessage('Reto creado y ranking semanal inicializado.')
-      setTab('retos')
+      setMessage('Reto creado.')
+      setTab('mas')
     } catch (error) {
       console.error('[challenge]', error)
       setMessage('No se pudo crear el reto.')
@@ -157,7 +153,7 @@ export function ExplorePage() {
       })
       setSegments(await communityService.listSegments(20))
       setMessage('Segmento publicado.')
-      setTab('segmentos')
+      setTab('mas')
     } catch (error) {
       console.error('[segment]', error)
       setMessage('No se pudo crear el segmento.')
@@ -171,7 +167,7 @@ export function ExplorePage() {
         Explorar
       </h1>
       <p className="mt-2 text-[var(--color-stone)]">
-        Rutas públicas, ciclistas, segmentos, retos y rankings.
+        Rutas públicas y ciclistas. Sin ruido: solo lo que hay contenido real.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -289,88 +285,65 @@ export function ExplorePage() {
             </>
           )}
 
-          {tab === 'segmentos' && (
-            <>
-              <Button onClick={() => void seedSegment()}>Publicar segmento</Button>
-              {segments.length === 0 ? (
-                <Empty hint="No hay segmentos públicos. Publica el primero." />
-              ) : (
-                segments.map((seg) => (
+          {tab === 'mas' && (
+            <div className="space-y-6">
+              <section className="space-y-3">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Guías</h2>
+                <div className="grid gap-3">
+                  {seoPages.slice(0, 4).map((page) => (
+                    <Link
+                      key={page.path}
+                      to={page.path}
+                      className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
+                    >
+                      <p className="font-semibold text-[var(--color-forest)]">{page.heading}</p>
+                      <p className="mt-1 text-sm text-[var(--color-stone)]">{page.description}</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Segmentos y retos
+                </h2>
+                <p className="text-sm text-[var(--color-stone)]">
+                  Todavía hay poco contenido comunitario. Cuando haya masa crítica, volverán como
+                  secciones propias.
+                </p>
+                {user && !user.isAnonymous && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="ghost" onClick={() => void seedSegment()}>
+                      Publicar segmento
+                    </Button>
+                    <Button variant="ghost" onClick={() => void seedDemoChallenge()}>
+                      Crear reto
+                    </Button>
+                  </div>
+                )}
+                {segments.slice(0, 3).map((seg) => (
                   <article
                     key={seg.id}
                     className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
                   >
-                    <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
-                      {seg.name}
-                    </h2>
+                    <h3 className="font-semibold text-[var(--color-forest)]">{seg.name}</h3>
                     <p className="text-sm text-[var(--color-stone)]">
                       {formatDistance(seg.distanceMeters)} · {formatElevation(seg.elevationGainMeters)}
                     </p>
                   </article>
-                ))
-              )}
-            </>
-          )}
-
-          {tab === 'retos' && (
-            <>
-              <Button onClick={() => void seedDemoChallenge()}>Crear reto semanal</Button>
-              {challenges.length === 0 ? (
-                <Empty hint="No hay retos activos." />
-              ) : (
-                challenges.map((ch) => (
+                ))}
+                {challenges.slice(0, 3).map((ch) => (
                   <article
                     key={ch.id}
                     className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
                   >
-                    <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
-                      {ch.title}
-                    </h2>
+                    <h3 className="font-semibold text-[var(--color-forest)]">{ch.title}</h3>
                     <p className="text-sm text-[var(--color-stone)]">
-                      Métrica: {ch.metric} · hasta {new Date(ch.endAt).toLocaleDateString('es-ES')}
+                      {ch.metric} · hasta {new Date(ch.endAt).toLocaleDateString('es-ES')}
                     </p>
                   </article>
-                ))
-              )}
-            </>
-          )}
-
-          {tab === 'rankings' && (
-            <>
-              {rankings.length === 0 ? (
-                <Empty hint="Ranking semanal vacío. Crea un reto para inicializarlo." />
-              ) : (
-                <ol className="space-y-2">
-                  {rankings.map((row, i) => (
-                    <li
-                      key={row.userId}
-                      className="flex items-center justify-between rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
-                    >
-                      <span className="font-semibold text-[var(--color-forest)]">
-                        #{row.rank || i + 1} {row.displayName || row.userId.slice(0, 6)}
-                      </span>
-                      <span className="text-sm text-[var(--color-stone)]">{row.score}</span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </>
-          )}
-
-          {tab === 'guias' && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {seoPages.map((page) => (
-                <Link
-                  key={page.path}
-                  to={page.path}
-                  className="rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)] transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
-                    {page.heading}
-                  </h2>
-                  <p className="mt-2 text-sm text-[var(--color-stone)]">{page.description}</p>
-                </Link>
-              ))}
+                ))}
+              </section>
             </div>
           )}
         </div>

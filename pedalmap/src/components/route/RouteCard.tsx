@@ -1,7 +1,9 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { SavedRoute } from '@/domain/types'
 import { difficultyLabel, formatDistance, formatDuration, formatElevation } from '@/lib/stats'
 import { Button } from '@/components/ui/Button'
+import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 
 interface RouteCardProps {
   route: SavedRoute
@@ -18,44 +20,113 @@ export function RouteCard({
   onDelete,
   onExport,
 }: RouteCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDoc(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [menuOpen])
+
   return (
     <article className="flex flex-col gap-3 rounded-3xl bg-white/80 p-4 ring-1 ring-[var(--color-fog)] transition hover:-translate-y-0.5 hover:shadow-md">
-      <div>
-        <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">{route.title}</h3>
-        <p className="mt-1 text-sm text-[var(--color-stone)]">
-          {formatDistance(route.stats.distanceMeters)} ·{' '}
-          {formatElevation(route.stats.elevationGainMeters)} ·{' '}
-          {formatDuration(route.stats.estimatedDurationSeconds)} ·{' '}
-          {difficultyLabel(route.stats.difficulty)}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">{route.title}</h3>
+          <p className="mt-1 text-sm text-[var(--color-stone)]">
+            {formatDistance(route.stats.distanceMeters)} ·{' '}
+            {formatElevation(route.stats.elevationGainMeters)} ·{' '}
+            {formatDuration(route.stats.estimatedDurationSeconds)} ·{' '}
+            {difficultyLabel(route.stats.difficulty)}
+          </p>
+          {route.isPublic && (
+            <p className="mt-1 text-xs font-medium text-[var(--color-trail)]">Pública</p>
+          )}
+        </div>
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            className="rounded-xl px-2 py-1 text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+            aria-label="Más acciones"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            ⋯
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-[var(--color-fog)]">
+              {onShare && (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onShare(route)
+                  }}
+                >
+                  Compartir
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onDuplicate(route)
+                  }}
+                >
+                  Duplicar
+                </button>
+              )}
+              {onExport && (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onExport(route)
+                  }}
+                >
+                  Exportar GPX
+                </button>
+              )}
+              <Link
+                to={`/route-planner?routeId=${route.id}&edit=1`}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]"
+                onClick={() => setMenuOpen(false)}
+              >
+                Editar
+              </Link>
+              {onDelete && (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm text-[var(--color-danger)] hover:bg-[#fff4f4]"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onDelete(route)
+                  }}
+                >
+                  Eliminar
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Link to={`/route-planner?routeId=${route.id}`}>
-          <Button variant="secondary" className="!py-2">Ver</Button>
+      <div>
+        <Link
+          to={`/ruta?routeId=${route.id}`}
+          onClick={() => stashReadyRoute({ draft: route, savedRouteId: route.id, shareSlug: route.shareSlug })}
+        >
+          <Button variant="secondary" className="!py-2">
+            Abrir
+          </Button>
         </Link>
-        <Link to={`/route-planner?routeId=${route.id}&edit=1`}>
-          <Button variant="ghost" className="!py-2">Editar</Button>
-        </Link>
-        {onShare && (
-          <Button variant="ghost" className="!py-2" onClick={() => onShare(route)}>
-            Compartir
-          </Button>
-        )}
-        {onDuplicate && (
-          <Button variant="ghost" className="!py-2" onClick={() => onDuplicate(route)}>
-            Duplicar
-          </Button>
-        )}
-        {onExport && (
-          <Button variant="ghost" className="!py-2" onClick={() => onExport(route)}>
-            GPX
-          </Button>
-        )}
-        {onDelete && (
-          <Button variant="danger" className="!py-2" onClick={() => onDelete(route)}>
-            Eliminar
-          </Button>
-        )}
       </div>
     </article>
   )

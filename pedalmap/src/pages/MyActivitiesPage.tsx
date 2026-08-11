@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { useEffect, useState } from 'react'
 import { activityRepository } from '@/services/ActivityRepository'
 import type { Activity } from '@/domain/types'
 import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
@@ -10,7 +10,7 @@ import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
 export function MyActivitiesPage() {
   usePageMeta({
     title: 'Mis actividades | PedalMap',
-    description: 'Historial de salidas GPS grabadas con PedalMap.',
+    description: 'Historial de salidas GPS y conexiones con tu ciclocomputador.',
     path: '/actividades',
   })
 
@@ -46,17 +46,25 @@ export function MyActivitiesPage() {
     <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
-            Fase 5
-          </p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
+          <h1 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
             Mis actividades
           </h1>
+          <p className="mt-1 text-sm text-[var(--color-stone)]">Tus salidas grabadas en PedalMap.</p>
         </div>
         <Link to="/actividad">
-          <Button>Nueva actividad</Button>
+          <Button>Nueva salida</Button>
         </Link>
       </div>
+
+      <section className="mt-6 rounded-3xl bg-white/80 p-4 ring-1 ring-[var(--color-fog)]">
+        <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">Conectar GPS</h2>
+        <p className="mt-1 text-sm text-[var(--color-stone)]">
+          Graba en el móvil o enlaza tu ciclocomputador para traer salidas aquí.
+        </p>
+        <Link to="/actividades/conectar" className="mt-3 inline-block">
+          <Button variant="secondary">Abrir conexiones</Button>
+        </Link>
+      </section>
 
       {!user || user.isAnonymous ? (
         <p className="mt-6 text-sm text-[var(--color-stone)]">
@@ -71,7 +79,7 @@ export function MyActivitiesPage() {
         <p className="mt-6 text-sm text-red-700">{error}</p>
       ) : items.length === 0 ? (
         <p className="mt-6 text-sm text-[var(--color-stone)]">
-          Aún no hay actividades. Empieza una salida con GPS.
+          Aún no hay actividades. Empieza una salida con GPS o conecta tu dispositivo.
         </p>
       ) : (
         <ul className="mt-6 space-y-3">

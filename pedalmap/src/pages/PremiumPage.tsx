@@ -11,7 +11,7 @@ export function PremiumPage() {
   usePageMeta({
     title: 'PedalMap Premium',
     description:
-      'Rutas ilimitadas, GPX, filtros avanzados y rutas circulares. 4,99 €/mes o 39,99 €/año (Stripe test).',
+      'Rutas ilimitadas, GPX a tu GPS y Objetivo avanzado. 4,99 €/mes o 39,99 €/año.',
     path: '/premium',
   })
 
@@ -120,8 +120,7 @@ export function PremiumPage() {
         PedalMap Premium
       </h1>
       <p className="mt-3 max-w-2xl text-[var(--color-stone)]">
-        Quita los límites Free: rutas, filtros y GPX sin techo. Empieza gratis y sube cuando lo
-        necesites.
+        Tres cosas claras: rutas sin techo, GPX a tu GPS y Objetivo avanzado.
       </p>
 
       {isPremium && (
@@ -130,68 +129,53 @@ export function PremiumPage() {
         </p>
       )}
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <div className="rounded-3xl bg-white/90 p-6 ring-1 ring-[var(--color-fog)]">
-          <h2 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h2>
-          <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
-            <li>Creación limitada de rutas</li>
-            <li>Hasta 5 rutas guardadas</li>
-            <li>Hasta 2 filtros a la vez</li>
-            <li>Compartir básico</li>
-          </ul>
-          <Link to="/route-planner" className="mt-6 inline-block">
-            <Button variant="ghost">Probar gratis</Button>
-          </Link>
-        </div>
-        <div className="rounded-3xl bg-[var(--color-panel)] p-6 text-white">
-          <h2 className="font-display text-2xl font-bold text-[var(--color-signal)]">Premium</h2>
-          <p className="mt-2 text-sm text-white/70">4,99 €/mes · 39,99 €/año</p>
-          <ul className="mt-4 space-y-2 text-sm text-white/80">
-            <li>Rutas ilimitadas</li>
-            <li>Exportación GPX</li>
-            <li>Filtros ilimitados</li>
-            <li>Modo Objetivo (circular km + desnivel)</li>
-            <li>Sin paywall en el planificador</li>
-          </ul>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button disabled={busy || isPremium} onClick={() => void startCheckout('year')}>
-              Anual 39,99 €
-            </Button>
+      <div className="mt-8 max-w-lg rounded-3xl bg-[var(--color-panel)] p-6 text-white">
+        <h2 className="font-display text-2xl font-bold text-[var(--color-signal)]">Premium</h2>
+        <ul className="mt-4 space-y-2 text-sm text-white/85">
+          <li>Rutas ilimitadas</li>
+          <li>Exportación GPX a Garmin, Wahoo y apps</li>
+          <li>Modo Objetivo (circular km + desnivel)</li>
+        </ul>
+        <p className="mt-5 text-sm text-white/70">4,99 €/mes · 39,99 €/año</p>
+        <div className="mt-4 space-y-2">
+          <Button
+            className="w-full"
+            disabled={busy || isPremium}
+            onClick={() => void startCheckout('year')}
+          >
+            Anual 39,99 €
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full !border-white/40 !text-white"
+            disabled={busy || isPremium}
+            onClick={() => void startCheckout('month')}
+          >
+            Mensual 4,99 €
+          </Button>
+          {isPremium && (
             <Button
               variant="ghost"
-              className="!border-white/40 !text-white"
-              disabled={busy || isPremium}
-              onClick={() => void startCheckout('month')}
-            >
-              Mensual 4,99 €
-            </Button>
-            <Button
-              variant="ghost"
-              className="!border-white/40 !text-white"
+              className="w-full !border-white/40 !text-white"
               disabled={busy}
               onClick={() => void openPortal()}
             >
-              Gestionar
+              Gestionar suscripción
             </Button>
-          </div>
-          <p className="mt-3 text-xs text-white/50">
-            {stripeReady
-              ? 'Checkout en modo test (sin cobro real) hasta activar Stripe live.'
-              : 'Activa VITE_STRIPE_ENABLED y el Worker API para probar el checkout.'}
-          </p>
+          )}
         </div>
       </div>
 
       {(message || syncingPlan) && (
         <p className="mt-6 rounded-2xl bg-[var(--color-mist)] px-4 py-3 text-sm text-[var(--color-forest)]">
           {syncingPlan && !message?.includes('activado')
-            ? 'Esperando confirmación del webhook Stripe…'
+            ? 'Activando Premium…'
             : message}
         </p>
       )}
 
       <Link to="/route-planner" className="mt-8 inline-block">
-        <Button variant="ghost">Volver al planificador</Button>
+        <Button variant="ghost">Volver a crear ruta</Button>
       </Link>
     </main>
   )
