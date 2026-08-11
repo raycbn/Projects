@@ -6,6 +6,7 @@ import { LandingPage } from '@/pages/LandingPage'
 import { RoutePlannerPage } from '@/pages/RoutePlannerPage'
 import { MyRoutesPage } from '@/pages/MyRoutesPage'
 import { LoginPage, RegisterPage, ForgotPasswordPage } from '@/pages/AuthPages'
+import { AuthBridgePage } from '@/pages/AuthBridgePage'
 import { PremiumPage } from '@/pages/PremiumPage'
 import { SharedRoutePage } from '@/pages/SharedRoutePage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -34,6 +35,7 @@ export default function App() {
               <Route path="premium" element={<PremiumPage />} />
               <Route path="perfil" element={<ProfilePage />} />
               <Route path="login" element={<LoginPage />} />
+              <Route path="auth/bridge" element={<AuthBridgePage />} />
               <Route path="register" element={<RegisterPage />} />
               <Route path="forgot-password" element={<ForgotPasswordPage />} />
               <Route path="route/:shareSlug" element={<SharedRoutePage />} />
