@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite-node scripts/prerender.ts",
+    "prerender": "vite-node scripts/prerender.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
@@ -47,6 +48,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
+    "vite-node": "^6.0.0",
     "vitest": "^4.1.10"
   }
 }

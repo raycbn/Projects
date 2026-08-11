@@ -19,8 +19,63 @@ export type AnalyticsEvent =
   | 'wind_alert_shown'
   | 'community_follow'
   | 'consent_updated'
+  | 'page_view'
 
 type Payload = Record<string, string | number | boolean | undefined>
+
+const PLAUSIBLE_DOMAIN = (import.meta.env.VITE_PLAUSIBLE_DOMAIN as string | undefined)?.trim()
+const GA_ID = (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined)?.trim()
+
+declare global {
+  interface Window {
+    plausible?: (event: string, options?: { props?: Record<string, string | number | boolean> }) => void
+    gtag?: (...args: unknown[]) => void
+    dataLayer?: unknown[]
+  }
+}
+
+let loaded = false
+
+/** Inject Plausible and/or GA4 only after analytics consent. */
+export function ensureAnalyticsLoaded(): void {
+  if (loaded || typeof document === 'undefined') return
+  if (!hasAnalyticsConsent()) return
+  loaded = true
+
+  if (PLAUSIBLE_DOMAIN) {
+    const s = document.createElement('script')
+    s.defer = true
+    s.dataset.domain = PLAUSIBLE_DOMAIN
+    s.src = 'https://plausible.io/js/script.js'
+    document.head.appendChild(s)
+  }
+
+  if (GA_ID) {
+    const s = document.createElement('script')
+    s.async = true
+    s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_ID)}`
+    document.head.appendChild(s)
+    window.dataLayer = window.dataLayer || []
+    window.gtag = function gtag(...args: unknown[]) {
+      window.dataLayer?.push(args)
+    }
+    window.gtag('js', new Date())
+    window.gtag('config', GA_ID, { anonymize_ip: true })
+  }
+}
+
+export function trackPageview(path: string): void {
+  if (!hasAnalyticsConsent()) return
+  ensureAnalyticsLoaded()
+  try {
+    window.plausible?.('pageview')
+    if (GA_ID && window.gtag) {
+      window.gtag('event', 'page_view', { page_path: path })
+    }
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Privacy-first analytics. Only records when the user accepted optional analytics.
@@ -32,17 +87,16 @@ export function track(event: AnalyticsEvent, payload: Payload = {}): void {
   }
   if (!hasAnalyticsConsent() && event !== 'consent_updated') return
 
-  // Lightweight beacon — no third-party ads SDK. Swap for Plausible/Firebase later.
+  ensureAnalyticsLoaded()
+
   try {
-    const body = JSON.stringify({
-      e: event,
-      p: payload,
-      t: Date.now(),
-      path: typeof location !== 'undefined' ? location.pathname : undefined,
-    })
-    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-      // No dedicated analytics endpoint yet — keep local-only until wired.
-      void body
+    const props: Record<string, string | number | boolean> = {}
+    for (const [k, v] of Object.entries(payload)) {
+      if (v !== undefined) props[k] = v
+    }
+    window.plausible?.(event, Object.keys(props).length ? { props } : undefined)
+    if (GA_ID && window.gtag) {
+      window.gtag('event', event, props)
     }
   } catch {
     // ignore

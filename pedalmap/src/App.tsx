@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/app/AuthContext'
 import { PlannerProvider } from '@/app/PlannerContext'
 import { AppShell } from '@/components/layout/AppShell'
+import { AnalyticsListener } from '@/components/AnalyticsListener'
 import { LandingPage } from '@/pages/LandingPage'
 import { RoutePlannerPage } from '@/pages/RoutePlannerPage'
 import { ReadyRoutePage } from '@/pages/ReadyRoutePage'
@@ -25,6 +26,7 @@ export default function App() {
     <AuthProvider>
       <PlannerProvider>
         <BrowserRouter>
+          <AnalyticsListener />
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<LandingPage />} />

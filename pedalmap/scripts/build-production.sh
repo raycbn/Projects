@@ -26,6 +26,7 @@ fi
 
 echo "Building with API=$VITE_PEDALMAP_API_URL stripe=$VITE_STRIPE_ENABLED"
 npm run build
+npx vite-node scripts/prerender.ts
 
 # Guardrails: secrets must not ship
 if [[ -n "${ORS_API_KEY:-}" ]] && grep -R -F -q -- "$ORS_API_KEY" dist/; then

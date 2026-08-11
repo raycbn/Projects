@@ -37,14 +37,15 @@ Salir en Google (España, ciclismo) y ser citables por motores generativos (Chat
 
 ## Siguiente fase técnica (código)
 
-1. Prerender/SSG de `/` + guías (máximo impacto crawl)
-2. Analytics real (Plausible o GA4) detrás del consentimiento
+1. ~~Prerender/SSG de `/` + guías~~ → `scripts/prerender.ts` (en cada `npm run build`)
+2. Analytics opcional tras consentimiento: `VITE_PLAUSIBLE_DOMAIN` y/o `VITE_GA_MEASUREMENT_ID` en `.env.local`
 3. Blog editorial ligero + rutas públicas indexables `/route/{slug}`
-4. Verification meta GSC cuando tengas el código
+4. Verification meta GSC — ya hecha por DNS Dominio
 
-## Keywords (calidad > volumen)
+## Operativa post–Search Console
 
-- crear ruta bicicleta / planificador rutas bici / crear ruta GPX
-- rutas bicicleta Madrid | Barcelona | Valencia | Sevilla
-- rutas MTB / gravel Madrid
-- calcular desnivel ruta bici
+1. Sitemap enviado + indexación de `/`, `/crear-ruta-bicicleta`, `/rutas-bicicleta-madrid`
+2. Esperar 2–7 días a datos de Rendimiento / Cobertura
+3. No lanzar Ads todavía sin queries reales en GSC (desperdicio de presupuesto)
+4. Opcional: Bing Webmaster Tools con el mismo sitemap
+5. Cuando GSC muestre impresiones: Ads Search solo a landings SEO
