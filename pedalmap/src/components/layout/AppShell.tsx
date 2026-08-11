@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { CookieBanner } from '@/components/legal/CookieBanner'
+import { isPremiumUser } from '@/lib/plan'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   clsx(
@@ -19,6 +20,7 @@ export function AppShell() {
   const isNav = pathname.startsWith('/navegacion')
   const hideTabbar = isPlanner || isNav
   const wash = !isPlanner && !isNav
+  const premium = isPremiumUser(profile)
 
   return (
     <div className={clsx('min-h-dvh', wash && 'page-wash')}>
@@ -43,9 +45,11 @@ export function AppShell() {
             <NavLink to="/actividades" className={navClass}>
               Actividades
             </NavLink>
-            <NavLink to="/premium" className={navClass}>
-              Premium
-            </NavLink>
+            {!premium && (
+              <NavLink to="/premium" className={navClass}>
+                Premium
+              </NavLink>
+            )}
           </nav>
           <div className="flex items-center gap-2">
             {user ? (
@@ -55,6 +59,11 @@ export function AppShell() {
                   className="hidden text-sm font-medium text-[var(--color-forest)] sm:inline"
                 >
                   {profile?.displayName || (user.isAnonymous ? 'Invitado' : 'Perfil')}
+                  {premium ? (
+                    <span className="ml-1 text-xs font-semibold text-[var(--color-trail)]">
+                      Premium
+                    </span>
+                  ) : null}
                 </Link>
                 <Button variant="ghost" size="sm" onClick={() => void logout()}>
                   Salir
@@ -92,9 +101,11 @@ export function AppShell() {
               <Link className="hover:text-[var(--color-forest)]" to="/terminos">
                 Términos
               </Link>
-              <Link className="hover:text-[var(--color-forest)]" to="/premium">
-                Premium
-              </Link>
+              {!premium && (
+                <Link className="hover:text-[var(--color-forest)]" to="/premium">
+                  Premium
+                </Link>
+              )}
             </nav>
           </div>
         </footer>

@@ -24,6 +24,7 @@ import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare
 import { shareRouteCard } from '@/lib/shareCard'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { fetchServerEntitlements } from '@/lib/planSync'
+import { isPremiumUser } from '@/lib/plan'
 import {
   formatWeatherHourCaption,
   formatWeatherWindowCaption,
@@ -78,6 +79,7 @@ export function RoutePlanner() {
     canCalculate,
   } = usePlanner()
   const { user, profile, firebaseReady } = useAuth()
+  const premium = isPremiumUser(profile)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -325,7 +327,9 @@ export function RoutePlanner() {
         mapExpanded && 'max-lg:!grid max-lg:grid-rows-[1fr_0]',
       )}
     >
-      {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
+      {paywallReason && !premium && (
+        <PremiumCard reason={paywallReason} onClose={clearPaywall} />
+      )}
 
       <aside
         className={clsx(
@@ -472,7 +476,7 @@ export function RoutePlanner() {
             <div className="space-y-3 rounded-xl bg-[var(--color-mist)]/70 px-3 py-3 text-sm">
               <p className="text-xs text-[var(--color-stone)]">
                 Indica partida, km y desnivel. Generamos una circular con el suelo según tu bici.
-                Premium desbloquea Objetivo en cuentas Free.
+                {!premium ? ' En Free, Objetivo completo va con Premium.' : ''}
               </p>
               <label className="block">
                 <span className="label-caps">Distancia objetivo</span>

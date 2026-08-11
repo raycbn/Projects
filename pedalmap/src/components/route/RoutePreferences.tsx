@@ -73,7 +73,11 @@ export function RoutePreferencesPanel({
                 atLimit ? 'cursor-pointer opacity-70' : 'cursor-pointer',
                 checked ? 'bg-[var(--color-mist)]' : 'hover:bg-white/70',
               )}
-              title={atLimit ? 'Límite Free alcanzado — pasa a Premium o desactiva otro filtro' : opt.hint}
+              title={
+                atLimit
+                  ? 'Límite Free alcanzado — desactiva otro filtro o mejora el plan'
+                  : opt.hint
+              }
             >
               <input
                 type="checkbox"

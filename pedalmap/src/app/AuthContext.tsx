@@ -8,6 +8,7 @@ import {
 import type { User } from 'firebase/auth'
 import type { UserProfile } from '@/domain/types'
 import { authErrorMessage, authService } from '@/services/AuthService'
+import { consumeCustomTokenFromUrl } from '@/lib/authBridge'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { syncServerPlan } from '@/lib/planSync'
 
@@ -44,16 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     let unsubProfile: (() => void) | undefined
 
-    // Finish Google redirect before attaching the auth listener so the session is ready.
-    void authService
-      .completeGoogleRedirect()
-      .catch((error) => {
-        console.error('[auth] google redirect', error)
-        if (!cancelled) {
-          setAuthError(authErrorMessage(error, 'No se pudo iniciar sesión con Google.'))
-        }
-      })
-
+    // Listen first so persistence / GIS / redirect all update UI the same way.
     const unsubAuth = authService.watch(async (next) => {
       if (cancelled) return
       unsubProfile?.()
@@ -63,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await authService.ensureProfile(next)
           if (cancelled) return
-          // Server-authoritative allowlist → Firestore plan (Worker Admin).
           if (!next.isAnonymous) {
             await syncServerPlan()
           }
@@ -90,6 +81,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false)
     })
+
+    void (async () => {
+      try {
+        const customToken = consumeCustomTokenFromUrl()
+        if (customToken) {
+          await authService.completeCustomToken(customToken)
+          return
+        }
+        await authService.completeGoogleRedirect()
+      } catch (error) {
+        console.error('[auth] google session', error)
+        if (!cancelled) {
+          setAuthError(authErrorMessage(error, 'No se pudo iniciar sesión con Google.'))
+        }
+      }
+    })()
+
     return () => {
       cancelled = true
       unsubProfile?.()

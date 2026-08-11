@@ -6,6 +6,7 @@ import { LandingPage } from '@/pages/LandingPage'
 import { RoutePlannerPage } from '@/pages/RoutePlannerPage'
 import { MyRoutesPage } from '@/pages/MyRoutesPage'
 import { LoginPage, RegisterPage, ForgotPasswordPage } from '@/pages/AuthPages'
+import { AuthBridgePage } from '@/pages/AuthBridgePage'
 import { PremiumPage } from '@/pages/PremiumPage'
 import { SharedRoutePage } from '@/pages/SharedRoutePage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -14,6 +15,7 @@ import { PrivacyPage, CookiesPage, TermsPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
 import { ActivityPage } from '@/pages/ActivityPage'
 import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
+import { ActivityDetailPage } from '@/pages/ActivityDetailPage'
 import { NavigationPage } from '@/pages/NavigationPage'
 import { seoPages } from '@/content/seoPages'
 
@@ -28,12 +30,14 @@ export default function App() {
               <Route path="route-planner" element={<RoutePlannerPage />} />
               <Route path="my-routes" element={<MyRoutesPage />} />
               <Route path="actividades" element={<MyActivitiesPage />} />
+              <Route path="actividades/:activityId" element={<ActivityDetailPage />} />
               <Route path="actividad" element={<ActivityPage />} />
               <Route path="navegacion" element={<NavigationPage />} />
               <Route path="explorar" element={<ExplorePage />} />
               <Route path="premium" element={<PremiumPage />} />
               <Route path="perfil" element={<ProfilePage />} />
               <Route path="login" element={<LoginPage />} />
+              <Route path="auth/bridge" element={<AuthBridgePage />} />
               <Route path="register" element={<RegisterPage />} />
               <Route path="forgot-password" element={<ForgotPasswordPage />} />
               <Route path="route/:shareSlug" element={<SharedRoutePage />} />
