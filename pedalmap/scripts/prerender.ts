@@ -91,6 +91,17 @@ function prerenderBody(page: PageSpec): string {
 </main>`
 }
 
+function setRoot(html: string, inner: string): string {
+  if (/<div id="root"\s*>\s*<\/div>/.test(html)) {
+    return html.replace(/<div id="root"\s*>\s*<\/div>/, `<div id="root">${inner}</div>`)
+  }
+  // Vite may put the module script in <head>, so do not require a trailing <script>.
+  if (/<div id="root"\s*>[\s\S]*?<\/div>/.test(html)) {
+    return html.replace(/<div id="root"\s*>[\s\S]*?<\/div>/, `<div id="root">${inner}</div>`)
+  }
+  throw new Error('prerender: #root not found in template')
+}
+
 function writePage(template: string, page: PageSpec) {
   const url = page.path === '/' ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}${page.path}`
   let html = template
@@ -105,13 +116,7 @@ function writePage(template: string, page: PageSpec) {
   html = upsertMeta(html, 'name', 'twitter:image', DEFAULT_OG_IMAGE)
   html = upsertCanonical(html, url)
   html = injectJsonLd(html, page.jsonLd)
-
-  const body = prerenderBody(page)
-  if (html.includes('<div id="root"></div>')) {
-    html = html.replace('<div id="root"></div>', `<div id="root">${body}</div>`)
-  } else if (html.includes('<div id="root">')) {
-    html = html.replace(/<div id="root">[\s\S]*?<\/div>\s*<script/, `<div id="root">${body}</div>\n    <script`)
-  }
+  html = setRoot(html, prerenderBody(page))
 
   const outPath =
     page.path === '/'
