@@ -37,6 +37,52 @@ function clearlyMissingActivityScope(scope: string | null | undefined): boolean 
   return !hasActivityReadScope(scope)
 }
 
+type StravaApiError = {
+  message?: string
+  errors?: Array<{ resource?: string; field?: string; code?: string }>
+}
+
+function stravaApiFailure(data: StravaApiError, status: number): Response {
+  const msg = data.message || 'Strava API error'
+  const errors = data.errors || []
+  const appInactive = errors.some(
+    (e) =>
+      String(e.resource || '').toLowerCase() === 'application' &&
+      String(e.field || '').toLowerCase() === 'status' &&
+      String(e.code || '').toLowerCase() === 'inactive',
+  )
+  if (appInactive) {
+    return json(
+      {
+        error:
+          'Strava exige suscripción de pago en la cuenta del dueño de la API (Standard Tier). Activa Strava Premium en la cuenta que creó la app y vuelve a intentar.',
+        code: 'strava_app_inactive_subscription',
+        stravaMessage: msg,
+      },
+      403,
+    )
+  }
+  const missingActivity = errors.some((e) =>
+    String(e.field || '')
+      .toLowerCase()
+      .includes('activity:read'),
+  )
+  if (status === 401 || status === 403 || missingActivity || /forbidden|authorization/i.test(msg)) {
+    return json(
+      {
+        error: missingActivity
+          ? 'Falta permiso de actividades en Strava. Desactiva la sync y vuelve a activarla; acepta «Ver tus actividades».'
+          : 'Strava rechazó la petición (Forbidden). En Standard Tier la cuenta desarrolladora necesita Strava Premium activo.',
+        code: missingActivity ? 'strava_missing_activity_scope' : 'strava_forbidden',
+        stravaMessage: msg,
+        stravaErrors: errors,
+      },
+      403,
+    )
+  }
+  return json({ error: msg, stravaErrors: errors }, 502)
+}
+
 function stravaConfigured(env: Env): boolean {
   return Boolean(env.STRAVA_CLIENT_ID && env.STRAVA_CLIENT_SECRET)
 }
@@ -215,6 +261,23 @@ export async function handleStravaOAuthCallback(
     scope: effectiveScope,
   })
 
+  // Probe list endpoint so we fail fast (missing scope OR Standard Tier without sub).
+  const probe = await fetch(`${STRAVA_API}/athlete/activities?per_page=1`, {
+    headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+  })
+  if (!probe.ok) {
+    const probeJson = (await probe.json().catch(() => ({}))) as StravaApiError
+    console.error('[strava] post-auth probe failed', probe.status, probeJson)
+    await deleteStravaConnection(env, uid)
+    const appInactive = (probeJson.errors || []).some(
+      (e) =>
+        String(e.resource || '').toLowerCase() === 'application' &&
+        String(e.code || '').toLowerCase() === 'inactive',
+    )
+    const reason = appInactive ? 'app_inactive_subscription' : 'forbidden_probe'
+    return Response.redirect(`${appUrl}/actividades?strava=error&reason=${reason}`, 302)
+  }
+
   return Response.redirect(`${appUrl}/actividades?strava=connected`, 302)
 }
 
@@ -326,21 +389,9 @@ export async function handleStravaListActivities(
     `${STRAVA_API}/athlete/activities?page=${page}&per_page=${perPage}`,
     { headers: { Authorization: `Bearer ${connOrErr.accessToken}` } },
   )
-  const data = (await res.json()) as StravaSummary[] | { message?: string; errors?: unknown }
+  const data = (await res.json()) as StravaSummary[] | StravaApiError
   if (!res.ok) {
-    const msg = (data as { message?: string }).message || 'Strava list failed'
-    if (res.status === 401 || res.status === 403 || /forbidden|authorization/i.test(msg)) {
-      return json(
-        {
-          error:
-            'Falta permiso de actividades en Strava. Desactiva la sync y vuelve a activarla; en la pantalla de Strava acepta «Ver tus actividades».',
-          code: 'strava_missing_activity_scope',
-          stravaMessage: msg,
-        },
-        403,
-      )
-    }
-    return json({ error: msg }, 502)
+    return stravaApiFailure(data as StravaApiError, res.status)
   }
   const activities = (data as StravaSummary[]).map((a) => ({
     id: a.id,
@@ -385,9 +436,9 @@ export async function handleStravaImportActivity(
   const metaRes = await fetch(`${STRAVA_API}/activities/${id}`, {
     headers: { Authorization: `Bearer ${connOrErr.accessToken}` },
   })
-  const meta = (await metaRes.json()) as StravaSummary & { message?: string }
+  const meta = (await metaRes.json()) as StravaSummary & StravaApiError
   if (!metaRes.ok) {
-    return json({ error: meta.message || 'No se pudo leer la actividad Strava' }, 502)
+    return stravaApiFailure(meta, metaRes.status)
   }
 
   const keys = ['latlng', 'altitude', 'time', 'heartrate', 'cadence', 'watts', 'velocity_smooth']
@@ -395,12 +446,9 @@ export async function handleStravaImportActivity(
     `${STRAVA_API}/activities/${id}/streams?keys=${keys.join(',')}&key_by_type=true`,
     { headers: { Authorization: `Bearer ${connOrErr.accessToken}` } },
   )
-  const streams = (await streamRes.json()) as StreamSet | { message?: string }
+  const streams = (await streamRes.json()) as StreamSet | StravaApiError
   if (!streamRes.ok) {
-    return json(
-      { error: (streams as { message?: string }).message || 'No se pudieron leer streams' },
-      502,
-    )
+    return stravaApiFailure(streams as StravaApiError, streamRes.status)
   }
 
   const set = streams as StreamSet

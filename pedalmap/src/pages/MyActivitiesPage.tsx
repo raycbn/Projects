@@ -105,11 +105,15 @@ export function MyActivitiesPage() {
     }
     if (stravaFlag === 'error') {
       const reason = params.get('reason') || 'error'
-      setMessage(
-        reason === 'missing_activity_scope'
-          ? 'Hay que autorizar también «Ver tus actividades» en Strava. Vuelve a activar la sincronización y marca ese permiso.'
-          : `No se pudo activar la sincronización (${reason}).`,
-      )
+      const messages: Record<string, string> = {
+        missing_activity_scope:
+          'Hay que autorizar también «Ver tus actividades» en Strava. Vuelve a activar la sincronización y marca ese permiso.',
+        app_inactive_subscription:
+          'Strava bloquea la API: la cuenta que creó la app PedalMap necesita Strava Premium (Standard Tier es de pago desde julio 2026).',
+        forbidden_probe:
+          'Strava rechazó el acceso tras autorizar. Si tu API es Standard Tier, activa Premium en la cuenta desarrolladora y reintenta.',
+      }
+      setMessage(messages[reason] || `No se pudo activar la sincronización (${reason}).`)
     }
   }, [params])
 
