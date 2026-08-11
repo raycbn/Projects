@@ -5,6 +5,7 @@ export interface GeolocationSample {
   position: LatLng
   elevationMeters?: number
   accuracyMeters?: number
+  speedMetersPerSecond?: number
   recordedAt: string
 }
 
@@ -17,8 +18,8 @@ export function useGeolocation(enabled: boolean) {
   const stop = useCallback(() => {
     if (watchId.current !== null && supported) {
       navigator.geolocation.clearWatch(watchId.current)
-      watchId.current = null
     }
+    watchId.current = null
   }, [supported])
 
   useEffect(() => {
@@ -30,6 +31,12 @@ export function useGeolocation(enabled: boolean) {
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         setError(null)
+        const speed =
+          typeof pos.coords.speed === 'number' &&
+          Number.isFinite(pos.coords.speed) &&
+          pos.coords.speed >= 0
+            ? pos.coords.speed
+            : undefined
         setSample({
           position: { lat: pos.coords.latitude, lng: pos.coords.longitude },
           elevationMeters:
@@ -37,6 +44,7 @@ export function useGeolocation(enabled: boolean) {
               ? pos.coords.altitude
               : undefined,
           accuracyMeters: pos.coords.accuracy,
+          speedMetersPerSecond: speed,
           recordedAt: new Date(pos.timestamp).toISOString(),
         })
       },

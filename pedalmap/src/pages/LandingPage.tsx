@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/app/AuthContext'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { FREE_LIMITS } from '@/domain/types'
+import { isPremiumUser } from '@/lib/plan'
 
 const faqs = [
   {
@@ -31,6 +33,9 @@ const faqs = [
 ]
 
 export function LandingPage() {
+  const { profile } = useAuth()
+  const premium = isPremiumUser(profile)
+
   usePageMeta({
     title: 'PedalMap — Crea tu próxima ruta en bici',
     description:
@@ -65,20 +70,32 @@ export function LandingPage() {
             style={{ animationDelay: '140ms' }}
           >
             Planifica con el suelo adecuado a tu modalidad, mira el viento y sal con la ruta lista.
-            Empieza gratis.
+            {premium ? ' Tienes Premium activo.' : ' Empieza gratis.'}
           </p>
           <div className="mt-8 flex flex-wrap gap-3 animate-rise" style={{ animationDelay: '200ms' }}>
             <Link to="/route-planner">
               <Button className="!px-6 !py-3 text-base">Crear una ruta</Button>
             </Link>
-            <Link to="/premium">
-              <Button
-                variant="ghost"
-                className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
-              >
-                Ver Premium
-              </Button>
-            </Link>
+            {!premium && (
+              <Link to="/premium">
+                <Button
+                  variant="ghost"
+                  className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
+                >
+                  Ver Premium
+                </Button>
+              </Link>
+            )}
+            {premium && (
+              <Link to="/actividades">
+                <Button
+                  variant="ghost"
+                  className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
+                >
+                  Mis actividades
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -105,41 +122,63 @@ export function LandingPage() {
 
       <section className="bg-[var(--color-mist)] px-4 py-16 md:px-6">
         <div className="mx-auto max-w-6xl">
-          <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
-            Free para empezar. Premium cuando lo pidas.
-          </h2>
-          <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
-            Sin tarjeta para probar. Los límites Free están pensados para salidas reales; Premium quita
-            el techo.
-          </p>
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl bg-white/80 p-6 ring-1 ring-[var(--color-fog)]">
-              <h3 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h3>
-              <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
-                <li>· Hasta {FREE_LIMITS.maxRoutesSaved} rutas guardadas</li>
-                <li>· {FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes</li>
-                <li>· {FREE_LIMITS.maxActivePreferences} filtros a la vez</li>
-                <li>· A→B, ida-vuelta, viento y superficie</li>
-              </ul>
-              <Link to="/route-planner" className="mt-6 inline-block">
-                <Button>Probar gratis</Button>
-              </Link>
-            </div>
-            <div className="rounded-3xl bg-[var(--color-forest)] p-6 text-white">
-              <h3 className="font-display text-2xl font-bold">Premium</h3>
-              <ul className="mt-4 space-y-2 text-sm text-white/85">
-                <li>· Rutas y filtros ilimitados</li>
-                <li>· Modo Objetivo (circular km + desnivel)</li>
-                <li>· Exportación / compartir GPX</li>
-                <li>· 4,99 €/mes o 39,99 €/año</li>
-              </ul>
-              <Link to="/premium" className="mt-6 inline-block">
-                <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
-                  Ir a Premium
-                </Button>
-              </Link>
-            </div>
-          </div>
+          {premium ? (
+            <>
+              <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
+                Tu plan Premium está activo
+              </h2>
+              <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
+                Rutas, filtros, Objetivo y GPX sin límites. Gestiona la suscripción desde tu perfil
+                o el portal de Stripe si contrataste con tarjeta.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link to="/route-planner">
+                  <Button>Crear una ruta</Button>
+                </Link>
+                <Link to="/perfil">
+                  <Button variant="secondary">Ir al perfil</Button>
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
+                Free para empezar. Premium cuando lo pidas.
+              </h2>
+              <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
+                Sin tarjeta para probar. Los límites Free están pensados para salidas reales; Premium
+                quita el techo.
+              </p>
+              <div className="mt-8 grid gap-6 md:grid-cols-2">
+                <div className="rounded-3xl bg-white/80 p-6 ring-1 ring-[var(--color-fog)]">
+                  <h3 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h3>
+                  <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
+                    <li>· Hasta {FREE_LIMITS.maxRoutesSaved} rutas guardadas</li>
+                    <li>· {FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes</li>
+                    <li>· {FREE_LIMITS.maxActivePreferences} filtros a la vez</li>
+                    <li>· A→B, ida-vuelta, viento y superficie</li>
+                  </ul>
+                  <Link to="/route-planner" className="mt-6 inline-block">
+                    <Button>Probar gratis</Button>
+                  </Link>
+                </div>
+                <div className="rounded-3xl bg-[var(--color-forest)] p-6 text-white">
+                  <h3 className="font-display text-2xl font-bold">Premium</h3>
+                  <ul className="mt-4 space-y-2 text-sm text-white/85">
+                    <li>· Rutas y filtros ilimitados</li>
+                    <li>· Modo Objetivo (circular km + desnivel)</li>
+                    <li>· Exportación / compartir GPX</li>
+                    <li>· 4,99 €/mes o 39,99 €/año</li>
+                  </ul>
+                  <Link to="/premium" className="mt-6 inline-block">
+                    <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
+                      Ir a Premium
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </section>
 

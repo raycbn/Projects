@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { BikeSelector } from '@/components/route/BikeSelector'
 import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { isPremiumUser } from '@/lib/plan'
 import type { BikeType, RoutePreference } from '@/domain/types'
 
 export function ProfilePage() {
@@ -69,6 +70,33 @@ export function ProfilePage() {
               <br />
               <strong className="capitalize">{profile?.plan || 'free'}</strong>
             </p>
+            {isPremiumUser(profile) ? (
+              <p className="text-sm text-[var(--color-stone)]">
+                Premium activo · sin límites de rutas, filtros ni GPX.
+              </p>
+            ) : (
+              <Link to="/premium" className="inline-block text-sm font-semibold text-[var(--color-trail)]">
+                Ver plan Premium
+              </Link>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+            <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+              Conectar GPS
+            </h2>
+            <p className="text-sm text-[var(--color-stone)]">
+              Wahoo por API oficial, o iGPSPORT / Garmin / otros trayendo las salidas a PedalMap.
+              El análisis se queda aquí.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/actividades#wahoo">
+                <Button variant="secondary">Wahoo</Button>
+              </Link>
+              <Link to="/actividades#gps-cloud">
+                <Button variant="secondary">Otros GPS → PedalMap</Button>
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-4 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
@@ -82,7 +110,9 @@ export function ProfilePage() {
               profile={profile}
               onLimitReached={() =>
                 setMessage(
-                  `Free permite hasta 2 filtros a la vez. Quita uno o pasa a Premium.`,
+                  isPremiumUser(profile)
+                    ? 'No se pudo aplicar ese filtro.'
+                    : 'Free permite hasta 2 filtros a la vez. Quita uno o pasa a Premium.',
                 )
               }
             />
