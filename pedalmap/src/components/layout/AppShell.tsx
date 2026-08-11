@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { CookieBanner } from '@/components/legal/CookieBanner'
+import { BRAND_EMAILS } from '@/lib/brandEmails'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   clsx(
@@ -97,6 +98,12 @@ export function AppShell() {
               <Link className="hover:text-[var(--color-forest)]" to="/premium">
                 Premium
               </Link>
+              <a
+                className="hover:text-[var(--color-forest)]"
+                href={`mailto:${BRAND_EMAILS.hello}`}
+              >
+                Contacto
+              </a>
             </nav>
           </div>
         </footer>

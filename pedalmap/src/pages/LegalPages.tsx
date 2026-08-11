@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { BRAND_EMAILS, PUBLIC_CONTACT_EMAIL } from '@/lib/brandEmails'
 
-const contact = 'rayvf2002@gmail.com'
+const contact = PUBLIC_CONTACT_EMAIL
+const hello = BRAND_EMAILS.hello
 
 export function PrivacyPage() {
   usePageMeta({
@@ -131,7 +133,7 @@ export function TermsPage() {
         </p>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Contacto</h2>
         <p>
-          Dudas: {contact}. Privacidad:{' '}
+          Dudas generales: {hello}. Soporte y privacidad: {contact}. Más en{' '}
           <Link className="underline" to="/privacidad">
             /privacidad
           </Link>

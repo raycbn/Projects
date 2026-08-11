@@ -40,4 +40,10 @@ if ! grep -R -F -q -- 'pedalmap-api.broken-dietician.workers.dev' dist/; then
   echo "WARN: Worker URL not found in dist (check VITE_PEDALMAP_API_URL)" >&2
 fi
 
+# Personal inboxes must never ship in the client bundle.
+if grep -R -E -q -- 'rayvf2002@gmail\.com|raymel\.vb@gmail\.com' dist/; then
+  echo "LEAK: personal Gmail found in dist/" >&2
+  exit 1
+fi
+
 echo "OK → dist/ ready for: npx firebase-tools deploy --only hosting --project pedalmap-79b3a"

@@ -16,7 +16,9 @@ workers_dev = true
 #   STRIPE_PRICE_YEARLY
 #   APP_URL
 #   ALLOWED_ORIGINS (comma-separated)
-#   PREMIUM_ALLOWLIST (optional comma-separated emails)
+#   PREMIUM_ALLOWLIST (optional comma-separated Auth emails — prefer Cloudflare secret;
+#                      do not commit personal Gmail. Default in code: premium@pedalmap.es)
+#   RESEND_API_KEY / MAIL_FROM (optional transactional mail)
 #   STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET (optional legacy)
 #   WAHOO_CLIENT_ID / WAHOO_CLIENT_SECRET / WAHOO_WEBHOOK_TOKEN
 #   IGPSPORT_CLIENT_ID / IGPSPORT_CLIENT_SECRET / IGPSPORT_WEBHOOK_TOKEN
@@ -28,4 +30,6 @@ STRIPE_PRICE_MONTHLY = "price_1U2i2oDRDu30ohSLy0PIHXtJ"
 STRIPE_PRICE_YEARLY = "price_1U2i69DRDu30ohSLo5EoU9ed"
 APP_URL = "https://pedalmap.es"
 ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
-PREMIUM_ALLOWLIST = "rayvf2002@gmail.com,raymel.vb@gmail.com"
+# Brand ops only in git. Add personal login emails as a Worker secret (not committed):
+#   echo 'premium@pedalmap.es,you@…' | npx wrangler secret put PREMIUM_ALLOWLIST
+PREMIUM_ALLOWLIST = "premium@pedalmap.es"

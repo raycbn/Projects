@@ -33,7 +33,7 @@ async function geocode(q) {
   const res = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'PedalMapMVPValidation/1.0 (contact: pedalmap@example.com)',
+      'User-Agent': 'PedalMapMVPValidation/1.0 (contact: hola@pedalmap.es)',
     },
   })
   const data = await res.json()

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { track } from '@/lib/analytics'
-import { FREE_TRIALS } from '@/domain/types'
+import { ANNUAL_TRIAL_DAYS, FREE_TRIALS } from '@/domain/types'
 
 interface PremiumCardProps {
   reason?: string | null
@@ -67,7 +67,7 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           ))}
         </ul>
         <p className="mt-4 text-xs text-white/55">
-          Anual: 7 días de prueba antes de cobrar.
+          Anual: {ANNUAL_TRIAL_DAYS} días de prueba antes de cobrar.
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
           <Link

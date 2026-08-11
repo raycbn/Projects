@@ -1,7 +1,11 @@
 import type { Env } from './types'
 
-/** Default ops allowlist — override with env PREMIUM_ALLOWLIST (comma-separated). */
-const DEFAULT_PREMIUM_EMAILS = ['rayvf2002@gmail.com', 'raymel.vb@gmail.com']
+/**
+ * Ops Premium allowlist (Firebase Auth email match).
+ * Default is the brand inbox only — never commit personal Gmail here.
+ * Override with env PREMIUM_ALLOWLIST (Cloudflare var/secret, comma-separated).
+ */
+const DEFAULT_PREMIUM_EMAILS = ['premium@pedalmap.es']
 
 export function premiumAllowlistEmails(env: Env): Set<string> {
   const raw = (env.PREMIUM_ALLOWLIST || '').trim()

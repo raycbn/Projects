@@ -1,6 +1,7 @@
 import type { GeocodingProvider } from '@/adapters/geocoding/GeocodingProvider'
 import type { LatLng, PlaceSuggestion } from '@/domain/types'
 import { GeocodingError } from '@/domain/types'
+import { BRAND_EMAILS } from '@/lib/brandEmails'
 
 /**
  * Nominatim (OSM) geocoder for low-volume MVP usage.
@@ -18,7 +19,8 @@ export class NominatimProvider implements GeocodingProvider {
 
   constructor(
     baseUrl = 'https://nominatim.openstreetmap.org',
-    email = import.meta.env.VITE_GEOCODER_CONTACT_EMAIL as string | undefined,
+    email = (import.meta.env.VITE_GEOCODER_CONTACT_EMAIL as string | undefined)?.trim() ||
+      BRAND_EMAILS.hello,
   ) {
     this.baseUrl = baseUrl
     this.email = email

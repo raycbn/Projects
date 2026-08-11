@@ -7,6 +7,7 @@ import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { track } from '@/lib/analytics'
 import { WIND_ALERT } from '@/lib/windAlerts'
+import { BRAND_EMAILS } from '@/lib/brandEmails'
 import { ANNUAL_TRIAL_DAYS, FREE_TRIALS, type BikeType, type RoutePreference } from '@/domain/types'
 
 export function ProfilePage() {
@@ -177,7 +178,7 @@ export function ProfilePage() {
                 <span>
                   También por email
                   <span className="block text-xs text-[var(--color-stone)]">
-                    Listo cuando conectemos el correo (aviso@pedalmap.es).
+                    Listo cuando conectemos el correo ({BRAND_EMAILS.alerts}).
                   </span>
                 </span>
               </label>
