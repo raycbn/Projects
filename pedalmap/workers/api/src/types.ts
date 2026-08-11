@@ -14,6 +14,22 @@ export interface Env {
   VALHALLA_URL?: string
   /** Optional comma-separated emails granted Premium without Stripe. */
   PREMIUM_ALLOWLIST?: string
+  /** Strava API application (optional legacy bridge — not shown in primary UI). */
+  STRAVA_CLIENT_ID?: string
+  STRAVA_CLIENT_SECRET?: string
+  /** Official GPS cloud APIs (wrangler secret put). */
+  WAHOO_CLIENT_ID?: string
+  WAHOO_CLIENT_SECRET?: string
+  WAHOO_WEBHOOK_TOKEN?: string
+  IGPSPORT_CLIENT_ID?: string
+  IGPSPORT_CLIENT_SECRET?: string
+  IGPSPORT_WEBHOOK_TOKEN?: string
+  IGPSPORT_AUTH_URL?: string
+  IGPSPORT_TOKEN_URL?: string
+  IGPSPORT_SCOPE?: string
+  GARMIN_CLIENT_ID?: string
+  GARMIN_CLIENT_SECRET?: string
+  GARMIN_WEBHOOK_TOKEN?: string
 }
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'

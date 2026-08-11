@@ -8,6 +8,23 @@ import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 import { handleMintCustomToken } from './customToken'
 import { handleEntitlements, handleSyncPlan } from './entitlements'
+import {
+  handleStravaDisconnect,
+  handleStravaImportActivity,
+  handleStravaListActivities,
+  handleStravaOAuthCallback,
+  handleStravaOAuthStart,
+  handleStravaStatus,
+} from './strava'
+import {
+  handleGpsDisconnect,
+  handleGpsOAuthCallback,
+  handleGpsOAuthStart,
+  handleGpsStatus,
+  handleGpsSync,
+  handleGpsWebhook,
+  isGpsProvider,
+} from './gps'
 
 function withCors(env: Env, request: Request, response: Response): Response {
   const headers = new Headers(response.headers)
@@ -199,6 +216,130 @@ export default {
 
       if (path === '/stripe/webhook' && request.method === 'POST') {
         return handleWebhook(request, env)
+      }
+
+      if (path === '/strava/oauth/start' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'strava-oauth',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleStravaOAuthStart(request, env, identity))
+      }
+
+      if (path === '/strava/oauth/callback' && request.method === 'GET') {
+        // Browser redirect from Strava — no CORS wrapper needed.
+        return handleStravaOAuthCallback(request, env)
+      }
+
+      if (path === '/strava/status' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        return withCors(env, request, await handleStravaStatus(env, identity))
+      }
+
+      if (path === '/strava/disconnect' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        return withCors(env, request, await handleStravaDisconnect(env, identity))
+      }
+
+      if (path === '/strava/activities' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 30,
+          windowSec: 60,
+          prefix: 'strava-list',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleStravaListActivities(env, identity, request))
+      }
+
+      {
+        const importMatch = path.match(/^\/strava\/activities\/(\d+)\/import$/)
+        if (importMatch && request.method === 'POST') {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          const limited = await enforceRateLimit(request, {
+            limit: 20,
+            windowSec: 60,
+            prefix: 'strava-import',
+            key: identity.uid,
+          })
+          if (limited) return withCors(env, request, limited)
+          return withCors(
+            env,
+            request,
+            await handleStravaImportActivity(env, identity, importMatch[1]),
+          )
+        }
+      }
+
+      if (path === '/gps/status' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        return withCors(env, request, await handleGpsStatus(env, identity))
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/oauth\/start$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          const limited = await enforceRateLimit(request, {
+            limit: 20,
+            windowSec: 60,
+            prefix: 'gps-oauth',
+            key: identity.uid,
+          })
+          if (limited) return withCors(env, request, limited)
+          return withCors(env, request, await handleGpsOAuthStart(request, env, identity, m[1]))
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/oauth\/callback$/)
+        if (m && request.method === 'GET' && isGpsProvider(m[1])) {
+          return handleGpsOAuthCallback(request, env, m[1])
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/disconnect$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          return withCors(env, request, await handleGpsDisconnect(env, identity, m[1]))
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/sync$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          const identity = await requireFirebaseUser(env, request)
+          if (identity instanceof Response) return withCors(env, request, identity)
+          const limited = await enforceRateLimit(request, {
+            limit: 10,
+            windowSec: 60,
+            prefix: 'gps-sync',
+            key: identity.uid,
+          })
+          if (limited) return withCors(env, request, limited)
+          return withCors(env, request, await handleGpsSync(env, identity, m[1]))
+        }
+      }
+
+      {
+        const m = path.match(/^\/gps\/([a-z]+)\/webhook$/)
+        if (m && request.method === 'POST' && isGpsProvider(m[1])) {
+          return handleGpsWebhook(request, env, m[1])
+        }
       }
 
       return withCors(env, request, json({ error: 'Not found', path }, 404))
