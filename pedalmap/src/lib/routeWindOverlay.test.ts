@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { LineString } from 'geojson'
 import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
 
 describe('buildRouteWindOverlay', () => {
@@ -72,13 +73,11 @@ describe('buildRouteWindOverlay', () => {
     expect(segments.length).toBeGreaterThan(0)
     for (const seg of segments) {
       expect(seg.geometry.type).toBe('LineString')
-      const coords = (seg.geometry as { coordinates: [number, number][] }).coordinates
+      const coords = (seg.geometry as LineString).coordinates
       expect(coords.length).toBeGreaterThanOrEqual(2)
     }
     // Full overlay should include the corner when covering the whole hook.
-    const allCoords = segments.flatMap(
-      (s) => (s.geometry as { coordinates: [number, number][] }).coordinates,
-    )
+    const allCoords = segments.flatMap((s) => (s.geometry as LineString).coordinates)
     const hasCorner = allCoords.some(
       ([lng, lat]) => Math.abs(lng - 0.01) < 1e-9 && Math.abs(lat - 0.01) < 1e-9,
     )
