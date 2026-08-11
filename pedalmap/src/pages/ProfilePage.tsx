@@ -178,7 +178,7 @@ export function ProfilePage() {
                 <span>
                   También por email
                   <span className="block text-xs text-[var(--color-stone)]">
-                    Listo cuando conectemos el correo ({BRAND_EMAILS.alerts}).
+                    Te llega desde {BRAND_EMAILS.alerts} cuando haya una ventana excelente.
                   </span>
                 </span>
               </label>
