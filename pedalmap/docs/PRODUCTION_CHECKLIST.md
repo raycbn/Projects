@@ -16,7 +16,10 @@ Estado actual (2026-08-10):
 | Superficie por modalidad | ✅ scoring + multi-strategy ORS |
 | Explorar vacío | ✅ demos Madrid/Sierra |
 | Stripe | ⚠️ **test/sandbox** (no live hasta cobrar) |
-| Dominio propio | ⏳ pendiente (DNS + Auth/CORS/APP_URL) |
+| Dominio propio | ✅ pedalmap.es (Hosting + Worker CORS) |
+| Correos marca en UI | ✅ hola@ / soporte@ / aviso@ (sin Gmail en bundle) |
+| Resend + DNS envío | ⏳ ver `docs/EMAIL_SETUP.md` |
+| OAuth/Firebase support email | ⏳ crear cuenta Google `soporte@` + miembro proyecto |
 | Rules/indexes deploy owner | ✅ publicadas por owner (2026-08-10) |
 
 ## Soft-launch gate

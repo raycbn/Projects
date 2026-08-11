@@ -75,6 +75,16 @@ npx firebase deploy --only firestore:rules,firestore:indexes,storage --project p
 
 Ver `docs/PRODUCTION_CHECKLIST.md`.
 
+## F) Correos de marca (Google / Firebase / Resend / IONOS)
+
+Guía completa: **`docs/EMAIL_SETUP.md`**.
+
+Resumen:
+
+1. **Google/Firebase no dejan elegir `soporte@`** hasta crear una cuenta Google con ese buzón e invitarla al proyecto.
+2. Rellena nombre `PedalMap` + URLs `/privacidad` y `/terminos` en la pantalla OAuth.
+3. **Resend** + registros DNS en **IONOS** (sin tocar MX) + `wrangler secret put RESEND_API_KEY`.
+
 ## No hagas
 
 - Subir Firebase a **Blaze**
