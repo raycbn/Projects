@@ -15,6 +15,7 @@ import { formatDistance, formatElevation } from '@/lib/stats'
 import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
 import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
+import { routeCameraKey } from '@/lib/mapCamera'
 import { getBikeModality } from '@/lib/bikeSurfaceProfile'
 import { canCreateRoute, canUseAdvancedCircular } from '@/services/EntitlementService'
 import type { RouteType } from '@/domain/types'
@@ -101,11 +102,20 @@ export function RoutePlanner() {
 
   const fitKey = useMemo(
     () =>
-      activeDraft
-        ? `${activeDraft.stats.distanceMeters}-${activeDraft.geometry.coordinates.length}-${activeDraft.selectedOptionId ?? 'main'}`
-        : `empty-${waypoints.length}`,
+      routeCameraKey(
+        activeDraft?.geometry,
+        activeDraft
+          ? `${activeDraft.selectedOptionId ?? 'main'}-${Math.round(activeDraft.stats.distanceMeters)}`
+          : `wp-${waypoints.length}`,
+      ),
     [activeDraft, waypoints.length],
   )
+
+  const handleGpxImported = (d: Parameters<typeof setDraftFromImport>[0]) => {
+    setDraftFromImport(d)
+    stashReadyRoute({ draft: d, source: 'import', fitNonce: Date.now() })
+    navigate('/ruta')
+  }
 
   const surfaceOverlay = useMemo(() => {
     if (!activeDraft?.geometry) return null
@@ -814,7 +824,7 @@ export function RoutePlanner() {
                   Ajustar en mapa
                 </Button>
               )}
-              <GPXImporter onImported={setDraftFromImport} />
+              <GPXImporter onImported={handleGpxImported} />
             </div>
           </div>
         )}
@@ -826,13 +836,7 @@ export function RoutePlanner() {
               <strong>Trazar</strong> para tocar puntos en el mapa.
             </p>
             <div className="mt-3">
-              <GPXImporter
-                onImported={(d) => {
-                  setDraftFromImport(d)
-                  stashReadyRoute({ draft: d, source: 'import' })
-                  navigate('/ruta')
-                }}
-              />
+              <GPXImporter onImported={handleGpxImported} />
             </div>
           </div>
         )}

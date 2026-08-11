@@ -10,6 +10,8 @@ export type ReadyRoutePacket = {
   savedRouteId?: string | null
   shareSlug?: string | null
   source?: 'calculate' | 'saved' | 'import'
+  /** Bumps MapView fit when the same geometry is re-imported / reopened. */
+  fitNonce?: number
 }
 
 export function stashReadyRoute(packet: ReadyRoutePacket): void {

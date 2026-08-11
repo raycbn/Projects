@@ -13,6 +13,7 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 import { peekReadyRoute, stashReadyRoute, type ReadyRoutePacket } from '@/lib/readyRouteHandoff'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { shareRouteCard } from '@/lib/shareCard'
+import { routeCameraKey } from '@/lib/mapCamera'
 import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
 import { canSaveRoute } from '@/services/EntitlementService'
 import { formatDistance, formatElevation } from '@/lib/stats'
@@ -141,11 +142,8 @@ export function ReadyRoutePage() {
   }, [routeIdParam, packet?.draft])
 
   const fitKey = useMemo(
-    () =>
-      draft
-        ? `${draft.stats.distanceMeters}-${draft.geometry.coordinates.length}-${draft.selectedOptionId ?? 'main'}`
-        : 'empty',
-    [draft],
+    () => routeCameraKey(draft?.geometry, packet?.fitNonce ?? packet?.source ?? 'ready'),
+    [draft, packet?.fitNonce, packet?.source],
   )
 
   const windOverlay = useMemo(() => {

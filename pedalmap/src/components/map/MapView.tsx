@@ -419,17 +419,51 @@ function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boo
   })
 
   if (fit) {
-    const bounds = geo.coordinates.reduce(
-      (b, c) => b.extend(c as [number, number]),
-      new maplibregl.LngLatBounds(
-        geo.coordinates[0] as [number, number],
-        geo.coordinates[0] as [number, number],
-      ),
-    )
-    map.fitBounds(bounds, { padding: 56, duration: 600 })
+    fitMapToGeometry(map, geo)
   }
 
   return true
+}
+
+/** Pan/zoom the camera to the route LineString (used after GPX import / new geometry). */
+export function fitMapToGeometry(
+  map: Map,
+  geo: RouteGeometry,
+  opts?: { padding?: number; duration?: number },
+) {
+  if (geo.coordinates.length < 2) return
+  const bounds = geo.coordinates.reduce(
+    (b, c) => b.extend(c as [number, number]),
+    new maplibregl.LngLatBounds(
+      geo.coordinates[0] as [number, number],
+      geo.coordinates[0] as [number, number],
+    ),
+  )
+  const padding = opts?.padding ?? 56
+  const duration = opts?.duration ?? 750
+  const run = () => {
+    try {
+      map.resize()
+    } catch {
+      /* ignore */
+    }
+    map.fitBounds(bounds, {
+      padding,
+      duration,
+      maxZoom: 14,
+      essential: true,
+    })
+  }
+  // Guard against zero-size containers (fitBounds then no-ops / jumps oddly).
+  const canvas = map.getCanvas()
+  if (canvas.clientWidth < 32 || canvas.clientHeight < 32) {
+    map.once('idle', () => {
+      requestAnimationFrame(run)
+    })
+    return
+  }
+  // Double rAF: layout after navigating to /ruta often settles one frame late.
+  requestAnimationFrame(() => requestAnimationFrame(run))
 }
 
 function splitWindOverlay(overlay: FeatureCollection | null | undefined): {
@@ -556,6 +590,8 @@ export function MapView({
   const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
   const onMapClickRef = useRef(onMapClick)
   const showWindArrowsRef = useRef(showWindArrows)
+  const fitKeyRef = useRef(fitKey)
+  const lastFittedKeyRef = useRef<string | undefined>(undefined)
   const hasWindOverlay = Boolean(windOverlay?.features?.length)
   followUserRef.current = followUser
   geometryRef.current = geometry
@@ -563,6 +599,7 @@ export function MapView({
   surfaceRef.current = surfaceOverlay
   onMapClickRef.current = onMapClick
   showWindArrowsRef.current = showWindArrows
+  fitKeyRef.current = fitKey
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -593,13 +630,29 @@ export function MapView({
 
       const paintFromRef = (fit: boolean) => {
         if (!map) return
-        applyGeometry(map, geometryRef.current, fit)
+        const key = fitKeyRef.current
+        const shouldFit = fit && Boolean(key)
+        const ok = applyGeometry(map, geometryRef.current, shouldFit)
+        if (shouldFit && ok && key) lastFittedKeyRef.current = key
         applySurfaceOverlay(map, surfaceRef.current)
         applyWindOverlay(map, windRef.current)
         setWindArrowLayersVisible(map, showWindArrowsRef.current)
       }
 
-      const resize = () => map?.resize()
+      const resize = () => {
+        if (!map) return
+        map.resize()
+        // After layout settles (e.g. navigating to /ruta after GPX), refit once.
+        const key = fitKeyRef.current
+        const geo = geometryRef.current
+        if (key && geo && geo.coordinates.length >= 2 && lastFittedKeyRef.current !== key) {
+          requestAnimationFrame(() => {
+            if (!mapRef.current) return
+            applyGeometry(mapRef.current, geometryRef.current, true)
+            lastFittedKeyRef.current = key
+          })
+        }
+      }
 
       map.on('load', () => {
         resize()
@@ -683,7 +736,24 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    applyGeometry(map, geometry, Boolean(fitKey))
+    const shouldFit = Boolean(fitKey) && lastFittedKeyRef.current !== fitKey
+    const ok = applyGeometry(map, geometry, shouldFit)
+    if (shouldFit && ok && fitKey) {
+      lastFittedKeyRef.current = fitKey
+    } else if (shouldFit && !ok) {
+      // Style not ready yet — fit when the map is idle.
+      map.once('idle', () => {
+        const m = mapRef.current
+        if (!m) return
+        const key = fitKeyRef.current
+        if (!key || lastFittedKeyRef.current === key) return
+        if (applyGeometry(m, geometryRef.current, true)) {
+          lastFittedKeyRef.current = key
+        }
+      })
+    } else if (!shouldFit) {
+      applyGeometry(map, geometry, false)
+    }
     applySurfaceOverlay(map, surfaceRef.current)
     applyWindOverlay(map, windRef.current)
     setWindArrowLayersVisible(map, showWindArrowsRef.current)

@@ -136,6 +136,7 @@ export function SharedRoutePage() {
               savedRouteId: route.id,
               shareSlug: route.shareSlug ?? shareSlug,
               source: 'import',
+              fitNonce: Date.now(),
             })
             navigate('/ruta')
           }}
