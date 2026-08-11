@@ -44,66 +44,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     let cancelled = false
     let unsubProfile: (() => void) | undefined
-    let unsubAuth: (() => void) | undefined
+
+    // Listen first so persistence / GIS / redirect all update UI the same way.
+    const unsubAuth = authService.watch(async (next) => {
+      if (cancelled) return
+      unsubProfile?.()
+      unsubProfile = undefined
+      setUser(next)
+      if (next) {
+        try {
+          await authService.ensureProfile(next)
+          if (cancelled) return
+          if (!next.isAnonymous) {
+            await syncServerPlan()
+          }
+          const p = await authService.ensureProfile(next)
+          if (cancelled) return
+          setProfile({
+            ...p,
+            email: p.email ?? next.email,
+          })
+          unsubProfile = authService.watchProfile(next.uid, (live) => {
+            if (live) {
+              setProfile({
+                ...live,
+                email: live.email ?? next.email,
+              })
+            }
+          })
+        } catch (error) {
+          console.error('[auth] profile', error)
+          if (!cancelled) setProfile(null)
+        }
+      } else {
+        setProfile(null)
+      }
+      setLoading(false)
+    })
 
     void (async () => {
       try {
         const customToken = consumeCustomTokenFromUrl()
         if (customToken) {
           await authService.completeCustomToken(customToken)
-        } else {
-          await authService.completeGoogleRedirect()
+          return
         }
+        await authService.completeGoogleRedirect()
       } catch (error) {
         console.error('[auth] google session', error)
         if (!cancelled) {
           setAuthError(authErrorMessage(error, 'No se pudo iniciar sesión con Google.'))
         }
       }
-      if (cancelled) return
-
-      unsubAuth = authService.watch(async (next) => {
-        if (cancelled) return
-        unsubProfile?.()
-        unsubProfile = undefined
-        setUser(next)
-        if (next) {
-          try {
-            await authService.ensureProfile(next)
-            if (cancelled) return
-            // Server-authoritative allowlist → Firestore plan (Worker Admin).
-            if (!next.isAnonymous) {
-              await syncServerPlan()
-            }
-            const p = await authService.ensureProfile(next)
-            if (cancelled) return
-            setProfile({
-              ...p,
-              email: p.email ?? next.email,
-            })
-            unsubProfile = authService.watchProfile(next.uid, (live) => {
-              if (live) {
-                setProfile({
-                  ...live,
-                  email: live.email ?? next.email,
-                })
-              }
-            })
-          } catch (error) {
-            console.error('[auth] profile', error)
-            if (!cancelled) setProfile(null)
-          }
-        } else {
-          setProfile(null)
-        }
-        setLoading(false)
-      })
     })()
 
     return () => {
       cancelled = true
       unsubProfile?.()
-      unsubAuth?.()
+      unsubAuth()
     }
   }, [firebaseReady])
 

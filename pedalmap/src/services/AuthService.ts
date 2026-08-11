@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInAnonymously,
+  signInWithCredential,
   signInWithCustomToken,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -17,11 +18,15 @@ import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/fires
 import type { UserProfile } from '@/domain/types'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { needsGoogleAuthBridge, startGoogleAuthBridge } from '@/lib/authBridge'
+import { requestGoogleAccessToken } from '@/lib/googleIdentity'
 import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
 import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
 
 const googleProvider = new GoogleAuthProvider()
+googleProvider.setCustomParameters({ prompt: 'select_account' })
+googleProvider.addScope('email')
+googleProvider.addScope('profile')
 
 /** Popup + COOP is unreliable on phones / in-app browsers. Prefer redirect there. */
 export function prefersGoogleRedirect(): boolean {
@@ -32,6 +37,9 @@ export function prefersGoogleRedirect(): boolean {
   const coarse = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches)
   return mobile || inApp || coarse
 }
+
+/** Consume Firebase redirect result at most once per page load (React remounts). */
+let redirectCompletion: Promise<User | null> | null = null
 
 export function authErrorMessage(error: unknown, fallback: string): string {
   const code =
@@ -141,13 +149,19 @@ export class AuthService {
   /**
    * Completes Google redirect sign-in after returning from accounts.google.com.
    * Safe to call on every cold start; no-ops when there is no pending redirect.
+   * Deduped: React Strict Mode / remounts must not call getRedirectResult twice.
    */
-  async completeGoogleRedirect(): Promise<User | null> {
-    const result = await getRedirectResult(getFirebaseAuth())
-    if (!result?.user) return null
-    await this.ensureProfile(result.user)
-    track('signup_completed', { method: 'google' })
-    return result.user
+  completeGoogleRedirect(): Promise<User | null> {
+    if (!redirectCompletion) {
+      redirectCompletion = (async () => {
+        const result = await getRedirectResult(getFirebaseAuth())
+        if (!result?.user) return null
+        await this.ensureProfile(result.user)
+        track('signup_completed', { method: 'google' })
+        return result.user
+      })()
+    }
+    return redirectCompletion
   }
 
   /** Exchange a Worker-minted custom token for a Firebase session (auth bridge return). */
@@ -158,20 +172,24 @@ export class AuthService {
     return result.user
   }
 
+  /** GIS access token → Firebase session (no /__/auth redirect). */
+  async signInGoogleWithAccessToken(accessToken: string): Promise<User> {
+    const credential = GoogleAuthProvider.credential(null, accessToken)
+    const result = await signInWithCredential(getFirebaseAuth(), credential)
+    await this.ensureProfile(result.user)
+    track('signup_completed', { method: 'google' })
+    return result.user
+  }
+
   /**
-   * Google sign-in on the current host (popup or redirect).
-   * Used by the auth bridge page on *.web.app — do not add cross-domain logic here.
+   * Google sign-in via Firebase popup/redirect helpers on the current host.
+   * Prefer signInGoogle() which tries GIS first.
    */
   async signInGoogleDirect(): Promise<User | null> {
     const auth = getFirebaseAuth()
 
-    // Always redirect on coarse/mobile/in-app browsers. Popup leaves a stuck overlay
-    // that blocks the app on many phones and embedded webviews.
-    if (prefersGoogleRedirect()) {
-      await signInWithRedirect(auth, googleProvider)
-      return null
-    }
-
+    // Prefer popup even on mobile when authDomain is first-party — redirect + SW
+    // historically left users on /login with no session.
     try {
       const result = await signInWithPopup(auth, googleProvider)
       await this.ensureProfile(result.user)
@@ -182,12 +200,10 @@ export class AuthService {
         typeof error === 'object' && error && 'code' in error
           ? String((error as { code?: string }).code || '')
           : ''
-      // Popup blocked / COOP / cancelled → fall back to redirect (no stuck window).
-      if (
-        code === 'auth/popup-blocked' ||
-        code === 'auth/popup-closed-by-user' ||
-        code === 'auth/cancelled-popup-request'
-      ) {
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        throw error
+      }
+      if (code === 'auth/popup-blocked' || prefersGoogleRedirect()) {
         await signInWithRedirect(auth, googleProvider)
         return null
       }
@@ -202,6 +218,22 @@ export class AuthService {
       startGoogleAuthBridge(`${window.location.origin}/login`)
       return null
     }
+
+    // Primary: Google Identity Services (stays on pedalmap.es, no Firebase redirect).
+    try {
+      const accessToken = await requestGoogleAccessToken()
+      return await this.signInGoogleWithAccessToken(accessToken)
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error && 'code' in error
+          ? String((error as { code?: string }).code || '')
+          : ''
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        throw error
+      }
+      console.warn('[auth] GIS Google sign-in failed, falling back to Firebase helper', error)
+    }
+
     return this.signInGoogleDirect()
   }
 
