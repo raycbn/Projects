@@ -18,11 +18,22 @@ PedalMap ayuda a crear salidas ciclistas realistas en España. El usuario elige 
 
 ## Guías locales
 - Madrid: https://pedalmap.es/rutas-bicicleta-madrid
-- MTB Madrid: https://pedalmap.es/rutas-mtb-madrid
-- Gravel Madrid: https://pedalmap.es/rutas-gravel-madrid
 - Barcelona: https://pedalmap.es/rutas-bicicleta-barcelona
 - Valencia: https://pedalmap.es/rutas-bicicleta-valencia
 - Sevilla: https://pedalmap.es/rutas-bicicleta-sevilla
+- Bilbao: https://pedalmap.es/rutas-bicicleta-bilbao
+- Zaragoza: https://pedalmap.es/rutas-bicicleta-zaragoza
+- Málaga: https://pedalmap.es/rutas-bicicleta-malaga
+- Granada: https://pedalmap.es/rutas-bicicleta-granada
+- Alicante: https://pedalmap.es/rutas-bicicleta-alicante
+- Murcia: https://pedalmap.es/rutas-bicicleta-murcia
+- Santander: https://pedalmap.es/rutas-bicicleta-santander
+
+## Blog
+- Índice: https://pedalmap.es/blog
+- GPX Garmin: https://pedalmap.es/blog/exportar-gpx-garmin
+- Wahoo: https://pedalmap.es/blog/pasar-ruta-wahoo
+- Objetivo circular: https://pedalmap.es/blog/ruta-circular-objetivo
 
 ## Diferenciadores
 - Routing orientado a tipo de bici y superficie (Valhalla primero, ORS respaldo)

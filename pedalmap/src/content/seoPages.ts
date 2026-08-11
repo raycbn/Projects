@@ -154,4 +154,123 @@ export const seoPages: SeoPageContent[] = [
       { to: '/crear-ruta-gpx', label: 'Crear GPX' },
     ],
   },
+  {
+    path: '/rutas-bicicleta-bilbao',
+    title: 'Rutas bicicleta Bilbao | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Bilbao y Bizkaia: ría, costa, desnivel y GPX con PedalMap.',
+    heading: 'Rutas de bicicleta en Bilbao',
+    body: [
+      'Bilbao y alrededores mezclan paseos junto a la ría, subidas cortas hacia los montes cercanos y escapadas hacia la costa de Bizkaia. Con PedalMap eliges el tipo de bici y ves desnivel y superficie antes de salir.',
+      'Útil para rodajes urbanos y para salidas de fin de semana con más metros. Exporta GPX a Garmin/Wahoo o navega desde el móvil.',
+      'Empieza Free; si preparas varias rutas a la semana, Premium quita los límites de creaciones y GPX.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-santander', label: 'Rutas Santander' },
+      { to: '/rutas-bicicleta-zaragoza', label: 'Rutas Zaragoza' },
+      { to: '/blog/primera-ruta-pedalmap', label: 'Primera ruta' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-zaragoza',
+    title: 'Rutas bicicleta Zaragoza | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Zaragoza: Ebro, canal, rodajes planos y escapadas con mapa y GPX.',
+    heading: 'Rutas de bicicleta en Zaragoza',
+    body: [
+      'Zaragoza encaja muy bien con rodajes largos y relativamente planos junto al Ebro y el Canal Imperial. PedalMap te ayuda a trazar la salida, mirar viento (clave en el valle) y desnivel real.',
+      'Elige perfil carretera o gravel según el firme que quieras. Guarda la ruta o exporta GPX para la grupeta.',
+      'Prueba sin cuenta y crea usuario Free cuando quieras guardar varias salidas.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-madrid', label: 'Rutas Madrid' },
+      { to: '/rutas-bicicleta-bilbao', label: 'Rutas Bilbao' },
+      { to: '/blog/viento-en-la-ruta', label: 'Viento en la ruta' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-malaga',
+    title: 'Rutas bicicleta Málaga | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Málaga y la Costa del Sol: costa, montaña cercana, desnivel y GPX.',
+    heading: 'Rutas de bicicleta en Málaga',
+    body: [
+      'Málaga ofrece costa para rodajes y, a pocos kilómetros, puertos y carreteras con desnivel serio hacia el interior. Define si quieres llano playero o metros positivos antes de calcular.',
+      'Con PedalMap trazas origen/destino, eliges el perfil de bici y revisas elevación y superficie. Ojo con el calor: planifica horarios y lleva agua.',
+      'Exporta GPX o usa la navegación móvil. Free para empezar; Premium si sales a menudo.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-granada', label: 'Rutas Granada' },
+      { to: '/rutas-bicicleta-sevilla', label: 'Rutas Sevilla' },
+      { to: '/crear-ruta-bicicleta', label: 'Crear ruta' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-granada',
+    title: 'Rutas bicicleta Granada | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Granada: Vega, sierra y desnivel real con mapa y exportación GPX.',
+    heading: 'Rutas de bicicleta en Granada',
+    body: [
+      'Granada premia mirar el desnivel: la Vega permite rodajes más suaves y en cuanto tiras hacia sierra los metros suben rápido. PedalMap muestra el perfil antes de comprometerte.',
+      'Elige carretera o MTB/gravel según la zona. Calcula, revisa superficie y viento, y guarda o exporta GPX.',
+      'Ideal para preparar entrenos de subida sin improvisar el recorrido el mismo día.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-malaga', label: 'Rutas Málaga' },
+      { to: '/blog/calcular-desnivel-ruta-bici', label: 'Calcular desnivel' },
+      { to: '/route-planner', label: 'Planificador' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-alicante',
+    title: 'Rutas bicicleta Alicante | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Alicante: costa, interior y desnivel con PedalMap y GPX.',
+    heading: 'Rutas de bicicleta en Alicante',
+    body: [
+      'Alicante combina paseos costeros con escapadas hacia el interior donde el desnivel aparece en cuanto dejas la primera línea. Con PedalMap defines la salida y ves metros y suelo.',
+      'Perfil carretera para asfalto; gravel si encadenas caminos. Revisa el viento, muy presente en tramos abiertos.',
+      'Empieza Free y pasa a Premium cuando necesites más GPX u Objetivo circular.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-valencia', label: 'Rutas Valencia' },
+      { to: '/rutas-bicicleta-murcia', label: 'Rutas Murcia' },
+      { to: '/blog/viento-en-la-ruta', label: 'Viento' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-murcia',
+    title: 'Rutas bicicleta Murcia | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Murcia y alrededores con mapa, desnivel, viento y GPX.',
+    heading: 'Rutas de bicicleta en Murcia',
+    body: [
+      'Murcia permite rodajes por huerta y conexiones hacia costa o interior según el desnivel que busques. PedalMap te ayuda a cuadrar kilómetros y metros antes de salir con calor.',
+      'Calcula con el tipo de bici adecuado, mira superficie y exporta GPX al GPS o al móvil.',
+      'Guarda tus salidas favoritas en Free y sube a Premium si entrenas con frecuencia.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-alicante', label: 'Rutas Alicante' },
+      { to: '/rutas-bicicleta-valencia', label: 'Rutas Valencia' },
+      { to: '/crear-ruta-gpx', label: 'Crear GPX' },
+    ],
+  },
+  {
+    path: '/rutas-bicicleta-santander',
+    title: 'Rutas bicicleta Santander | PedalMap',
+    description:
+      'Planifica rutas de bicicleta en Santander y Cantabria: costa, desnivel y GPX con PedalMap.',
+    heading: 'Rutas de bicicleta en Santander',
+    body: [
+      'Santander y Cantabria ofrecen costa dura de viento y carreteras con subidas frecuentes. Planificar desnivel y exposición al viento aquí no es opcional.',
+      'Con PedalMap trazas la ruta, eliges el perfil y revisas elevación antes de salir. Lleva capas: el tiempo cambia rápido.',
+      'Exporta GPX o navega desde el móvil. Empieza Free en pedalmap.es.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-bilbao', label: 'Rutas Bilbao' },
+      { to: '/blog/viento-en-la-ruta', label: 'Viento en la ruta' },
+      { to: '/planificador-rutas-bici', label: 'Planificador' },
+    ],
+  },
 ]

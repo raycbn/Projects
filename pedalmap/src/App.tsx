@@ -19,6 +19,8 @@ import { ActivityPage } from '@/pages/ActivityPage'
 import { MyActivitiesPage } from '@/pages/MyActivitiesPage'
 import { ConnectGpsPage } from '@/pages/ConnectGpsPage'
 import { NavigationPage } from '@/pages/NavigationPage'
+import { BlogIndexPage } from '@/pages/BlogIndexPage'
+import { BlogPostPage } from '@/pages/BlogPostPage'
 import { seoPages } from '@/content/seoPages'
 
 export default function App() {
@@ -38,6 +40,8 @@ export default function App() {
               <Route path="actividad" element={<ActivityPage />} />
               <Route path="navegacion" element={<NavigationPage />} />
               <Route path="explorar" element={<ExplorePage />} />
+              <Route path="blog" element={<BlogIndexPage />} />
+              <Route path="blog/:slug" element={<BlogPostPage />} />
               <Route path="premium" element={<PremiumPage />} />
               <Route path="perfil" element={<ProfilePage />} />
               <Route path="login" element={<LoginPage />} />

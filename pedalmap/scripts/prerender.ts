@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seoPages } from '../src/content/seoPages'
+import { blogPosts } from '../src/content/blogPosts'
 import { landingFaqs } from '../src/content/faqs'
 import {
   faqPageJsonLd,
@@ -158,6 +159,46 @@ const pages: PageSpec[] = [
       name: p.heading,
       description: p.description,
     }),
+  })),
+  {
+    path: '/blog',
+    title: 'Blog ciclista | PedalMap',
+    description:
+      'Guías prácticas: GPX a Garmin/Wahoo, Objetivo circular, viento, desnivel y cómo planificar rutas en España con PedalMap.',
+    heading: 'Blog PedalMap',
+    paragraphs: [
+      'Tutoriales cortos para crear rutas, exportar GPX y salir con datos de verdad.',
+      ...blogPosts.map((p) => `${p.title}: ${p.description}`),
+    ],
+    jsonLd: webPageJsonLd({
+      path: '/blog',
+      name: 'Blog PedalMap',
+      description: 'Guías prácticas de planificación ciclista',
+    }),
+    related: blogPosts.slice(0, 6).map((p) => ({
+      to: `/blog/${p.slug}`,
+      label: p.title,
+    })),
+  },
+  ...blogPosts.map((post) => ({
+    path: `/blog/${post.slug}`,
+    title: `${post.title} | PedalMap`,
+    description: post.description,
+    heading: post.title,
+    paragraphs: post.body,
+    related: post.relatedPaths,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.description,
+      datePublished: post.date,
+      dateModified: post.date,
+      author: { '@type': 'Organization', name: 'PedalMap' },
+      publisher: { '@type': 'Organization', name: 'PedalMap', url: SITE_ORIGIN },
+      mainEntityOfPage: `${SITE_ORIGIN}/blog/${post.slug}`,
+      inLanguage: 'es-ES',
+    },
   })),
   {
     path: '/premium',
