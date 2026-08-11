@@ -15,7 +15,16 @@ import {
 const STRAVA_AUTH = 'https://www.strava.com/oauth/authorize'
 const STRAVA_TOKEN = 'https://www.strava.com/oauth/token'
 const STRAVA_API = 'https://www.strava.com/api/v3'
-const SCOPE = 'read,activity:read_all,profile:read_all'
+/** Must include activity:read* — plain `read` cannot list /athlete/activities. */
+const SCOPE = 'read,activity:read,activity:read_all,profile:read_all'
+
+function hasActivityReadScope(scope: string | null | undefined): boolean {
+  const parts = String(scope || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+  return parts.includes('activity:read') || parts.includes('activity:read_all')
+}
 
 function stravaConfigured(env: Env): boolean {
   return Boolean(env.STRAVA_CLIENT_ID && env.STRAVA_CLIENT_SECRET)
@@ -110,7 +119,8 @@ export async function handleStravaOAuthStart(
     client_id: env.STRAVA_CLIENT_ID!,
     response_type: 'code',
     redirect_uri: redirectUri(env, request),
-    approval_prompt: 'auto',
+    // Force consent so activity:read* is not skipped after a prior limited auth.
+    approval_prompt: 'force',
     scope: SCOPE,
     state,
   })
@@ -132,12 +142,19 @@ export async function handleStravaOAuthCallback(
   }
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
+  const grantedScope = url.searchParams.get('scope') || ''
   if (!code || !state) {
     return Response.redirect(`${appUrl}/actividades?strava=error&reason=missing_code`, 302)
   }
   const uid = await parseState(env, state)
   if (!uid) {
     return Response.redirect(`${appUrl}/actividades?strava=error&reason=bad_state`, 302)
+  }
+  if (!hasActivityReadScope(grantedScope)) {
+    return Response.redirect(
+      `${appUrl}/actividades?strava=error&reason=missing_activity_scope`,
+      302,
+    )
   }
 
   const tokenRes = await fetch(STRAVA_TOKEN, {
@@ -155,6 +172,7 @@ export async function handleStravaOAuthCallback(
     refresh_token?: string
     expires_at?: number
     athlete?: { id?: number }
+    scope?: string
     message?: string
     errors?: unknown
   }
@@ -163,12 +181,20 @@ export async function handleStravaOAuthCallback(
     return Response.redirect(`${appUrl}/actividades?strava=error&reason=token`, 302)
   }
 
+  const effectiveScope = tokenJson.scope || grantedScope || SCOPE
+  if (!hasActivityReadScope(effectiveScope)) {
+    return Response.redirect(
+      `${appUrl}/actividades?strava=error&reason=missing_activity_scope`,
+      302,
+    )
+  }
+
   await writeStravaConnection(env, uid, {
     athleteId: tokenJson.athlete?.id ?? 0,
     accessToken: tokenJson.access_token,
     refreshToken: tokenJson.refresh_token,
     expiresAt: tokenJson.expires_at,
-    scope: SCOPE,
+    scope: effectiveScope,
   })
 
   return Response.redirect(`${appUrl}/actividades?strava=connected`, 302)
@@ -282,9 +308,21 @@ export async function handleStravaListActivities(
     `${STRAVA_API}/athlete/activities?page=${page}&per_page=${perPage}`,
     { headers: { Authorization: `Bearer ${connOrErr.accessToken}` } },
   )
-  const data = (await res.json()) as StravaSummary[] | { message?: string }
+  const data = (await res.json()) as StravaSummary[] | { message?: string; errors?: unknown }
   if (!res.ok) {
-    return json({ error: (data as { message?: string }).message || 'Strava list failed' }, 502)
+    const msg = (data as { message?: string }).message || 'Strava list failed'
+    if (res.status === 401 || res.status === 403 || /forbidden|authorization/i.test(msg)) {
+      return json(
+        {
+          error:
+            'Falta permiso de actividades en Strava. Desactiva la sync y vuelve a activarla; en la pantalla de Strava acepta «Ver tus actividades».',
+          code: 'strava_missing_activity_scope',
+          stravaMessage: msg,
+        },
+        403,
+      )
+    }
+    return json({ error: msg }, 502)
   }
   const activities = (data as StravaSummary[]).map((a) => ({
     id: a.id,

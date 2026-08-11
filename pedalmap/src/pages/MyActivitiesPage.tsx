@@ -104,8 +104,11 @@ export function MyActivitiesPage() {
       setMessage('Sincronización activa. Trayendo tus salidas a PedalMap…')
     }
     if (stravaFlag === 'error') {
+      const reason = params.get('reason') || 'error'
       setMessage(
-        `No se pudo activar la sincronización (${params.get('reason') || 'error'}).`,
+        reason === 'missing_activity_scope'
+          ? 'Hay que autorizar también «Ver tus actividades» en Strava. Vuelve a activar la sincronización y marca ese permiso.'
+          : `No se pudo activar la sincronización (${reason}).`,
       )
     }
   }, [params])
