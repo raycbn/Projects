@@ -3,6 +3,21 @@ import { AuthForm } from '@/components/auth/AuthForm'
 import { useAuth } from '@/app/AuthContext'
 import { usePageMeta } from '@/hooks/usePageMeta'
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <main className="mx-auto flex min-h-[70vh] max-w-lg items-center justify-center px-4 py-10">
+        <p className="text-sm text-[var(--color-stone)]">Comprobando sesión…</p>
+      </main>
+    )
+  }
+  if (user && !user.isAnonymous) {
+    return <Navigate to="/my-routes" replace />
+  }
+  return <>{children}</>
+}
+
 export function LoginPage() {
   usePageMeta({
     title: 'Entrar | PedalMap',
@@ -10,12 +25,12 @@ export function LoginPage() {
     path: '/login',
     noindex: true,
   })
-  const { user } = useAuth()
-  if (user && !user.isAnonymous) return <Navigate to="/my-routes" replace />
   return (
-    <main className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
-      <AuthForm mode="login" />
-    </main>
+    <AuthGate>
+      <main className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
+        <AuthForm mode="login" />
+      </main>
+    </AuthGate>
   )
 }
 
@@ -26,12 +41,12 @@ export function RegisterPage() {
     path: '/register',
     noindex: true,
   })
-  const { user } = useAuth()
-  if (user && !user.isAnonymous) return <Navigate to="/my-routes" replace />
   return (
-    <main className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
-      <AuthForm mode="register" />
-    </main>
+    <AuthGate>
+      <main className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
+        <AuthForm mode="register" />
+      </main>
+    </AuthGate>
   )
 }
 

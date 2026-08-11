@@ -174,7 +174,7 @@ function canCalculateRoute(routeType: RouteType, waypoints: Waypoint[]): boolean
 }
 
 export function PlannerProvider({ children }: { children: ReactNode }) {
-  const { user, profile } = useAuth()
+  const { user, profile, loading: authLoading } = useAuth()
   const [status, setStatus] = useState<PlannerStatus>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [routeType, setRouteTypeState] = useState<RouteType>('a_to_b')
@@ -223,13 +223,20 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   }, [profile, hydratedProfile])
 
   // Warm an anonymous Firebase session so Free limits apply before the first create.
+  // Wait until auth persistence resolves — otherwise a late anonymous sign-in can
+  // overwrite email/Google right after login and bounce the user back to /login.
   useEffect(() => {
     if (!isFirebaseConfigured()) return
+    if (authLoading) return
     if (user) return
+    let cancelled = false
     void authService.signInGuest().catch((err) => {
-      console.warn('[planner] anonymous warm-up', err)
+      if (!cancelled) console.warn('[planner] anonymous warm-up', err)
     })
-  }, [user])
+    return () => {
+      cancelled = true
+    }
+  }, [user, authLoading])
 
   // Pull cloud draft when signing in if we don't already have a local one.
   useEffect(() => {

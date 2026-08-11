@@ -21,6 +21,7 @@ import type { UserProfile } from '@/domain/types'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { needsGoogleAuthBridge, startGoogleAuthBridge } from '@/lib/authBridge'
 import { requestGoogleAccessToken } from '@/lib/googleIdentity'
+import { withAuthLock } from '@/lib/authLock'
 import { track } from '@/lib/analytics'
 import { communityService } from '@/services/CommunityService'
 import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
@@ -273,45 +274,70 @@ export class AuthService {
       return null
     }
 
-    // Primary: Google Identity Services (stays on pedalmap.es, no Firebase redirect).
-    try {
-      const accessToken = await requestGoogleAccessToken()
-      return await this.signInGoogleWithAccessToken(accessToken)
-    } catch (error) {
-      const code =
-        typeof error === 'object' && error && 'code' in error
-          ? String((error as { code?: string }).code || '')
-          : ''
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        throw error
+    return withAuthLock(async () => {
+      // Primary: Google Identity Services (stays on pedalmap.es, no Firebase redirect).
+      try {
+        const accessToken = await requestGoogleAccessToken()
+        return await this.signInGoogleWithAccessToken(accessToken)
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code?: string }).code || '')
+            : ''
+        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+          throw error
+        }
+        console.warn('[auth] GIS Google sign-in failed, falling back to Firebase helper', error)
       }
-      console.warn('[auth] GIS Google sign-in failed, falling back to Firebase helper', error)
-    }
 
-    return this.signInGoogleDirect()
-  }
-
-  async registerEmail(email: string, password: string, displayName?: string): Promise<User> {
-    track('signup_started', { method: 'email' })
-    const result = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password)
-    if (displayName) {
-      await updateProfile(result.user, { displayName })
-    }
-    await this.ensureProfile(result.user)
-    track('signup_completed', { method: 'email' })
-    return result.user
-  }
-
-  async signInEmail(email: string, password: string): Promise<User> {
-    const result = await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
-    await this.ensureProfile(result.user)
-    return result.user
+      return this.signInGoogleDirect()
+    })
   }
 
   async signInGuest(): Promise<User> {
-    const result = await signInAnonymously(getFirebaseAuth())
-    await this.ensureProfile(result.user)
-    return result.user
+    return withAuthLock(async () => {
+      const auth = getFirebaseAuth()
+      const existing = auth.currentUser
+      // Never replace a real (email/Google) session with anonymous — that bounces
+      // users back to /login after a successful sign-in when warm-up races.
+      if (existing && !existing.isAnonymous) {
+        await this.ensureProfile(existing)
+        return existing
+      }
+      if (existing?.isAnonymous) {
+        await this.ensureProfile(existing)
+        return existing
+      }
+      const result = await signInAnonymously(auth)
+      const after = auth.currentUser
+      if (after && !after.isAnonymous) {
+        await this.ensureProfile(after)
+        return after
+      }
+      await this.ensureProfile(result.user)
+      return result.user
+    })
+  }
+
+  async signInEmail(email: string, password: string): Promise<User> {
+    return withAuthLock(async () => {
+      const result = await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
+      await this.ensureProfile(result.user)
+      return result.user
+    })
+  }
+
+  async registerEmail(email: string, password: string, displayName?: string): Promise<User> {
+    return withAuthLock(async () => {
+      track('signup_started', { method: 'email' })
+      const result = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password)
+      if (displayName) {
+        await updateProfile(result.user, { displayName })
+      }
+      await this.ensureProfile(result.user)
+      track('signup_completed', { method: 'email' })
+      return result.user
+    })
   }
 
   async resetPassword(email: string): Promise<void> {

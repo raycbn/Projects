@@ -1,9 +1,13 @@
-import { signInAnonymously } from 'firebase/auth'
+import { signInAnonymously, type User } from 'firebase/auth'
+import { withAuthLock } from '@/lib/authLock'
 import { getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 
 /**
  * Routing calls to the Cloudflare Worker must carry a Firebase ID token
  * (anonymous guests included) so the Worker can rate-limit and bill by uid.
+ *
+ * Anonymous sign-in is locked and skipped when a real user is already present
+ * so it cannot wipe email/Google sessions.
  */
 export async function routingAuthHeaders(
   extra: HeadersInit = {},
@@ -17,16 +21,24 @@ export async function routingAuthHeaders(
   if (!isFirebaseConfigured()) return headers
 
   const auth = getFirebaseAuth()
-  let user = auth.currentUser
+  let user: User | null = auth.currentUser
   if (!user) {
     try {
-      const result = await signInAnonymously(auth)
-      user = result.user
+      user = await withAuthLock(async (): Promise<User> => {
+        const existing = getFirebaseAuth().currentUser
+        if (existing) return existing
+        const result = await signInAnonymously(getFirebaseAuth())
+        const after = getFirebaseAuth().currentUser as User | null
+        if (after && !after.isAnonymous) return after
+        return result.user
+      })
     } catch (error) {
       console.warn('[routingAuth] anonymous sign-in failed', error)
       return headers
     }
   }
+  user = getFirebaseAuth().currentUser ?? user
+  if (!user) return headers
   const token = await user.getIdToken()
   headers.Authorization = `Bearer ${token}`
   return headers

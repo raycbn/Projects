@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/app/AuthContext'
@@ -22,6 +22,7 @@ export function AuthForm({ mode }: AuthFormProps) {
     authError,
     clearAuthError,
   } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -42,9 +43,13 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
     setLoading(true)
     try {
-      if (mode === 'login') await signInEmail(email, password)
-      else if (mode === 'register') await registerEmail(email, password, name)
-      else {
+      if (mode === 'login') {
+        await signInEmail(email, password)
+        navigate('/my-routes', { replace: true })
+      } else if (mode === 'register') {
+        await registerEmail(email, password, name)
+        navigate('/my-routes', { replace: true })
+      } else {
         await resetPassword(email)
         setMessage('Te hemos enviado un enlace para restablecer la contraseña.')
       }
@@ -133,6 +138,7 @@ export function AuthForm({ mode }: AuthFormProps) {
               clearAuthError()
               setLoading(true)
               void signInGuest()
+                .then(() => navigate('/route-planner', { replace: true }))
                 .catch((err) => {
                   console.error(err)
                   setError(authErrorMessage(err, 'No se pudo entrar como invitado.'))
