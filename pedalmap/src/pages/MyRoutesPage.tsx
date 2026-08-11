@@ -32,7 +32,7 @@ export function MyRoutesPage() {
     noindex: true,
   })
 
-  const { user, profile, firebaseReady } = useAuth()
+  const { user, profile, loading: authLoading, firebaseReady } = useAuth()
   const [routes, setRoutes] = useState<SavedRoute[]>([])
   const [loading, setLoading] = useState(true)
   const [share, setShare] = useState<{ url: string; title: string } | null>(null)
@@ -43,6 +43,7 @@ export function MyRoutesPage() {
   const alertsMasterOn = Boolean(profile?.notifications?.windAlertsEnabled)
 
   useEffect(() => {
+    if (authLoading) return
     if (!user || user.isAnonymous || !firebaseReady) {
       setLoading(false)
       return
@@ -52,7 +53,7 @@ export function MyRoutesPage() {
       .then(setRoutes)
       .catch((error) => console.error(error))
       .finally(() => setLoading(false))
-  }, [user, firebaseReady])
+  }, [user, firebaseReady, authLoading])
 
   // Soft in-app check for opted-in routes with excellent windows soon.
   useEffect(() => {
@@ -171,6 +172,14 @@ export function MyRoutesPage() {
     } finally {
       setWindBusyId(null)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <p className="text-sm text-[var(--color-stone)]">Comprobando sesión…</p>
+      </main>
+    )
   }
 
   if (!firebaseReady) {

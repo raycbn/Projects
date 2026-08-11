@@ -14,7 +14,7 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
   )
 
 export function AppShell() {
-  const { user, profile, logout, firebaseReady } = useAuth()
+  const { user, profile, logout } = useAuth()
   const { pathname } = useLocation()
   const isPlanner = pathname.startsWith('/route-planner')
   // Exact /ruta only — do not match SEO /rutas-*
@@ -51,13 +51,13 @@ export function AppShell() {
             </NavLink>
           </nav>
           <div className="flex items-center gap-2">
-            {user ? (
+            {user && !user.isAnonymous ? (
               <>
                 <Link
                   to="/perfil"
                   className="hidden text-sm font-medium text-[var(--color-forest)] sm:inline"
                 >
-                  {profile?.displayName || (user.isAnonymous ? 'Invitado' : 'Perfil')}
+                  {profile?.displayName || 'Perfil'}
                 </Link>
                 <Button variant="ghost" size="sm" onClick={() => void logout()}>
                   Cerrar sesión
@@ -66,7 +66,7 @@ export function AppShell() {
             ) : (
               <Link to="/login">
                 <Button variant="secondary" size="sm">
-                  {firebaseReady ? 'Entrar' : 'Entrar'}
+                  Entrar
                 </Button>
               </Link>
             )}
