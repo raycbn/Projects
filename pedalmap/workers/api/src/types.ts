@@ -34,6 +34,11 @@ export interface Env {
   RESEND_API_KEY?: string
   /** Optional From header, e.g. `PedalMap <aviso@pedalmap.es>`. */
   MAIL_FROM?: string
+  /** Instagram Graph API (own PedalMap professional account). */
+  INSTAGRAM_ACCESS_TOKEN?: string
+  INSTAGRAM_IG_USER_ID?: string
+  /** Shared secret for ops publish endpoint (header X-PedalMap-Ops-Token). */
+  INSTAGRAM_OPS_TOKEN?: string
 }
 
 export const ORS_BASE = 'https://api.heigit.org/openrouteservice'

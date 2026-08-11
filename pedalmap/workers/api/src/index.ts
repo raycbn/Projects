@@ -27,6 +27,7 @@ import {
   isGpsProvider,
 } from './gps'
 import { handlePublishRoute } from './publishRoute'
+import { handleInstagramPublish, handleInstagramStatus } from './instagram'
 import {
   assertRoutingCreateAllowed,
   bumpRoutesCreatedThisMonth,
@@ -420,6 +421,13 @@ export default {
         if (m && request.method === 'POST' && isGpsProvider(m[1])) {
           return handleGpsWebhook(request, env, m[1])
         }
+      }
+
+      if (path === '/ops/instagram/status' && request.method === 'GET') {
+        return withCors(env, request, await handleInstagramStatus(request, env))
+      }
+      if (path === '/ops/instagram/publish' && request.method === 'POST') {
+        return withCors(env, request, await handleInstagramPublish(request, env))
       }
 
       return withCors(env, request, json({ error: 'Not found', path }, 404))
