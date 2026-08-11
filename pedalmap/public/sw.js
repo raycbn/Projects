@@ -1,5 +1,8 @@
-/* PedalMap service worker — cache app shell + last API health for offline reopen */
-const CACHE = 'pedalmap-shell-v3'
+/* PedalMap service worker — cache app shell for offline reopen.
+ * NEVER intercept Firebase Auth helper routes (/__/auth, /__/firebase):
+ * a cached or SPA fallback response there breaks Google redirect login.
+ */
+const CACHE = 'pedalmap-shell-v5'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -20,13 +23,18 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return
 
-  // Network-first for navigations; cache-first for static assets
+  // Firebase Auth / Hosting reserved helpers — always network, never cache.
+  if (url.pathname.startsWith('/__/')) return
+
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone()
-          void caches.open(CACHE).then((c) => c.put(req, copy))
+          // Only cache the app shell, not arbitrary navigations.
+          if (url.pathname === '/' || url.pathname === '/index.html') {
+            const copy = res.clone()
+            void caches.open(CACHE).then((c) => c.put(req, copy))
+          }
           return res
         })
         .catch(() => caches.match(req).then((r) => r || caches.match('/index.html'))),

@@ -5,15 +5,20 @@ import { getFunctions, type Functions } from 'firebase/functions'
 import { getStorage, type FirebaseStorage } from 'firebase/storage'
 
 /**
- * On Firebase Hosting, use the current hostname as authDomain so
- * signInWithRedirect stays first-party (avoids mobile 3P storage failures
- * between *.web.app and *.firebaseapp.com).
+ * Prefer the page hostname as authDomain whenever Google OAuth already lists
+ * `https://<host>/__/auth/handler`. That keeps signInWithRedirect first-party
+ * (no third-party storage) on pedalmap.es and on Firebase Hosting hosts.
  */
 function resolveAuthDomain(): string {
   const configured = String(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '')
   if (typeof window !== 'undefined') {
     const host = window.location.hostname
-    if (host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')) {
+    if (
+      host === 'pedalmap.es' ||
+      host === 'www.pedalmap.es' ||
+      host.endsWith('.web.app') ||
+      host.endsWith('.firebaseapp.com')
+    ) {
       return host
     }
   }

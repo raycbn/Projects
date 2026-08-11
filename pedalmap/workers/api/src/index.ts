@@ -6,6 +6,7 @@ import { handleBikeRoute } from './bikeRoute'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
 import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
+import { handleMintCustomToken } from './customToken'
 import { handleEntitlements, handleSyncPlan } from './entitlements'
 import {
   handleStravaDisconnect,
@@ -152,6 +153,19 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleValhallaProxy(request, env, 'height'))
+      }
+
+      if (path === '/auth/custom-token' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 30,
+          windowSec: 60,
+          prefix: 'custom-token',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleMintCustomToken(env, identity))
       }
 
       if (path === '/me/sync-plan' && request.method === 'POST') {
