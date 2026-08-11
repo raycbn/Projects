@@ -6,6 +6,7 @@ import {
   windRelativeFactor,
   windRelativeLabel,
 } from '@/lib/wind'
+import { isMeteoStampUpcoming } from '@/lib/weatherFormat'
 
 export interface HourlyWeatherPoint {
   time: string // ISO local-ish from Open-Meteo
@@ -63,7 +64,7 @@ export class WeatherService {
 
   async forecastForRoute(
     geometry: RouteGeometry,
-    opts?: { forecastDays?: number; signal?: AbortSignal },
+    opts?: { forecastDays?: number; signal?: AbortSignal; now?: Date },
   ): Promise<RouteWeatherForecast> {
     const center = midpoint(geometry)
     const routeBearingDeg = dominantRouteBearing(geometry)
@@ -114,12 +115,16 @@ export class WeatherService {
       windGustsKmh: Number(data.hourly?.wind_gusts_10m?.[i] ?? 0),
     }))
 
-    const windows = this.buildWindows(hours, routeBearingDeg)
+    const timezone = data.timezone ?? 'UTC'
+    const windows = this.buildWindows(hours, routeBearingDeg, {
+      timeZone: timezone,
+      now: opts?.now ?? new Date(),
+    })
 
     return {
       latitude: data.latitude ?? center.lat,
       longitude: data.longitude ?? center.lng,
-      timezone: data.timezone ?? 'auto',
+      timezone,
       routeBearingDeg,
       routeBearingLabel: routeBearingDeg == null ? null : bearingLabel(routeBearingDeg),
       hours,
@@ -128,11 +133,21 @@ export class WeatherService {
     }
   }
 
-  /** Score morning (7–10) and afternoon (16–19) windows per day. */
+  /**
+   * Score morning (7–10) and afternoon (16–19) windows per day.
+   * Past windows (already ended in the forecast timezone) are dropped so
+   * "best window" never suggests this morning at 16:00.
+   */
   buildWindows(
     hours: HourlyWeatherPoint[],
     routeBearingDeg: number | null,
+    opts?: { timeZone?: string; now?: Date; minRemainingMinutes?: number },
   ): RideWindowAdvice[] {
+    const timeZone = opts?.timeZone ?? 'UTC'
+    const now = opts?.now ?? new Date()
+    // Keep a window if ≥30 min remain before its end (still rideable).
+    const minRemaining = opts?.minRemainingMinutes ?? 30
+
     const byDay = new Map<string, HourlyWeatherPoint[]>()
     for (const h of hours) {
       const key = dayKey(h.time)
@@ -149,6 +164,11 @@ export class WeatherService {
     const out: RideWindowAdvice[] = []
     for (const [day, dayHours] of byDay) {
       for (const slot of slots) {
+        const endStamp = `${day}T${String(slot.end).padStart(2, '0')}:00`
+        if (!isMeteoStampUpcoming(endStamp, timeZone, now, minRemaining)) {
+          continue
+        }
+
         const slice = dayHours.filter((h) => {
           const hour = Number(h.time.slice(11, 13))
           return hour >= slot.start && hour < slot.end
@@ -178,7 +198,7 @@ export class WeatherService {
 
         out.push({
           startHour: `${day}T${String(slot.start).padStart(2, '0')}:00`,
-          endHour: `${day}T${String(slot.end).padStart(2, '0')}:00`,
+          endHour: endStamp,
           score: scored.score,
           label: labelForScore(scored.score),
           windSpeedKmh: Math.round(windSpeedKmh),

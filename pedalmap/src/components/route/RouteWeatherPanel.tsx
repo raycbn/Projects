@@ -7,7 +7,13 @@ import {
   type RouteWeatherForecast,
 } from '@/services/WeatherService'
 import { track } from '@/lib/analytics'
-import { formatWeatherDay, formatWeatherHour, formatWeatherWindowCaption, meteoDayKey } from '@/lib/weatherFormat'
+import {
+  formatWeatherDay,
+  formatWeatherHour,
+  formatWeatherWindowCaption,
+  isMeteoStampUpcoming,
+  meteoDayKey,
+} from '@/lib/weatherFormat'
 import clsx from 'clsx'
 
 interface RouteWeatherPanelProps {
@@ -106,10 +112,14 @@ export function RouteWeatherPanel({
 
   const dayHours = useMemo(() => {
     if (!forecast || !selectedDay) return []
+    const zone = forecast.timezone || 'UTC'
+    const now = new Date()
     return forecast.hours.filter((h) => {
       if (meteoDayKey(h.time) !== selectedDay) return false
       const hour = Number(formatWeatherHour(h.time).slice(0, 2))
-      return hour >= 6 && hour <= 21
+      if (hour < 6 || hour > 21) return false
+      // Hide hours already started/passed in the forecast timezone.
+      return isMeteoStampUpcoming(h.time, zone, now, 0)
     })
   }, [forecast, selectedDay])
 
@@ -119,7 +129,8 @@ export function RouteWeatherPanel({
     <section className="space-y-3 p-2">
       <p className="text-xs text-[var(--color-stone)]">
         El mapa colorea la ruta al cargar el viento (verde cola · azul lateral · naranja cara) y dibuja
-        flechas hacia dónde sopla. Toca otra ventana u hora para actualizarlo.
+        flechas hacia dónde sopla. Solo mostramos ventanas y horas futuras. Toca otra para actualizar el
+        mapa.
       </p>
 
       {loading && <p className="text-sm text-[var(--color-stone)]">Calculando viento…</p>}

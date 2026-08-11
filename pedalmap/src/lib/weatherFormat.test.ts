@@ -6,6 +6,7 @@ import {
   formatWeatherWindowCaption,
   meteoDayKey,
   parseMeteoLocal,
+  isMeteoStampUpcoming,
 } from '@/lib/weatherFormat'
 
 describe('weatherFormat', () => {
@@ -27,5 +28,11 @@ describe('weatherFormat', () => {
   it('extracts day keys from meteo timestamps', () => {
     expect(meteoDayKey('2026-08-10T07:00')).toBe('2026-08-10')
     expect(meteoDayKey('2026-08-11')).toBe('2026-08-11')
+  })
+
+  it('detects past vs upcoming meteo stamps in a zone', () => {
+    const now = new Date('2026-08-11T16:22:00+02:00')
+    expect(isMeteoStampUpcoming('2026-08-11T07:00', 'Europe/Madrid', now)).toBe(false)
+    expect(isMeteoStampUpcoming('2026-08-11T19:00', 'Europe/Madrid', now)).toBe(true)
   })
 })
