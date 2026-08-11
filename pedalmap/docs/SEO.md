@@ -15,9 +15,13 @@ Salir en Google (España, ciclismo) y ser citables por motores generativos (Chat
 
 ## Qué hacer tú (cuenta / ads) — orden
 
-1. **Google Search Console** → propiedad `pedalmap.es` → verificar DNS o meta → enviar `https://pedalmap.es/sitemap.xml`
-2. **Bing Webmaster** (opcional, barato) con el mismo sitemap
-3. Redirección 301 de `pedalmap-79b3a.web.app` → `pedalmap.es` (Firebase Hosting / DNS) si aún no está
+1. **Google Search Console** (pantalla “Selecciona el tipo de propiedad”):
+   - Elige **Dominio** (izquierda), no “Prefijo de la URL”
+   - Escribe solo: `pedalmap.es` (sin `https://`, sin `www`)
+   - CONTINUAR → Google te da un registro **TXT** → añádelo en DNS de IONOS → Verifica
+   - Luego: Sitemaps → `https://pedalmap.es/sitemap.xml`
+2. **Bing Webmaster** (opcional) con el mismo sitemap
+3. Hosts legacy (`*.web.app`, `*.firebaseapp.com`, `www`) redirigen a `pedalmap.es` desde el HTML/SW (Firebase no ofrece 301 por hostname en `firebase.json`)
 4. **Publicidad** (después de GSC midiendo):
    - Google Ads Search: campañas exactas en “crear ruta bicicleta”, “planificador rutas bici”, “crear ruta GPX” → landing `/crear-ruta-bicicleta` etc.
    - Presupuesto bajo al inicio; landing = página SEO, no solo `/`
