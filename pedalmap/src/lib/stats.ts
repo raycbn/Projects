@@ -321,9 +321,17 @@ export function formatElevation(meters: number, locale = 'es-ES'): string {
   return `${sign}${Math.round(meters).toLocaleString(locale)} m`
 }
 
-export function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.round((seconds % 3600) / 60)
+export function formatDuration(seconds: number, localeMode: 'short' | 'live' = 'short'): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (localeMode === 'live') {
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
   if (h === 0) return `${m} min`
   return `${h} h ${m.toString().padStart(2, '0')} min`
 }

@@ -40,23 +40,41 @@ export function computeActivityStats(
   track: ActivityTrackPoint[],
   startedAt: string,
   finishedAt?: string,
+  options?: {
+    /** Override wall-clock duration (e.g. exclude paused time). */
+    durationSeconds?: number
+    /** Phone GPS altitude is noisier than DEM — default 3 m vs 10 m for routes. */
+    elevationThresholdMeters?: number
+  },
 ): Activity['stats'] {
   const positions = track.map((p) => p.position)
   const distanceMeters = Math.round(pathDistanceMeters(positions))
   const start = Date.parse(startedAt)
   const end = Date.parse(finishedAt ?? new Date().toISOString())
-  const durationSeconds = Math.max(0, Math.round((end - start) / 1000))
+  const durationSeconds =
+    options?.durationSeconds !== undefined
+      ? Math.max(0, Math.round(options.durationSeconds))
+      : Math.max(0, Math.round((end - start) / 1000))
+
+  // O(n) cumulative distance for the elevation profile (avoid O(n²) slice scans).
+  let cum = 0
   const profile = normalizeCyclingElevationProfile(
-    track.map((p, i) => ({
-      distanceMeters: i === 0 ? 0 : pathDistanceMeters(positions.slice(0, i + 1)),
-      elevationMeters:
-        p.elevationMeters !== undefined && Number.isFinite(p.elevationMeters)
-          ? p.elevationMeters
-          : Number.NaN,
-      position: p.position,
-    })),
+    track.map((p, i) => {
+      if (i > 0) cum += pathDistanceMeters([positions[i - 1], positions[i]])
+      return {
+        distanceMeters: cum,
+        elevationMeters:
+          p.elevationMeters !== undefined && Number.isFinite(p.elevationMeters)
+            ? p.elevationMeters
+            : Number.NaN,
+        position: p.position,
+      }
+    }),
   )
-  const elev = computeElevationStats(profile)
+  const elev = computeElevationStats(
+    profile,
+    options?.elevationThresholdMeters ?? 3,
+  )
   return {
     distanceMeters,
     durationSeconds,
@@ -86,11 +104,10 @@ export class ActivityRepository {
     routeId?: string
   }): Promise<Activity> {
     const startedAt = new Date().toISOString()
-    const payload = {
+    const payload: Record<string, unknown> = {
       userId: input.userId,
-      title: input.title,
+      title: input.title.slice(0, 120),
       bikeType: input.bikeType,
-      routeId: input.routeId,
       status: 'recording' as ActivityStatus,
       startedAt,
       track: [] as ActivityTrackPoint[],
@@ -99,6 +116,9 @@ export class ActivityRepository {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
+    // Firestore rejects `undefined` field values — only include routeId when present.
+    if (input.routeId) payload.routeId = input.routeId
+
     const ref = await addDoc(collection(getDb(), 'activities'), payload)
     return mapActivity(ref.id, { ...payload, createdAt: startedAt, updatedAt: startedAt })
   }

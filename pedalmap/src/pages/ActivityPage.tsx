@@ -9,7 +9,7 @@ import {
   computeActivityStats,
 } from '@/services/ActivityRepository'
 import type { Activity, ActivityTrackPoint, BikeType, RouteGeometry, Waypoint } from '@/domain/types'
-import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
+import { formatDistance, formatDuration, formatElevation, haversineMeters } from '@/lib/stats'
 import { track } from '@/lib/analytics'
 import { takeGpsRoute, type GpsRoutePacket } from '@/lib/gpsRouteHandoff'
 import {
@@ -22,6 +22,27 @@ import { requestScreenWakeLock, type WakeLockHandle } from '@/lib/wakeLock'
 const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
 )
+
+/** Ignore phone GPS jitter: require real movement (or first fix). */
+const GPS_MAX_ACCURACY_M = 80
+const GPS_MIN_MOVE_M = 4
+
+function shouldAcceptGpsSample(
+  prev: ActivityTrackPoint[],
+  sample: { position: { lat: number; lng: number }; accuracyMeters?: number },
+): boolean {
+  if (prev.length === 0) return true
+  if (sample.accuracyMeters != null && sample.accuracyMeters > GPS_MAX_ACCURACY_M) {
+    return false
+  }
+  const last = prev[prev.length - 1]
+  const moved = haversineMeters(last.position, sample.position)
+  const minMove = Math.max(
+    GPS_MIN_MOVE_M,
+    sample.accuracyMeters != null ? sample.accuracyMeters * 0.35 : GPS_MIN_MOVE_M,
+  )
+  return moved >= minMove
+}
 
 export function ActivityPage() {
   usePageMeta({
@@ -46,10 +67,20 @@ export function ActivityPage() {
   const wakeLockRef = useRef<WakeLockHandle | null>(null)
   const trackRef = useRef<ActivityTrackPoint[]>([])
   const activityRef = useRef<Activity | null>(null)
+  const pausedTotalMs = useRef(0)
+  const pauseStartedAtMs = useRef<number | null>(null)
+  const [clockMs, setClockMs] = useState(() => Date.now())
 
   useEffect(() => {
     setPlannedRoute(takeGpsRoute())
   }, [])
+
+  // Live clock while recording so Tiempo updates every second (not only on GPS ticks).
+  useEffect(() => {
+    if (status !== 'recording') return
+    const id = window.setInterval(() => setClockMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [status])
 
   useEffect(() => {
     trackRef.current = localTrack
@@ -58,12 +89,46 @@ export function ActivityPage() {
     activityRef.current = activity
   }, [activity])
 
+  const liveDurationSeconds = useMemo(() => {
+    if (!activity) return 0
+    if (status === 'finished') {
+      return activity.stats?.durationSeconds ?? 0
+    }
+    const startMs = Date.parse(activity.startedAt)
+    let paused = pausedTotalMs.current
+    if (status === 'paused' && pauseStartedAtMs.current != null) {
+      paused += Date.now() - pauseStartedAtMs.current
+    }
+    const endMs =
+      status === 'paused' && pauseStartedAtMs.current != null
+        ? pauseStartedAtMs.current
+        : clockMs
+    return Math.max(0, Math.round((endMs - startMs - paused) / 1000))
+  }, [activity, status, clockMs])
+
+  const liveStats = useMemo(() => {
+    if (!activity) {
+      return {
+        distanceMeters: 0,
+        durationSeconds: 0,
+        elevationGainMeters: 0,
+      }
+    }
+    return computeActivityStats(localTrack, activity.startedAt, undefined, {
+      durationSeconds: liveDurationSeconds,
+      elevationThresholdMeters: 3,
+    })
+  }, [localTrack, activity, liveDurationSeconds])
+
   // Restore unfinished ride from local checkpoint (survives tab close).
   useEffect(() => {
     if (!user || user.isAnonymous || status !== 'idle') return
     const ckpt = loadLatestActivityCheckpoint()
     if (!ckpt || ckpt.userId !== user.uid) return
     if (ckpt.status !== 'recording' && ckpt.status !== 'paused') return
+    pausedTotalMs.current = ckpt.pausedMs ?? 0
+    pauseStartedAtMs.current = ckpt.status === 'paused' ? Date.now() : null
+    setClockMs(Date.now())
     setActivity({
       id: ckpt.activityId,
       userId: ckpt.userId,
@@ -73,7 +138,15 @@ export function ActivityPage() {
       bikeType: ckpt.bikeType,
       startedAt: ckpt.startedAt,
       track: ckpt.track,
-      stats: computeActivityStats(ckpt.track, ckpt.startedAt),
+      stats: computeActivityStats(ckpt.track, ckpt.startedAt, undefined, {
+        durationSeconds: Math.max(
+          0,
+          Math.round(
+            (Date.now() - Date.parse(ckpt.startedAt) - (ckpt.pausedMs ?? 0)) / 1000,
+          ),
+        ),
+        elevationThresholdMeters: 3,
+      }),
       createdAt: ckpt.startedAt,
       updatedAt: ckpt.updatedAt,
     })
@@ -123,7 +196,18 @@ export function ActivityPage() {
       const trackPts = trackRef.current
       if (!act || !user || user.isAnonymous) return
       if (status !== 'recording' && status !== 'paused') return
-      const stats = computeActivityStats(trackPts, act.startedAt)
+      let paused = pausedTotalMs.current
+      if (status === 'paused' && pauseStartedAtMs.current != null) {
+        paused += Date.now() - pauseStartedAtMs.current
+      }
+      const durationSeconds = Math.max(
+        0,
+        Math.round((Date.now() - Date.parse(act.startedAt) - paused) / 1000),
+      )
+      const stats = computeActivityStats(trackPts, act.startedAt, undefined, {
+        durationSeconds,
+        elevationThresholdMeters: 3,
+      })
       void activityRepository
         .updateTrack(act.id, trackPts, stats, status === 'paused' ? 'paused' : 'recording')
         .catch((err) => console.warn('[activity] pagehide flush', err))
@@ -136,6 +220,7 @@ export function ActivityPage() {
         startedAt: act.startedAt,
         status: status === 'paused' ? 'paused' : 'recording',
         track: trackPts,
+        pausedMs: paused,
         updatedAt: new Date().toISOString(),
       })
     }
@@ -153,12 +238,7 @@ export function ActivityPage() {
   useEffect(() => {
     if (!sample || !recording || !activity || !user) return
     setLocalTrack((prev) => {
-      const last = prev.at(-1)
-      if (
-        last &&
-        Math.abs(last.position.lat - sample.position.lat) < 0.00001 &&
-        Math.abs(last.position.lng - sample.position.lng) < 0.00001
-      ) {
+      if (!shouldAcceptGpsSample(prev, sample)) {
         return prev
       }
       const next = [
@@ -179,13 +259,21 @@ export function ActivityPage() {
         startedAt: activity.startedAt,
         status: 'recording',
         track: next,
+        pausedMs: pausedTotalMs.current,
         updatedAt: new Date().toISOString(),
       })
       const now = Date.now()
       if (next.length - lastFlushLen.current >= 25 || now - lastFlushAt.current > 45_000) {
         lastFlushAt.current = now
         lastFlushLen.current = next.length
-        const stats = computeActivityStats(next, activity.startedAt)
+        const durationSeconds = Math.max(
+          0,
+          Math.round((now - Date.parse(activity.startedAt) - pausedTotalMs.current) / 1000),
+        )
+        const stats = computeActivityStats(next, activity.startedAt, undefined, {
+          durationSeconds,
+          elevationThresholdMeters: 3,
+        })
         void activityRepository
           .updateTrack(activity.id, next, stats, 'recording')
           .catch((err) => console.warn('[activity] checkpoint flush', err))
@@ -193,13 +281,6 @@ export function ActivityPage() {
       return next
     })
   }, [sample, recording, activity, user])
-
-  const liveStats = useMemo(() => {
-    if (!activity) {
-      return computeActivityStats(localTrack, new Date().toISOString())
-    }
-    return computeActivityStats(localTrack, activity.startedAt)
-  }, [localTrack, activity])
 
   const liveGeometry: RouteGeometry | null = useMemo(() => {
     if (localTrack.length >= 2) {
@@ -251,6 +332,29 @@ export function ActivityPage() {
       return
     }
     try {
+      // Ask for location up front so Android/iOS show the permission prompt
+      // before we create the Firestore activity.
+      await new Promise<void>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          () => resolve(),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+        )
+      })
+    } catch (err) {
+      const code = err && typeof err === 'object' && 'code' in err ? Number(err.code) : 0
+      if (code === 1) {
+        setMessage('Activa el permiso de ubicación para PedalMap en el navegador.')
+      } else if (code === 2) {
+        setMessage('No hay señal GPS. Sal al exterior o activa la ubicación del teléfono.')
+      } else if (code === 3) {
+        setMessage('Tiempo agotado buscando GPS. Inténtalo otra vez al aire libre.')
+      } else {
+        setMessage('No se pudo obtener la ubicación. Revisa el permiso de ubicación.')
+      }
+      return
+    }
+    try {
       const created = await activityRepository.create({
         userId: user.uid,
         title,
@@ -259,6 +363,9 @@ export function ActivityPage() {
       })
       setActivity(created)
       setLocalTrack([])
+      pausedTotalMs.current = 0
+      pauseStartedAtMs.current = null
+      setClockMs(Date.now())
       setStatus('recording')
       lastFlushAt.current = Date.now()
       lastFlushLen.current = 0
@@ -271,17 +378,27 @@ export function ActivityPage() {
         startedAt: created.startedAt,
         status: 'recording',
         track: [],
+        pausedMs: 0,
         updatedAt: new Date().toISOString(),
       })
       track('activity_started', { bikeType })
       setMessage(null)
     } catch (error) {
       console.error('[activity] start', error)
-      setMessage('No se pudo iniciar la actividad.')
+      const raw = error instanceof Error ? error.message : String(error)
+      if (/permission|insufficient|PERMISSION_DENIED/i.test(raw)) {
+        setMessage('Sin permiso para guardar la actividad en la nube. Vuelve a iniciar sesión.')
+      } else if (/undefined|Unsupported field value/i.test(raw)) {
+        setMessage('Error al crear la actividad (datos inválidos). Prueba de nuevo.')
+      } else {
+        setMessage('No se pudo iniciar la actividad. Comprueba la conexión e inténtalo otra vez.')
+      }
     }
   }
 
   function pause() {
+    const now = Date.now()
+    pauseStartedAtMs.current = now
     setStatus('paused')
     if (activity && user) {
       saveActivityCheckpoint({
@@ -293,22 +410,40 @@ export function ActivityPage() {
         startedAt: activity.startedAt,
         status: 'paused',
         track: localTrack,
+        pausedMs: pausedTotalMs.current,
         updatedAt: new Date().toISOString(),
       })
     }
   }
 
   function resume() {
+    if (pauseStartedAtMs.current != null) {
+      pausedTotalMs.current += Date.now() - pauseStartedAtMs.current
+      pauseStartedAtMs.current = null
+    }
+    setClockMs(Date.now())
     setStatus('recording')
   }
 
   async function finish() {
     if (!activity) return
     const finishedAt = new Date().toISOString()
-    const stats = computeActivityStats(localTrack, activity.startedAt, finishedAt)
+    let paused = pausedTotalMs.current
+    if (status === 'paused' && pauseStartedAtMs.current != null) {
+      paused += Date.now() - pauseStartedAtMs.current
+    }
+    const durationSeconds = Math.max(
+      0,
+      Math.round((Date.parse(finishedAt) - Date.parse(activity.startedAt) - paused) / 1000),
+    )
+    const stats = computeActivityStats(localTrack, activity.startedAt, finishedAt, {
+      durationSeconds,
+      elevationThresholdMeters: 3,
+    })
     try {
       await activityRepository.updateTrack(activity.id, localTrack, stats, 'finished', finishedAt)
       clearActivityCheckpoint(activity.id)
+      setActivity({ ...activity, finishedAt, stats, status: 'finished' })
       setStatus('finished')
       track('activity_finished', { distance_m: stats.distanceMeters })
       setMessage('Actividad guardada.')
@@ -365,12 +500,24 @@ export function ActivityPage() {
 
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Distancia" value={formatDistance(liveStats.distanceMeters)} />
-          <Stat label="Tiempo" value={formatDuration(liveStats.durationSeconds)} />
+          <Stat
+            label="Tiempo"
+            value={
+              status === 'recording' || status === 'paused'
+                ? formatDuration(liveStats.durationSeconds, 'live')
+                : formatDuration(liveStats.durationSeconds)
+            }
+          />
           <Stat label="Desnivel +" value={formatElevation(liveStats.elevationGainMeters)} />
         </div>
 
         <p className="text-sm text-[var(--color-stone)]">
           Puntos GPS: <strong className="text-[var(--color-forest)]">{localTrack.length}</strong>
+          {status === 'recording' && localTrack.length < 2 ? (
+            <span className="mt-1 block text-xs">
+              Con 1 punto la distancia y el desnivel son 0. Muévete unos metros para que sumen.
+            </span>
+          ) : null}
         </p>
 
         {(geoError || message) && (
