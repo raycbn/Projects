@@ -4,6 +4,7 @@ import {
   computeElevationStats,
   CYCLING_ELEVATION_THRESHOLD_M,
   estimateDifficulty,
+  formatDuration,
   normalizeCyclingElevationProfile,
   resolveCyclingElevationGain,
   sanitizeElevationProfile,
@@ -126,5 +127,17 @@ describe('stats', () => {
     expect(stats.elevationGainMeters).toBeGreaterThan(0)
     expect(stats.elevationLossMeters).toBeGreaterThan(0)
     expect(stats.difficulty).toBe(estimateDifficulty(50000, stats.elevationGainMeters))
+  })
+})
+
+describe('formatDuration', () => {
+  it('formats short minutes for summaries', () => {
+    expect(formatDuration(125)).toBe('2 min')
+    expect(formatDuration(3660)).toBe('1 h 01 min')
+  })
+
+  it('formats live mm:ss / h:mm:ss while recording', () => {
+    expect(formatDuration(65, 'live')).toBe('1:05')
+    expect(formatDuration(3723, 'live')).toBe('1:02:03')
   })
 })
