@@ -9,7 +9,7 @@ import {
   computeActivityStats,
 } from '@/services/ActivityRepository'
 import type { Activity, ActivityTrackPoint, BikeType, RouteGeometry, Waypoint } from '@/domain/types'
-import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
+import { formatDistance, formatDuration, formatElevation, formatSpeedKmh } from '@/lib/stats'
 import { track } from '@/lib/analytics'
 import { takeGpsRoute, type GpsRoutePacket } from '@/lib/gpsRouteHandoff'
 import {
@@ -167,6 +167,7 @@ export function ActivityPage() {
           position: sample.position,
           elevationMeters: sample.elevationMeters,
           accuracyMeters: sample.accuracyMeters,
+          speedMetersPerSecond: sample.speedMetersPerSecond,
           recordedAt: sample.recordedAt,
         },
       ]
@@ -311,7 +312,8 @@ export function ActivityPage() {
       clearActivityCheckpoint(activity.id)
       setStatus('finished')
       track('activity_finished', { distance_m: stats.distanceMeters })
-      setMessage('Actividad guardada.')
+      // Like Strava: finish → already in PedalMap, open the analysis straight away.
+      navigate(`/actividades/${activity.id}`, { replace: true })
     } catch (error) {
       console.error('[activity] finish', error)
       setMessage('No se pudo guardar la actividad. El track sigue en este dispositivo.')
@@ -363,10 +365,35 @@ export function ActivityPage() {
           ) : null}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           <Stat label="Distancia" value={formatDistance(liveStats.distanceMeters)} />
-          <Stat label="Tiempo" value={formatDuration(liveStats.durationSeconds)} />
+          <Stat
+            label="En movimiento"
+            value={formatDuration(liveStats.movingTimeSeconds ?? liveStats.durationSeconds)}
+          />
           <Stat label="Desnivel +" value={formatElevation(liveStats.elevationGainMeters)} />
+          <Stat
+            label="Vel. media"
+            value={
+              liveStats.averageSpeedMetersPerSecond !== undefined
+                ? formatSpeedKmh(liveStats.averageSpeedMetersPerSecond)
+                : '—'
+            }
+          />
+          <Stat
+            label="Pot. est."
+            value={
+              liveStats.estimatedPowerWatts !== undefined || liveStats.averagePowerWatts !== undefined
+                ? `${liveStats.estimatedPowerWatts ?? liveStats.averagePowerWatts} W`
+                : '—'
+            }
+          />
+          <Stat
+            label="VAM"
+            value={
+              liveStats.vamMetersPerHour !== undefined ? `${liveStats.vamMetersPerHour} m/h` : '—'
+            }
+          />
         </div>
 
         <p className="text-sm text-[var(--color-stone)]">
@@ -394,9 +421,6 @@ export function ActivityPage() {
               <Button onClick={resume}>Reanudar</Button>
               <Button onClick={() => void finish()}>Finalizar</Button>
             </>
-          )}
-          {status === 'finished' && (
-            <Button onClick={() => navigate('/actividades')}>Ver mis actividades</Button>
           )}
           <Link to="/route-planner">
             <Button variant="ghost">Planificador</Button>

@@ -10,6 +10,7 @@ import { track } from '@/lib/analytics'
 import { routeRepository } from '@/services/RouteRepository'
 import { canExportGpx } from '@/services/EntitlementService'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { publicSiteUrl } from '@/lib/siteConfig'
 
 export function MyRoutesPage() {
   usePageMeta({
@@ -82,7 +83,7 @@ export function MyRoutesPage() {
           onShare={async (route) => {
             if (!user) return
             const slug = await routeRepository.makePublic(route.id, user.uid)
-            const url = `${window.location.origin}/route/${slug}`
+            const url = publicSiteUrl(`/route/${slug}`)
             setShare({ url, title: route.title })
           }}
           onDuplicate={async (route) => {

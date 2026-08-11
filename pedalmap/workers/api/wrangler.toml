@@ -17,11 +17,15 @@ workers_dev = true
 #   APP_URL
 #   ALLOWED_ORIGINS (comma-separated)
 #   PREMIUM_ALLOWLIST (optional comma-separated emails)
+#   STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET (optional legacy)
+#   WAHOO_CLIENT_ID / WAHOO_CLIENT_SECRET / WAHOO_WEBHOOK_TOKEN
+#   IGPSPORT_CLIENT_ID / IGPSPORT_CLIENT_SECRET / IGPSPORT_WEBHOOK_TOKEN
+#   GARMIN_CLIENT_ID / GARMIN_CLIENT_SECRET / GARMIN_WEBHOOK_TOKEN
 
 [vars]
 FIREBASE_PROJECT_ID = "pedalmap-79b3a"
 STRIPE_PRICE_MONTHLY = "price_1U2i2oDRDu30ohSLy0PIHXtJ"
 STRIPE_PRICE_YEARLY = "price_1U2i69DRDu30ohSLo5EoU9ed"
-APP_URL = "https://pedalmap-79b3a.web.app"
-ALLOWED_ORIGINS = "https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
+APP_URL = "https://pedalmap.es"
+ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
 PREMIUM_ALLOWLIST = "rayvf2002@gmail.com,raymel.vb@gmail.com"

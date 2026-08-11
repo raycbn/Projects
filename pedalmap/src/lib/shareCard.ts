@@ -62,7 +62,7 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
   ctx.font = '500 24px DM Sans, sans-serif'
   const footer =
     shareUrl?.replace(/^https?:\/\//, '') ||
-    (typeof window !== 'undefined' ? window.location.host : 'pedalmap.app')
+    (typeof window !== 'undefined' ? window.location.host : 'pedalmap.es')
   ctx.fillText(truncate(footer, 48), 72, size - 72)
 
   return await new Promise((resolve, reject) => {
