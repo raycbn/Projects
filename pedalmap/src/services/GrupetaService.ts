@@ -33,7 +33,7 @@ export type GrupetaPackView = {
   billable: boolean
   seats: GrupetaSeatView[]
   updatedAt: string
-  viewerRole?: 'member'
+  viewerRole?: 'owner' | 'member'
 }
 
 export type GrupetaPackResponse = {

@@ -85,6 +85,11 @@ export async function upsertSubscriptionAndPlan(
     stripeCustomerId?: string
     stripeSubscriptionId?: string
     product?: 'solo' | 'grupeta'
+    soloSubscriptionId?: string
+    soloStatus?: string
+    grupetaSubscriptionId?: string
+    grupetaStatus?: string
+    annualTrialUsed?: boolean
   },
 ): Promise<void> {
   const sa = parseServiceAccount(env)
@@ -96,21 +101,67 @@ export async function upsertSubscriptionAndPlan(
   const token = await getAccessToken(sa)
   const now = new Date().toISOString()
 
-  const subUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/subscriptions/${input.uid}`
+  // Preserve existing customer id / product sides when not provided (avoid wipe on revoke).
+  const existing = await adminGetDocument(projectId, token, `subscriptions/${input.uid}`)
+  const prevCustomer =
+    fieldString(existing, 'stripeCustomerId') || undefined
+  const customerId = input.stripeCustomerId || prevCustomer
+
+  const masks = [
+    'userId',
+    'status',
+    'plan',
+    'updatedAt',
+    'stripeCustomerId',
+    'stripeSubscriptionId',
+    'product',
+    'soloSubscriptionId',
+    'soloStatus',
+    'grupetaSubscriptionId',
+    'grupetaStatus',
+    'annualTrialUsed',
+  ]
+  const subUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/subscriptions/${input.uid}?${masks
+    .map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`)
+    .join('&')}`
   const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${input.uid}?updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt`
+
+  const prevSoloId = fieldString(existing, 'soloSubscriptionId') || undefined
+  const prevSoloStatus = fieldString(existing, 'soloStatus') || undefined
+  const prevGrupetaId = fieldString(existing, 'grupetaSubscriptionId') || undefined
+  const prevGrupetaStatus = fieldString(existing, 'grupetaStatus') || undefined
+  const prevTrial = (existing?.fields as Record<string, { booleanValue?: boolean }> | undefined)
+    ?.annualTrialUsed?.booleanValue
 
   const subBody = {
     fields: {
       userId: { stringValue: input.uid },
       status: { stringValue: input.status },
       plan: { stringValue: input.plan },
-      ...(input.product ? { product: { stringValue: input.product } } : {}),
-      ...(input.stripeCustomerId
-        ? { stripeCustomerId: { stringValue: input.stripeCustomerId } }
-        : {}),
+      ...(customerId ? { stripeCustomerId: { stringValue: customerId } } : {}),
       ...(input.stripeSubscriptionId
         ? { stripeSubscriptionId: { stringValue: input.stripeSubscriptionId } }
         : {}),
+      ...(input.product ? { product: { stringValue: input.product } } : {}),
+      ...((input.soloSubscriptionId ?? prevSoloId)
+        ? { soloSubscriptionId: { stringValue: (input.soloSubscriptionId ?? prevSoloId)! } }
+        : {}),
+      ...((input.soloStatus ?? prevSoloStatus)
+        ? { soloStatus: { stringValue: (input.soloStatus ?? prevSoloStatus)! } }
+        : {}),
+      ...((input.grupetaSubscriptionId ?? prevGrupetaId)
+        ? {
+            grupetaSubscriptionId: {
+              stringValue: (input.grupetaSubscriptionId ?? prevGrupetaId)!,
+            },
+          }
+        : {}),
+      ...((input.grupetaStatus ?? prevGrupetaStatus)
+        ? { grupetaStatus: { stringValue: (input.grupetaStatus ?? prevGrupetaStatus)! } }
+        : {}),
+      annualTrialUsed: {
+        booleanValue: Boolean(input.annualTrialUsed ?? prevTrial ?? false),
+      },
       updatedAt: { timestampValue: now },
     },
   }
@@ -661,6 +712,15 @@ export async function writeSeatIndex(
   }
 }
 
+export async function deleteSeatIndex(env: Env, emailKey: string): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/grupetaSeatIndex/${emailKey}`
+  await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+}
+
 /** Find users/{uid} by email (exact match on stored profile email). */
 export async function findUserUidByEmail(env: Env, email: string): Promise<string | null> {
   const sa = parseServiceAccount(env)
@@ -705,53 +765,96 @@ export async function findUserUidByEmail(env: Env, email: string): Promise<strin
 export async function readSubscriptionRecord(
   env: Env,
   uid: string,
-): Promise<{ status?: string; plan?: string; stripeSubscriptionId?: string } | null> {
+): Promise<{
+  status?: string
+  plan?: string
+  stripeSubscriptionId?: string
+  stripeCustomerId?: string
+  product?: string
+  soloSubscriptionId?: string
+  soloStatus?: string
+  grupetaSubscriptionId?: string
+  grupetaStatus?: string
+  annualTrialUsed?: boolean
+} | null> {
   const sa = parseServiceAccount(env)
   if (!sa) return null
   const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
   const token = await getAccessToken(sa)
   const doc = await adminGetDocument(projectId, token, `subscriptions/${uid}`)
   if (!doc) return null
+  const fields = doc.fields as Record<string, { booleanValue?: boolean }> | undefined
   return {
     status: fieldString(doc, 'status') || undefined,
     plan: fieldString(doc, 'plan') || undefined,
     stripeSubscriptionId: fieldString(doc, 'stripeSubscriptionId') || undefined,
+    stripeCustomerId: fieldString(doc, 'stripeCustomerId') || undefined,
+    product: fieldString(doc, 'product') || undefined,
+    soloSubscriptionId: fieldString(doc, 'soloSubscriptionId') || undefined,
+    soloStatus: fieldString(doc, 'soloStatus') || undefined,
+    grupetaSubscriptionId: fieldString(doc, 'grupetaSubscriptionId') || undefined,
+    grupetaStatus: fieldString(doc, 'grupetaStatus') || undefined,
+    annualTrialUsed: Boolean(fields?.annualTrialUsed?.booleanValue),
   }
 }
 
 /**
- * Downgrade to free unless allowlist-equivalent protection:
- * - has another active/trialing subscription (not the ignored grupeta sub id)
+ * Downgrade to free unless protected by allowlist, another paying product side,
+ * or an ignored-subscription mismatch.
+ * Never wipes stripeCustomerId.
  */
 export async function revokePremiumUnlessProtected(
   env: Env,
   uid: string,
-  opts?: { ignoreSubscriptionId?: string; keepIfSubscriptionId?: string },
+  opts?: {
+    ignoreSubscriptionId?: string
+    keepIfSubscriptionId?: string
+    email?: string | null
+  },
 ): Promise<void> {
+  const { isAllowlistedPremiumEmail } = await import('./premiumAllowlist')
+  if (isAllowlistedPremiumEmail(env, opts?.email)) return
+
+  // Resolve email from profile if not provided (ops allowlist).
+  if (!opts?.email) {
+    const sa = parseServiceAccount(env)
+    if (sa) {
+      const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+      const token = await getAccessToken(sa)
+      const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+      const email = fieldString(userDoc, 'email')
+      if (isAllowlistedPremiumEmail(env, email)) return
+    }
+  }
+
   const sub = await readSubscriptionRecord(env, uid)
-  const status = sub?.status || ''
   const subId = sub?.stripeSubscriptionId
   if (opts?.keepIfSubscriptionId && subId === opts.keepIfSubscriptionId) {
     return
   }
-  if (
-    (status === 'active' || status === 'trialing') &&
+
+  const paying = (s?: string) =>
+    s === 'active' || s === 'trialing' || s === 'past_due'
+  const soloPay =
+    paying(sub?.soloStatus) &&
+    sub?.soloSubscriptionId &&
+    sub.soloSubscriptionId !== opts?.ignoreSubscriptionId
+  const grupetaPay =
+    paying(sub?.grupetaStatus) &&
+    sub?.grupetaSubscriptionId &&
+    sub.grupetaSubscriptionId !== opts?.ignoreSubscriptionId
+  const legacyPay =
+    paying(sub?.status) &&
     subId &&
-    subId !== opts?.ignoreSubscriptionId
-  ) {
-    // Own solo (or other) subscription still paying — keep premium.
+    subId !== opts?.ignoreSubscriptionId &&
+    !sub?.soloStatus &&
+    !sub?.grupetaStatus
+
+  if (soloPay || grupetaPay || legacyPay) {
     return
   }
-  // If their only sub is the cancelled grupeta one, clear it to free.
+
   await writeUserPlan(env, uid, 'free')
-  if (subId && subId === opts?.ignoreSubscriptionId) {
-    await upsertSubscriptionAndPlan(env, {
-      uid,
-      plan: 'free',
-      status: 'canceled',
-      stripeSubscriptionId: subId,
-    })
-  }
 }
 
 export async function writeSubscriptionCustomerId(

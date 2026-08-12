@@ -597,11 +597,17 @@ export function ExplorePage() {
                 <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
                   Reto semanal por ciudad
                 </h2>
+                <p className="rounded-2xl bg-[var(--color-mist)]/70 px-4 py-3 text-sm text-[var(--color-stone)]">
+                  Próximamente: ranking semanal real. Mientras tanto, estas son las ciudades piloto.
+                </p>
                 <ul className="divide-y divide-[var(--color-fog)] rounded-2xl bg-white/80 ring-1 ring-[var(--color-fog)]">
                   {CITY_CHALLENGES.map((c) => (
                     <li key={c.slug} className="px-4 py-3">
                       <p className="font-semibold text-[var(--color-forest)]">
                         {c.city} · {c.targetKm} km
+                        <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                          Próximamente
+                        </span>
                       </p>
                       <p className="mt-0.5 text-sm text-[var(--color-stone)]">{c.blurb}</p>
                     </li>

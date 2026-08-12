@@ -201,11 +201,11 @@ export function LandingPage() {
                 </Link>
               )}
             </div>
-            <div className="rounded-3xl bg-[var(--color-panel)] p-6 text-white">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
+            <div className="rounded-3xl bg-white/80 p-6 ring-1 ring-[var(--color-fog)] md:bg-[var(--color-panel)] md:text-white md:ring-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)] md:text-[var(--color-signal)]">
                 Pack Grupeta
               </p>
-              <ul className="mt-4 space-y-2 text-sm text-white/85">
+              <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)] md:text-white/85">
                 <li>· {GRUPETA_SEAT_LIMIT} plazas Premium (tú + {GRUPETA_MEMBER_SEATS})</li>
                 <li>· Asignas emails tras el pago</li>
                 <li>· Mismas ventajas ilimitadas</li>
@@ -213,7 +213,7 @@ export function LandingPage() {
                 <li>· o {GRUPETA_PRICE_MONTH} €/mes</li>
               </ul>
               <Link to="/premium#grupeta" className="mt-6 inline-block">
-                <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
+                <Button className="md:!bg-[var(--color-signal)] md:!text-[var(--color-ink)]">
                   Ver Pack Grupeta
                 </Button>
               </Link>

@@ -6,40 +6,85 @@ import {
   claimFreeGpxExport,
   FREE_GPX_PER_WEEK,
   isoWeekKey,
+  readSeatIndex,
+  readSubscriptionRecord,
   readUserEntitlements,
+  revokePremiumUnlessProtected,
   writeUserPlan,
 } from './firestore'
-import { grantPremiumFromGrupetaSeat } from './grupetaPack'
+import {
+  emailDocId,
+  grantPremiumFromGrupetaSeat,
+  packIsBillable,
+} from './grupetaPack'
 
 const FREE_MAX_SAVED = 5
 
-/**
- * Persist allowlist / Grupeta seat Premium to Firestore (Admin) and return effective entitlements.
- * Spark-friendly: no Cloud Functions / custom claims required.
- */
+async function resolveEffectivePlan(
+  env: Env,
+  identity: FirebaseIdentity,
+): Promise<{ plan: 'free' | 'premium'; allowlisted: boolean; grupetaSeat: boolean }> {
+  const email = identity.email ?? null
+  const allowlisted = isAllowlistedPremiumEmail(env, email)
+  if (allowlisted) {
+    await writeUserPlan(env, identity.uid, 'premium')
+    return { plan: 'premium', allowlisted: true, grupetaSeat: false }
+  }
+
+  const sub = await readSubscriptionRecord(env, identity.uid)
+  const paying = (s?: string) =>
+    s === 'active' || s === 'trialing' || s === 'past_due'
+  const soloPay = paying(sub?.soloStatus)
+  const grupetaPay = paying(sub?.grupetaStatus)
+  const legacyPay =
+    paying(sub?.status) && !sub?.soloStatus && !sub?.grupetaStatus
+  if (soloPay || grupetaPay || legacyPay) {
+    if (sub?.plan !== 'premium') {
+      await writeUserPlan(env, identity.uid, 'premium')
+    }
+    return { plan: 'premium', allowlisted: false, grupetaSeat: false }
+  }
+
+  // Seat grant requires verified email (blocks unverified register-to-steal).
+  let grupetaSeat = false
+  if (identity.email && identity.emailVerified) {
+    try {
+      grupetaSeat = await grantPremiumFromGrupetaSeat(env, identity)
+    } catch (error) {
+      console.warn('[plan] grupeta seat', error)
+    }
+    if (grupetaSeat) return { plan: 'premium', allowlisted: false, grupetaSeat: true }
+  } else if (identity.email && !identity.emailVerified) {
+    const idx = await readSeatIndex(env, await emailDocId(identity.email))
+    if (idx && packIsBillable(idx.status)) {
+      console.info('[plan] seat pending email verification', identity.uid)
+    }
+  }
+
+  // Reconcile downgrade: Firestore said premium but no paying source.
+  const current = await readUserEntitlements(env, identity.uid)
+  if (current?.plan === 'premium') {
+    await revokePremiumUnlessProtected(env, identity.uid, {
+      email,
+    })
+    const after = await readUserEntitlements(env, identity.uid)
+    return {
+      plan: after?.plan === 'premium' ? 'premium' : 'free',
+      allowlisted: false,
+      grupetaSeat: false,
+    }
+  }
+
+  return { plan: 'free', allowlisted: false, grupetaSeat: false }
+}
+
 export async function handleSyncPlan(
   env: Env,
   identity: FirebaseIdentity,
 ): Promise<Response> {
   const email = identity.email ?? null
-  const allowlisted = isAllowlistedPremiumEmail(env, email)
+  const { plan, allowlisted, grupetaSeat } = await resolveEffectivePlan(env, identity)
   const current = await readUserEntitlements(env, identity.uid)
-  let plan: 'free' | 'premium' = current?.plan ?? 'free'
-  let grupetaSeat = false
-
-  if (allowlisted && plan !== 'premium') {
-    await writeUserPlan(env, identity.uid, 'premium')
-    plan = 'premium'
-  }
-
-  if (plan !== 'premium') {
-    try {
-      grupetaSeat = await grantPremiumFromGrupetaSeat(env, identity)
-      if (grupetaSeat) plan = 'premium'
-    } catch (error) {
-      console.warn('[sync-plan] grupeta seat', error)
-    }
-  }
 
   const week = isoWeekKey()
   const used =
@@ -54,6 +99,7 @@ export async function handleSyncPlan(
     plan,
     allowlisted,
     grupetaSeat,
+    emailVerified: identity.emailVerified,
     gpxExport: plan === 'premium' || (freeGpxRemaining ?? 0) > 0,
     freeGpxRemaining,
     maxRoutesSaved: plan === 'premium' ? null : FREE_MAX_SAVED,
@@ -66,28 +112,8 @@ export async function handleEntitlements(
   identity: FirebaseIdentity,
 ): Promise<Response> {
   const email = identity.email ?? null
-  const allowlisted = isAllowlistedPremiumEmail(env, email)
+  const { plan, allowlisted, grupetaSeat } = await resolveEffectivePlan(env, identity)
   const current = await readUserEntitlements(env, identity.uid)
-  let plan: 'free' | 'premium' =
-    allowlisted || current?.plan === 'premium' ? 'premium' : 'free'
-  let grupetaSeat = false
-
-  if (allowlisted && current?.plan !== 'premium') {
-    try {
-      await writeUserPlan(env, identity.uid, 'premium')
-    } catch (error) {
-      console.warn('[entitlements] allowlist sync failed', error)
-    }
-  }
-
-  if (plan !== 'premium') {
-    try {
-      grupetaSeat = await grantPremiumFromGrupetaSeat(env, identity)
-      if (grupetaSeat) plan = 'premium'
-    } catch (error) {
-      console.warn('[entitlements] grupeta seat', error)
-    }
-  }
 
   const week = isoWeekKey()
   const used =
@@ -102,6 +128,7 @@ export async function handleEntitlements(
     plan,
     allowlisted,
     grupetaSeat,
+    emailVerified: identity.emailVerified,
     gpxExport: plan === 'premium' || (freeGpxRemaining ?? 0) > 0,
     freeGpxRemaining,
     maxRoutesSaved: plan === 'premium' ? null : FREE_MAX_SAVED,
@@ -111,7 +138,6 @@ export async function handleEntitlements(
   })
 }
 
-/** Claim one Free weekly GPX export (or confirm Premium unlimited). */
 export async function handleClaimGpx(
   env: Env,
   identity: FirebaseIdentity,

@@ -23,6 +23,7 @@ import { ActivityHeatmap } from '@/components/athlete/ActivityHeatmap'
 import { communityService } from '@/services/CommunityService'
 import { activityRepository } from '@/services/ActivityRepository'
 import { routeRepository } from '@/services/RouteRepository'
+import { grupetaService } from '@/services/GrupetaService'
 import { doc, getDoc } from 'firebase/firestore'
 import { getDb } from '@/lib/firebase'
 import {
@@ -59,6 +60,7 @@ export function ProfilePage() {
   const [statsLoading, setStatsLoading] = useState(false)
   const [trialing, setTrialing] = useState(false)
   const [trialEnd, setTrialEnd] = useState<string | null>(null)
+  const [ownsGrupetaPack, setOwnsGrupetaPack] = useState(false)
 
   const windAlertsEnabled = Boolean(profile?.notifications?.windAlertsEnabled)
   const windAlertsEmail = Boolean(profile?.notifications?.windAlertsEmail)
@@ -102,6 +104,29 @@ export function ProfilePage() {
     setBikeType(profile.bikePreferences.bikeType)
     setPreferences(profile.bikePreferences.preferences)
   }, [profile])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPack() {
+      if (!user || user.isAnonymous || !grupetaService.isConfigured()) {
+        setOwnsGrupetaPack(false)
+        return
+      }
+      try {
+        const res = await grupetaService.getPack()
+        if (cancelled) return
+        setOwnsGrupetaPack(
+          Boolean(res.pack?.viewerRole === 'owner' && res.pack.billable),
+        )
+      } catch {
+        if (!cancelled) setOwnsGrupetaPack(false)
+      }
+    }
+    void loadPack()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.uid, profile?.plan])
 
   useEffect(() => {
     let cancelled = false
@@ -462,12 +487,11 @@ export function ProfilePage() {
             </section>
           ) : null}
 
-          {!user.isAnonymous && profile?.plan === 'premium' ? (
+          {ownsGrupetaPack ? (
             <section className="space-y-2 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
               <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Pack Grupeta</h2>
               <p className="text-sm text-[var(--color-stone)]">
-                4 plazas Premium (tú + 3). Tras contratar el pack en Premium, asignas los emails de
-                tus compañeros.
+                Eres el titular: asigna hasta 3 emails de tu grupeta.
               </p>
               <Link to="/premium#grupeta">
                 <Button type="button" variant="secondary">
@@ -475,7 +499,7 @@ export function ProfilePage() {
                 </Button>
               </Link>
             </section>
-          ) : !user.isAnonymous ? (
+          ) : !user.isAnonymous && profile?.plan !== 'premium' ? (
             <section className="space-y-2 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
               <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Pack Grupeta</h2>
               <p className="text-sm text-[var(--color-stone)]">

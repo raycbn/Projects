@@ -47,6 +47,8 @@ service cloud.firestore {
             <= resource.data.usage.routesSaved + 1
           && request.resource.data.usage.routesSaved
             >= resource.data.usage.routesSaved - 1
+          // Free never stores a routesSaved above the Free cap (Premium may).
+          && (isPremiumUser() || request.resource.data.usage.routesSaved <= 5)
           // monthKey may only stay put or advance to the real UTC calendar month.
           && (
             request.resource.data.usage.monthKey == resource.data.usage.monthKey

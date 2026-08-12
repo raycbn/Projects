@@ -58,8 +58,16 @@ export function ActivityDetailPage() {
           setError('No encontramos esa actividad.')
           return
         }
-        if (user && !user.isAnonymous && row.userId !== user.uid) {
+        if (user && !user.isAnonymous && row.userId !== user.uid && row.isPublic !== true) {
           setError('Esta actividad pertenece a otra cuenta.')
+          return
+        }
+        // Public activities are readable by anyone (rules + opt-in). Private only by owner.
+        if (
+          row.isPublic !== true &&
+          (!user || user.isAnonymous || row.userId !== user.uid)
+        ) {
+          setError('Esta actividad no es pública.')
           return
         }
         setActivity(row)
@@ -267,6 +275,12 @@ export function ActivityDetailPage() {
             variant="ghost"
             onClick={() => {
               const next = !activity.isPublic
+              if (next && !profile?.notifications?.activitiesPublic) {
+                setHint(
+                  'Activa «Actividad pública» en Perfil antes de hacer pública esta salida.',
+                )
+                return
+              }
               void activityRepository
                 .setPublic(activity.id, next)
                 .then(() => {

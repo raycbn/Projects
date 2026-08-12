@@ -12,6 +12,7 @@ import {
   revokePremiumUnlessProtected,
   writeGrupetaPack,
   writeSeatIndex,
+  deleteSeatIndex,
   writeUserPlan,
   type GrupetaPack,
   type GrupetaSeat,
@@ -37,7 +38,8 @@ export async function emailDocId(email: string): Promise<string> {
 }
 
 export function packIsBillable(status: string): boolean {
-  return status === 'active' || status === 'trialing'
+  // past_due keeps seats until Stripe cancels (payment retry grace).
+  return status === 'active' || status === 'trialing' || status === 'past_due'
 }
 
 /** Create/refresh pack when Stripe says the Grupeta subscription is paying. */
@@ -194,9 +196,9 @@ export async function handleGetGrupetaPack(
       year: '119,99 €',
     },
     pack: asOwner
-      ? publicPack(asOwner)
+      ? { ...publicPack(asOwner), viewerRole: 'owner' as const }
       : asMember
-        ? { ...publicPack(asMember), viewerRole: 'member' }
+        ? { ...publicPack(asMember), viewerRole: 'member' as const }
         : null,
   })
 }
@@ -271,6 +273,20 @@ export async function handleSetGrupetaSeats(
     )
   }
 
+  // Refuse emails already seated on another billable pack.
+  for (const email of normalized) {
+    const idx = await readSeatIndex(env, await emailDocId(email))
+    if (idx && packIsBillable(idx.status) && idx.packId !== identity.uid) {
+      return json(
+        {
+          error: `${email} ya está en otro Pack Grupeta activo.`,
+          code: 'seat_taken',
+        },
+        409,
+      )
+    }
+  }
+
   const now = new Date().toISOString()
   const prevMembers = (pack.seats || []).filter((s) => s.role === 'member')
   const prevEmails = new Set(prevMembers.map((s) => normalizeEmail(s.email)))
@@ -307,17 +323,11 @@ export async function handleSetGrupetaSeats(
     })
   }
 
-  // Revoke removed members
+  // Revoke removed members and delete stale index docs.
   for (const prev of prevMembers) {
     const email = normalizeEmail(prev.email)
     if (normalized.includes(email)) continue
-    await writeSeatIndex(env, await emailDocId(email), {
-      packId: identity.uid,
-      email,
-      role: 'member',
-      status: 'removed',
-      updatedAt: now,
-    })
+    await deleteSeatIndex(env, await emailDocId(email))
     const uid = prev.uid || (await findUserUidByEmail(env, email))
     if (uid) {
       await revokePremiumUnlessProtected(env, uid, {

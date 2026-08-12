@@ -40,6 +40,10 @@ export const landingFaqs: FaqItem[] = [
     a: `Sí: el plan Free incluye hasta ${FREE_LIMITS.maxRoutesSaved} rutas guardadas, ${FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes, 1 GPX a la semana, 1 Objetivo al mes y filtros básicos. Premium quita los techos y añade trial anual de 7 días.`,
   },
   {
+    q: '¿Qué es el Pack Grupeta?',
+    a: 'Es un pack de 4 plazas Premium (tú + 3 compañeros) a 14,99 €/mes o 119,99 €/año (con 7 días de prueba en el anual). Tras pagar, el titular asigna los emails en Premium. No es un descuento sobre Premium individual: son plazas compartidas. Detalle en pedalmap.es/premium#grupeta.',
+  },
+  {
     q: '¿PedalMap es una alternativa a Komoot?',
     a: 'Puede serlo si lo que buscas es planificar salidas en España con perfil de bici, desnivel, viento, superficie y GPX. No es una red social de tracks: es la capa previa a rodar. Comparativa en pedalmap.es/alternativa-komoot.',
   },

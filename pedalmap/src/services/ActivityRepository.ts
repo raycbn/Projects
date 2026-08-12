@@ -141,8 +141,15 @@ export class ActivityRepository {
         .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
         .slice(0, max)
     } catch (err) {
-      console.warn('[activities] listPublicForUser', err)
-      return []
+      console.warn('[activities] listPublicForUser composite failed, falling back', err)
+      try {
+        const all = await this.listForUser(userId)
+        return all
+          .filter((a) => a.isPublic === true && a.status === 'finished')
+          .slice(0, max)
+      } catch {
+        return []
+      }
     }
   }
 

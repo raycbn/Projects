@@ -8,6 +8,7 @@ const jwks = createRemoteJWKSet(
 export type FirebaseIdentity = {
   uid: string
   email?: string
+  emailVerified: boolean
   isAnonymous: boolean
 }
 
@@ -31,6 +32,7 @@ export async function verifyFirebaseIdToken(
   return {
     uid,
     email: typeof payload.email === 'string' ? payload.email : undefined,
+    emailVerified: payload.email_verified === true,
     isAnonymous: firebaseClaim?.sign_in_provider === 'anonymous',
   }
 }

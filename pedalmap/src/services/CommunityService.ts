@@ -27,6 +27,18 @@ import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 import { resolvePublicDisplayName } from '@/lib/communityIdentity'
 import { routeRepository } from '@/services/RouteRepository'
 
+/** Lowercase + strip accents for fuzzy city matching (Madrid ≈ mádrid). */
+function normalizeCityKey(city: string): string {
+  return city
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function mapPublicProfile(id: string, data: DocumentData): PublicProfile {
   return {
     uid: id,
@@ -317,13 +329,25 @@ export class CommunityService {
   }
 
   async listNearYou(city: string, excludeUid?: string, max = 12): Promise<PublicProfile[]> {
-    const needle = city.trim().toLowerCase()
+    const needle = normalizeCityKey(city)
     if (!needle) return []
     const all = await this.listPublicProfiles(48)
-    return all
+    const scored = all
       .filter((p) => p.uid !== excludeUid)
-      .filter((p) => (p.city || '').trim().toLowerCase() === needle)
-      .slice(0, max)
+      .map((p) => {
+        const key = normalizeCityKey(p.city || '')
+        if (!key) return { p, score: 0 }
+        if (key === needle) return { p, score: 3 }
+        if (key.includes(needle) || needle.includes(key)) return { p, score: 2 }
+        // Token overlap: "Madrid Centro" ≈ "Madrid"
+        const a = new Set(needle.split(' '))
+        const b = key.split(' ')
+        const hit = b.some((t) => t.length > 2 && a.has(t))
+        return { p, score: hit ? 1 : 0 }
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+    return scored.slice(0, max).map((x) => x.p)
   }
 
   async listSegments(max = 30): Promise<Segment[]> {

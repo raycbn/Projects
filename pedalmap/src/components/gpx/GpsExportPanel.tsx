@@ -94,12 +94,18 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
       }
       return true
     }
-    // Free: prefer server remaining, fall back to client.
-    const server = await fetchServerEntitlements()
-    if (server) {
-      if (!server.gpxExport || (server.freeGpxRemaining ?? 0) <= 0) {
+    // Free: claim server quota BEFORE generating the file (blocks download-without-claim).
+    const claim = await claimServerGpxExport()
+    if (claim) {
+      if (!claim.allowed) {
         onPremiumRequired?.()
         return false
+      }
+      try {
+        await authService.recordFreeGpxExport(profile.uid)
+        track('free_trial_used', { kind: 'gpx' })
+      } catch (err) {
+        console.warn('[gpx] free trial local', err)
       }
       return true
     }
@@ -112,20 +118,8 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
 
   async function noteFreeTrialUsed() {
     if (profile?.plan === 'premium') return
-    if (profile) {
-      const claim = await claimServerGpxExport()
-      if (claim && !claim.allowed) {
-        // Race: another tab used the weekly GPX — still try local sync.
-        console.warn('[gpx] server claim denied after export')
-      }
-      try {
-        await authService.recordFreeGpxExport(profile.uid)
-        track('free_trial_used', { kind: 'gpx' })
-      } catch (err) {
-        console.warn('[gpx] free trial', err)
-      }
-      return
-    }
+    // Logged-in Free already claimed in ensureExportAllowed.
+    if (profile) return
     consumeGuestGpx()
     track('free_trial_used', { kind: 'gpx', guest: true })
   }

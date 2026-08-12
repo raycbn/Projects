@@ -49,6 +49,18 @@ export function PremiumPage() {
   const wantsGrupeta = params.get('pack') === 'grupeta' || params.get('grupeta') === '1'
 
   const packBillable = Boolean(pack?.billable)
+  const isPackOwner = pack?.viewerRole === 'owner' && packBillable
+  const isPackMember = pack?.viewerRole === 'member' && packBillable
+  const canBuyPack = !isPremium && !packBillable
+  const canBuySolo = !isPremium
+
+  useEffect(() => {
+    if (window.location.hash !== '#grupeta') return
+    const el = document.getElementById('grupeta')
+    if (el) {
+      window.setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+    }
+  }, [pack, wantsGrupeta])
 
   const memberEmailsFromPack = useMemo(
     () =>
@@ -100,11 +112,16 @@ export function PremiumPage() {
       tries += 1
       await syncServerPlan().catch(() => null)
       const ent = await fetchServerEntitlements()
-      await reloadPack()
+      const packRes = await grupetaService.getPack().catch(() => null)
+      if (packRes?.pack) setPack(packRes.pack)
       if (cancelled) return
-      if (ent?.plan === 'premium') {
+      const grupetaCheckout = params.get('pack') === 'grupeta'
+      const packReady =
+        !grupetaCheckout ||
+        (packRes?.pack?.viewerRole === 'owner' && packRes.pack.billable)
+      if (ent?.plan === 'premium' && packReady) {
         setMessage(
-          params.get('pack') === 'grupeta'
+          grupetaCheckout
             ? `Pack Grupeta activo. Asigna hasta ${GRUPETA_MEMBER_SEATS} emails de tu grupeta abajo.`
             : startedWithTrial
               ? `¡Prueba de ${ANNUAL_TRIAL_DAYS} días activa! Premium listo: Objetivo, GPX y guardados ilimitados.`
@@ -114,8 +131,13 @@ export function PremiumPage() {
         track('premium_activated', {
           source: 'checkout_poll',
           trial: startedWithTrial,
-          pack: params.get('pack') === 'grupeta' ? 'grupeta' : 'solo',
+          pack: grupetaCheckout ? 'grupeta' : 'solo',
         })
+        if (grupetaCheckout) {
+          window.setTimeout(() => {
+            document.getElementById('grupeta')?.scrollIntoView({ behavior: 'smooth' })
+          }, 100)
+        }
         return
       }
       if (tries >= 12) {
@@ -141,6 +163,18 @@ export function PremiumPage() {
       setMessage('Inicia sesión para suscribirte.')
       return
     }
+    if (product === 'grupeta' && !canBuyPack) {
+      setMessage(
+        isPackOwner || isPackMember || isPremium
+          ? 'Ya tienes Premium o un Pack activo. Usa el portal para gestionar la suscripción.'
+          : 'No se puede contratar el Pack ahora.',
+      )
+      return
+    }
+    if (product === 'solo' && !canBuySolo) {
+      setMessage('Ya eres Premium. Gestiona la suscripción en el portal.')
+      return
+    }
     if (!stripeReady) {
       track('premium_clicked', { source: 'premium_page_preview', product })
       setMessage(
@@ -154,11 +188,14 @@ export function PremiumPage() {
       window.location.assign(url)
     } catch (error) {
       console.error('[stripe]', error)
-      setMessage(
+      const msg =
         error instanceof Error
           ? error.message
-          : 'No se pudo abrir Stripe Checkout. Revisa el Worker y los precios.',
-      )
+          : 'No se pudo abrir Stripe Checkout. Revisa el Worker y los precios.'
+      setMessage(msg)
+      if (msg.toLowerCase().includes('portal') || msg.toLowerCase().includes('suscripción')) {
+        // Offer portal path when already subscribed.
+      }
     } finally {
       setBusy(false)
     }
@@ -257,7 +294,7 @@ export function PremiumPage() {
           <div className="mt-4 space-y-2">
             <Button
               className="w-full"
-              disabled={busy || isPremium}
+              disabled={busy || !canBuySolo}
               onClick={() => void startCheckout('year', 'solo')}
             >
               Probar {ANNUAL_TRIAL_DAYS} días · Anual
@@ -265,7 +302,7 @@ export function PremiumPage() {
             <Button
               variant="ghost"
               className="w-full !border-white/30 !text-white"
-              disabled={busy || isPremium}
+              disabled={busy || !canBuySolo}
               onClick={() => void startCheckout('month', 'solo')}
             >
               Mensual 4,99 €
@@ -315,11 +352,11 @@ export function PremiumPage() {
           o {GRUPETA_PRICE_MONTH} €/mes sin prueba
         </p>
 
-        {!packBillable ? (
+        {!isPackOwner && !isPackMember ? (
           <div className="mt-4 space-y-2">
             <Button
               className="w-full"
-              disabled={busy}
+              disabled={busy || !canBuyPack}
               onClick={() => void startCheckout('year', 'grupeta')}
             >
               Probar {ANNUAL_TRIAL_DAYS} días · Pack anual
@@ -327,10 +364,30 @@ export function PremiumPage() {
             <Button
               variant="ghost"
               className="w-full !border-white/30 !text-white"
-              disabled={busy}
+              disabled={busy || !canBuyPack}
               onClick={() => void startCheckout('month', 'grupeta')}
             >
               Pack mensual {GRUPETA_PRICE_MONTH} €
+            </Button>
+            {isPremium ? (
+              <p className="text-xs text-white/55">
+                Ya tienes Premium. Cancela o gestiona en el portal si quieres pasar al Pack.
+              </p>
+            ) : null}
+          </div>
+        ) : isPackMember ? (
+          <div className="mt-5 space-y-2">
+            <p className="text-sm text-white/85">
+              Formas parte de un Pack Grupeta activo. Disfrutas Premium gracias a tu grupeta.
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full !border-white/30 !text-white"
+              disabled={busy}
+              onClick={() => void openPortal()}
+            >
+              Portal de facturación
             </Button>
           </div>
         ) : (
