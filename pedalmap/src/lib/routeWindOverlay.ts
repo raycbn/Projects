@@ -149,8 +149,9 @@ export function buildRouteWindOverlay(
 
   const cum = cumulativeDistances(coords)
   const total = cum[cum.length - 1] || 1
-  // Dense enough to read on a half-screen mobile map; cap for long routes.
-  const samples = Math.max(18, Math.min(48, opts.sampleCount ?? 32))
+  // Segments stay dense for color; arrows are sparse so they fit inside the stripe.
+  const samples = Math.max(16, Math.min(36, opts.sampleCount ?? 24))
+  const arrowEvery = Math.max(3, Math.ceil(samples / 7))
   const windToward = (wind.windFromDeg + 180) % 360
   const features: Feature<Point | LineString>[] = []
 
@@ -192,6 +193,8 @@ export function buildRouteWindOverlay(
         },
       })
     }
+
+    if (s % arrowEvery !== 0) continue
 
     const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
     if (!mid) continue

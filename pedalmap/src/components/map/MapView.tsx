@@ -190,8 +190,8 @@ function applySurfaceOverlay(map: Map, overlay: FeatureCollection | null | undef
 function createWindArrowImage(
   fill: string,
 ): { data: Uint8Array; width: number; height: number } {
-  const width = 128
-  const height = 128
+  const width = 64
+  const height = 64
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -201,21 +201,21 @@ function createWindArrowImage(
   }
   ctx.clearRect(0, 0, width, height)
   ctx.translate(width / 2, height / 2)
-  // Halo for contrast on any segment color
+  // Compact halo so the glyph sits inside the wind route stripe.
   ctx.beginPath()
-  ctx.arc(0, 0, 36, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(255,255,255,0.92)'
+  ctx.arc(0, 0, 14, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
   ctx.fill()
   // Arrow tip points UP (north). With icon-rotation-alignment:map, rotate = bearing.
   ctx.beginPath()
-  ctx.moveTo(0, -38)
-  ctx.lineTo(22, 28)
-  ctx.lineTo(0, 14)
-  ctx.lineTo(-22, 28)
+  ctx.moveTo(0, -15)
+  ctx.lineTo(9, 11)
+  ctx.lineTo(0, 5)
+  ctx.lineTo(-9, 11)
   ctx.closePath()
   ctx.fillStyle = fill
   ctx.fill()
-  ctx.lineWidth = 5
+  ctx.lineWidth = 2
   ctx.strokeStyle = '#04140e'
   ctx.stroke()
   const imageData = ctx.getImageData(0, 0, width, height)
@@ -223,9 +223,9 @@ function createWindArrowImage(
 }
 
 const WIND_ARROW_IMAGES: Record<string, string> = {
-  'wind-arrow-cola-v2': '#16a34a',
-  'wind-arrow-lateral-v2': '#0284c7',
-  'wind-arrow-cara-v2': '#ea580c',
+  'wind-arrow-cola-v3': '#16a34a',
+  'wind-arrow-lateral-v3': '#0284c7',
+  'wind-arrow-cara-v3': '#ea580c',
 }
 
 function ensureWindArrowImages(map: Map) {
@@ -447,21 +447,21 @@ function ensureWindLayers(map: Map) {
           'match',
           ['get', 'relative'],
           'cola',
-          'wind-arrow-cola-v2',
+          'wind-arrow-cola-v3',
           'cara',
-          'wind-arrow-cara-v2',
-          'wind-arrow-lateral-v2',
+          'wind-arrow-cara-v3',
+          'wind-arrow-lateral-v3',
         ],
         'icon-size': [
           'interpolate',
           ['linear'],
           ['zoom'],
           8,
-          0.4,
+          0.55,
           11,
-          0.58,
+          0.7,
           14,
-          0.78,
+          0.85,
         ],
         'icon-rotate': ['to-number', ['get', 'windTowardDeg']],
         'icon-rotation-alignment': 'map',
@@ -490,8 +490,8 @@ function ensureWindLayers(map: Map) {
       ],
       layout: {
         'text-field': ['get', 'legLabel'],
-        'text-size': 11,
-        'text-offset': [0, 1.85],
+        'text-size': 10,
+        'text-offset': [0, 1.35],
         'text-anchor': 'top',
         'text-allow-overlap': false,
         'text-ignore-placement': false,
