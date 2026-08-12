@@ -28,11 +28,13 @@ export function Button({
   variant = 'primary',
   size = 'md',
   className,
+  type = 'button',
   children,
   ...props
 }: Props) {
   return (
     <button
+      type={type}
       className={clsx(
         'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition disabled:cursor-not-allowed disabled:opacity-50',
         styles[variant],

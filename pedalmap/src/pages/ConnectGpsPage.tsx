@@ -60,7 +60,7 @@ export function ConnectGpsPage() {
     ({
       id: 'wahoo' as const,
       label: 'Wahoo',
-      configured: false,
+      configured: true,
       connected: false,
       externalUserId: null,
     } satisfies GpsProviderStatus)
@@ -69,8 +69,11 @@ export function ConnectGpsPage() {
     setBusy(provider)
     setMessage(null)
     try {
+      if (!gpsSyncService.isApiReady()) {
+        throw new Error('Falta la API de PedalMap. Recarga la página.')
+      }
       const { url } = await gpsSyncService.startConnect(provider)
-      window.location.assign(url)
+      window.location.href = url
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'No se pudo abrir la conexión')
       setBusy(null)
@@ -158,17 +161,16 @@ export function ConnectGpsPage() {
         <li className="rounded-3xl bg-[var(--color-forest)] p-5 text-white">
           <h2 className="font-display text-xl font-bold">Wahoo</h2>
           <p className="mt-1 text-sm text-white/80">
-            {!wahoo.configured
-              ? 'Aún falta configurar la app Wahoo Cloud en el Worker.'
-              : wahoo.connected
-                ? 'Conectado · las nuevas salidas se cargan solas'
-                : 'API oficial. Autoriza una vez y sincroniza salidas a PedalMap.'}
+            {wahoo.connected
+              ? 'Conectado · las nuevas salidas se cargan solas'
+              : 'API oficial. Autoriza una vez y sincroniza salidas a PedalMap.'}
           </p>
-          {user && !user.isAnonymous && wahoo.configured ? (
+          {user && !user.isAnonymous ? (
             <div className="mt-4 flex flex-wrap gap-2">
               {wahoo.connected ? (
                 <>
                   <Button
+                    type="button"
                     variant="secondary"
                     disabled={busy === 'wahoo'}
                     onClick={() => void sync('wahoo')}
@@ -176,6 +178,7 @@ export function ConnectGpsPage() {
                     {busy === 'wahoo' ? 'Sincronizando…' : 'Traer salidas'}
                   </Button>
                   <Button
+                    type="button"
                     variant="ghost"
                     disabled={busy === 'wahoo'}
                     onClick={() => void disconnect('wahoo')}
@@ -184,8 +187,12 @@ export function ConnectGpsPage() {
                   </Button>
                 </>
               ) : (
-                <Button disabled={busy === 'wahoo'} onClick={() => void connect('wahoo')}>
-                  {busy === 'wahoo' ? 'Abriendo…' : 'Conectar Wahoo'}
+                <Button
+                  type="button"
+                  disabled={busy === 'wahoo'}
+                  onClick={() => void connect('wahoo')}
+                >
+                  {busy === 'wahoo' ? 'Abriendo Wahoo…' : 'Conectar Wahoo'}
                 </Button>
               )}
             </div>

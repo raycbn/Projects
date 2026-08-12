@@ -36,6 +36,7 @@ export function MyActivitiesPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [providers, setProviders] = useState<GpsProviderStatus[]>([])
+  const [gpsStatusLoading, setGpsStatusLoading] = useState(false)
   const [busyProvider, setBusyProvider] = useState<GpsProviderId | null>(null)
   const [cloudConfigured, setCloudConfigured] = useState(false)
   const [cloudConnected, setCloudConnected] = useState(false)
@@ -136,11 +137,30 @@ export function MyActivitiesPage() {
       void (async () => {
         try {
           if (gpsSyncService.isApiReady()) {
+            setGpsStatusLoading(true)
             const st = await gpsSyncService.status()
             if (!cancelled) setProviders(st)
           }
         } catch (err) {
           console.warn('[activities] gps status', err)
+          // Keep Wahoo connectable even if status fails — oauth/start is the source of truth.
+          if (!cancelled) {
+            setProviders((prev) =>
+              prev.length
+                ? prev
+                : [
+                    {
+                      id: 'wahoo',
+                      label: 'Wahoo',
+                      configured: true,
+                      connected: false,
+                      externalUserId: null,
+                    },
+                  ],
+            )
+          }
+        } finally {
+          if (!cancelled) setGpsStatusLoading(false)
         }
         if (!cancelled) await refreshCloudStatus()
         if (!cancelled && params.get('strava') === 'connected') {
@@ -199,8 +219,12 @@ export function MyActivitiesPage() {
     setBusyProvider(provider)
     setMessage(null)
     try {
+      if (!gpsSyncService.isApiReady()) {
+        throw new Error('Falta la API de PedalMap. Recarga la página o vuelve a entrar.')
+      }
       const { url } = await gpsSyncService.startConnect(provider)
-      window.location.assign(url)
+      // Full navigation (more reliable on mobile than assign after await).
+      window.location.href = url
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'No se pudo abrir la conexión GPS')
       setBusyProvider(null)
@@ -333,7 +357,8 @@ export function MyActivitiesPage() {
           {
             id: 'wahoo',
             label: 'Wahoo',
-            configured: false,
+            // Optimistic: secrets are live; status confirms when it arrives.
+            configured: true,
             connected: false,
             externalUserId: null,
           },
@@ -357,7 +382,7 @@ export function MyActivitiesPage() {
     ({
       id: 'wahoo' as const,
       label: 'Wahoo',
-      configured: false,
+      configured: true,
       connected: false,
       externalUserId: null,
     } satisfies GpsProviderStatus)
@@ -446,23 +471,18 @@ export function MyActivitiesPage() {
                 <div>
                   <p className="font-display text-xl font-bold">Wahoo</p>
                   <p className="mt-1 text-sm text-white/80">
-                    {!wahoo.configured
-                      ? 'Falta terminar la app en developers.wahooligan.com (redirect + webhook).'
+                    {gpsStatusLoading
+                      ? 'Comprobando conexión…'
                       : wahoo.connected
                         ? 'Conectado · las nuevas salidas se cargan solas'
                         : 'API oficial · conecta y olvídate de exportar a mano'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {!wahoo.configured ? (
-                    <Link to="/actividades/conectar">
-                      <Button size="sm" variant="ghost" className="!border-white/40 !text-white">
-                        Ver cómo conectar
-                      </Button>
-                    </Link>
-                  ) : wahoo.connected ? (
+                  {wahoo.connected ? (
                     <>
                       <Button
+                        type="button"
                         size="sm"
                         className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
                         disabled={busyProvider === 'wahoo'}
@@ -471,6 +491,7 @@ export function MyActivitiesPage() {
                         Sincronizar ahora
                       </Button>
                       <Button
+                        type="button"
                         size="sm"
                         variant="ghost"
                         className="!border-white/40 !text-white"
@@ -482,12 +503,13 @@ export function MyActivitiesPage() {
                     </>
                   ) : (
                     <Button
+                      type="button"
                       size="sm"
                       className="!bg-[var(--color-signal)] !text-[var(--color-ink)]"
-                      disabled={busyProvider === 'wahoo'}
+                      disabled={busyProvider === 'wahoo' || gpsStatusLoading}
                       onClick={() => void connect('wahoo')}
                     >
-                      {busyProvider === 'wahoo' ? 'Abriendo…' : 'Conectar Wahoo'}
+                      {busyProvider === 'wahoo' ? 'Abriendo Wahoo…' : 'Conectar Wahoo'}
                     </Button>
                   )}
                 </div>
@@ -495,6 +517,11 @@ export function MyActivitiesPage() {
             </div>
           </div>
         )}
+        {message ? (
+          <p className="mt-3 rounded-xl bg-white/90 px-3 py-2 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]">
+            {message}
+          </p>
+        ) : null}
       </section>
 
       <section
