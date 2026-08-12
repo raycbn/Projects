@@ -1,11 +1,12 @@
 import type { Env } from './types'
 import { json } from './types'
+import { unwrapValhallaAlternates } from './valhallaAlternates'
 
 const DEFAULT_VALHALLA = 'https://valhalla1.openstreetmap.de'
 const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap-79b3a.web.app; bike routing)'
 
 type BikeType = 'road' | 'mtb' | 'gravel' | 'urban' | 'ebike'
-type RouteType = 'a_to_b' | 'out_and_back' | 'circular'
+type RouteType = 'a_to_b' | 'out_and_back' | 'circular' | 'map_trace'
 
 interface LatLng {
   lat: number
@@ -287,7 +288,8 @@ type ValhallaTrip = {
 
 type TripJson = {
   trip?: ValhallaTrip
-  alternates?: ValhallaTrip[]
+  /** Valhalla returns `{ trip }` wrappers; some mirrors may return bare trips. */
+  alternates?: Array<ValhallaTrip | { trip?: ValhallaTrip }>
   error?: string
 }
 
@@ -439,7 +441,7 @@ async function routeLocations(
     // Longer shapes (typical ida-vuelta) use a slightly coarser DEM interval for speed.
     (locations.length >= 3 ? 40 : ROUTE_ELEVATION_INTERVAL_M)
 
-  const routeJson = (await valhallaPost(env, 'route', {
+  const buildBody = (alternates?: number) => ({
     locations,
     costing: 'bicycle',
     costing_options: { bicycle: costing },
@@ -448,17 +450,42 @@ async function routeLocations(
       language: language === 'en' ? 'en-US' : 'es-ES',
     },
     elevation_interval: elevationInterval,
-    ...(options?.alternates && options.alternates > 0
-      ? { alternates: Math.min(3, Math.floor(options.alternates)) }
+    ...(alternates && alternates > 0
+      ? { alternates: Math.min(3, Math.floor(alternates)) }
       : {}),
-  })) as TripJson
+  })
+
+  let routeJson: TripJson
+  try {
+    routeJson = (await valhallaPost(
+      env,
+      'route',
+      buildBody(options?.alternates),
+    )) as TripJson
+  } catch (err) {
+    // Some FOSS mirrors reject `alternates` — retry primary-only so costing top-ups still run.
+    if (options?.alternates && options.alternates > 0) {
+      console.warn('[bike-route] alternates request failed; retrying without', err)
+      routeJson = (await valhallaPost(env, 'route', buildBody(undefined))) as TripJson
+    } else {
+      throw err
+    }
+  }
+
+  if (routeJson.error || !routeJson.trip?.legs?.length) {
+    // Soft-fallback when alternates poison the response.
+    if (options?.alternates && options.alternates > 0) {
+      console.warn('[bike-route] alternates response unusable; retrying without')
+      routeJson = (await valhallaPost(env, 'route', buildBody(undefined))) as TripJson
+    }
+  }
 
   if (routeJson.error || !routeJson.trip?.legs?.length) {
     throw new Error(routeJson.error || 'No route found')
   }
 
   const primary = await enrichTrip(env, routeJson.trip, costing)
-  const alternateTrips = Array.isArray(routeJson.alternates) ? routeJson.alternates : []
+  const alternateTrips = unwrapValhallaAlternates(routeJson.alternates) as ValhallaTrip[]
   const alternatives = (
     await Promise.all(
       alternateTrips.map((trip) =>
@@ -484,9 +511,9 @@ function routeFingerprint(route: EnrichedRoute): string {
   const mid = at(0.5)
   const q3 = at(0.75)
   const end = coords[coords.length - 1] ?? coords[0]
-  // Finer buckets so costing variants (roads vs mixed) don't collapse into one option.
+  // Fine buckets: costing variants (roads vs mixed) must stay distinct options.
   return [
-    Math.round(route.distanceMeters / 40),
+    Math.round(route.distanceMeters / 25),
     q1[0].toFixed(4),
     q1[1].toFixed(4),
     mid[0].toFixed(4),
@@ -496,6 +523,24 @@ function routeFingerprint(route: EnrichedRoute): string {
     end[0].toFixed(4),
     end[1].toFixed(4),
   ].join('|')
+}
+
+function routesTooSimilar(a: EnrichedRoute, b: EnrichedRoute): boolean {
+  const denom = Math.max(a.distanceMeters, b.distanceMeters, 1)
+  const distRatio = Math.abs(a.distanceMeters - b.distanceMeters) / denom
+  if (distRatio > 0.035) return false
+  return routeFingerprint(a) === routeFingerprint(b)
+}
+
+function mergeUniqueRoutes(routes: EnrichedRoute[], max = 3): EnrichedRoute[] {
+  const out: EnrichedRoute[] = []
+  for (const route of routes) {
+    if (!route?.coordinates || route.coordinates.length < 2) continue
+    if (out.some((kept) => routesTooSimilar(kept, route))) continue
+    out.push(route)
+    if (out.length >= max) break
+  }
+  return out
 }
 
 function costingVariant(
@@ -518,20 +563,6 @@ function costingVariant(
     next.use_hills = Math.min(1, num('use_hills', 0.2) + 0.12)
   }
   return next
-}
-
-function mergeUniqueRoutes(routes: EnrichedRoute[], max = 3): EnrichedRoute[] {
-  const out: EnrichedRoute[] = []
-  const seen = new Set<string>()
-  for (const route of routes) {
-    if (!route?.coordinates || route.coordinates.length < 2) continue
-    const key = routeFingerprint(route)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(route)
-    if (out.length >= max) break
-  }
-  return out
 }
 
 async function topUpWithCostingVariants(
@@ -761,7 +792,8 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
       routeType === 'out_and_back' ? [...waypoints, waypoints[0]] : waypoints
     const locations = pts.map((w) => ({ lat: w.lat, lon: w.lng, type: 'break' }))
     const wantsOptions =
-      wantAlternatives && (routeType === 'a_to_b' || routeType === 'out_and_back')
+      wantAlternatives &&
+      (routeType === 'a_to_b' || routeType === 'out_and_back' || routeType === 'map_trace')
     const result = wantsOptions
       ? await routeLocationsWithOptions(
           env,

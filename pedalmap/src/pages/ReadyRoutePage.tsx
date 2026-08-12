@@ -8,6 +8,7 @@ import { ElevationChart } from '@/components/route/ElevationChart'
 import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
 import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
 import { RideChooserSheet } from '@/components/route/RideChooserSheet'
+import { RouteOptionsPicker } from '@/components/route/RouteOptionsPicker'
 import { PremiumCard } from '@/components/premium/PremiumCard'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import {
@@ -40,6 +41,7 @@ import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
 import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { applySelectedOption, ensureRouteOptions } from '@/lib/routeOptions'
+import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import type { RouteDraft } from '@/domain/types'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 
@@ -632,48 +634,27 @@ export function ReadyRoutePage() {
         </div>
 
         {(draft.routeOptions?.length ?? 0) > 1 && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-              Opciones ({draft.routeOptions!.length})
-            </p>
-            <p className="text-xs text-[var(--color-stone)]">
-              Elige la variante con mejor superficie o menos desnivel antes de salir.
-            </p>
-            {draft.routeOptions!.map((opt) => {
-              const active = (draft.selectedOptionId ?? draft.routeOptions![0]?.id) === opt.id
-              const suit = opt.stats.surfaceStats?.suitability?.score
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={
-                    active
-                      ? 'w-full rounded-xl bg-[var(--color-signal)] px-3 py-2 text-left text-xs font-semibold'
-                      : 'w-full rounded-xl bg-[var(--color-mist)] px-3 py-2 text-left text-xs font-semibold ring-1 ring-[var(--color-fog)]'
-                  }
-                  onClick={() => {
-                    if (!packet?.draft) return
-                    const base = ensureRouteOptions(packet.draft)
-                    const nextDraft = applySelectedOption(base, opt.id)
-                    const next = { ...packet, draft: nextDraft }
-                    stashReadyRoute(next)
-                    handoffEpochRef.current = readyRouteEpoch()
-                    setPacket(next)
-                  }}
-                >
-                  <span className="block">
-                    {opt.label}
-                    {active ? ' · activa' : ''}
-                  </span>
-                  <span className="mt-0.5 block font-medium opacity-80">
-                    {formatDistance(opt.stats.distanceMeters)} ·{' '}
-                    {formatElevation(opt.stats.elevationGainMeters)}
-                    {typeof suit === 'number' ? ` · aptitud ${suit}%` : ''}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <RouteOptionsPicker
+            options={draft.routeOptions!}
+            selectedOptionId={draft.selectedOptionId}
+            isPremium={profile?.plan === 'premium'}
+            onSelect={(optionId) => {
+              if (!packet?.draft) return
+              const base = ensureRouteOptions(packet.draft)
+              const idx = base.routeOptions?.findIndex((o) => o.id === optionId) ?? -1
+              const opt = idx >= 0 ? base.routeOptions?.[idx] : null
+              if (opt && isRouteOptionPremiumLocked(opt, profile?.plan === 'premium', idx)) {
+                showPaywall('route_option_premium')
+                return
+              }
+              const nextDraft = applySelectedOption(base, optionId)
+              const next = { ...packet, draft: nextDraft }
+              stashReadyRoute(next)
+              handoffEpochRef.current = readyRouteEpoch()
+              setPacket(next)
+            }}
+            onPremiumRequired={() => showPaywall('route_option_premium')}
+          />
         )}
 
         <RouteSummary stats={draft.stats} />

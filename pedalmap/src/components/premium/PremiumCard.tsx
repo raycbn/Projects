@@ -17,6 +17,10 @@ const COPY: Record<string, { title: string; body: string }> = {
     title: 'Tu Objetivo gratis de este mes ya está usado',
     body: `Free incluye ${FREE_TRIALS.circularPerMonth} Objetivo al mes. Premium deja Objetivo ilimitado, GPX y guardados sin techo.`,
   },
+  route_option_premium: {
+    title: 'La 3.ª opción de ruta es Premium',
+    body: 'Free compara las 2 mejores variantes. Premium desbloquea la 3.ª opción completa (más superficie / menos desnivel).',
+  },
   gpx_export: {
     title: 'Tu GPX gratis de esta semana ya está usado',
     body: `Free incluye ${FREE_TRIALS.gpxPerWeek} GPX a la semana. Premium exporta sin límite a Garmin, Wahoo y apps.`,

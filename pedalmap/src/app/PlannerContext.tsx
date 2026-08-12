@@ -26,6 +26,7 @@ import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
 import { loadCloudDraft, saveCloudDraft, clearCloudDraft } from '@/services/DraftRepository'
 import { applySelectedOption } from '@/lib/routeOptions'
+import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { clearReadyRoute } from '@/lib/readyRouteHandoff'
 
@@ -804,6 +805,14 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       },
       selectRouteOption(optionId) {
         if (!draft?.routeOptions?.length) return
+        const idx = draft.routeOptions.findIndex((o) => o.id === optionId)
+        const opt = idx >= 0 ? draft.routeOptions[idx] : null
+        if (!opt) return
+        const isPremium = profile?.plan === 'premium'
+        if (isRouteOptionPremiumLocked(opt, Boolean(isPremium), idx)) {
+          setPaywallReason('route_option_premium')
+          return
+        }
         const next = applySelectedOption(draft, optionId)
         setDraft(next)
         persistDraft(next, user && !user.isAnonymous ? user.uid : null)

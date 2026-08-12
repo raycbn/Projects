@@ -9,6 +9,7 @@ import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { RouteSummary } from '@/components/route/RouteSummary'
 import { TraceReadyPanel } from '@/components/route/TraceReadyPanel'
 import { PremiumCard } from '@/components/premium/PremiumCard'
+import { RouteOptionsPicker } from '@/components/route/RouteOptionsPicker'
 import { Button } from '@/components/ui/Button'
 import { GPXImporter } from '@/components/gpx/GPXImporter'
 import { track } from '@/lib/analytics'
@@ -455,7 +456,7 @@ export function RoutePlanner() {
                 checked={wantAlternatives}
                 onChange={(e) => setWantAlternatives(e.target.checked)}
               />
-              Pedir varias opciones y elegir la mejor superficie (hasta 3)
+              Pedir varias opciones (hasta 3 · la 3.ª es Premium)
             </label>
 
             {panelError && (
@@ -487,35 +488,14 @@ export function RoutePlanner() {
                 )}
 
                 {(activeDraft?.routeOptions?.length ?? 0) > 1 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-                      Mejores opciones para {bikeModality.label}
-                    </p>
-                    {activeDraft!.routeOptions!.map((opt) => {
-                      const active =
-                        (activeDraft!.selectedOptionId ?? activeDraft!.routeOptions![0]?.id) ===
-                        opt.id
-                      const score = opt.stats.surfaceStats?.suitability?.score
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          className={clsx(
-                            'w-full rounded-xl px-3 py-2 text-left text-xs ring-1 transition',
-                            active
-                              ? 'bg-[var(--color-signal)] font-semibold ring-[var(--color-trail)]'
-                              : 'bg-[var(--color-mist)] font-semibold ring-[var(--color-fog)]',
-                          )}
-                          onClick={() => selectRouteOption(opt.id)}
-                        >
-                          {opt.label}
-                          {active ? ' · activa' : ''} · {formatDistance(opt.stats.distanceMeters)} ·{' '}
-                          {formatElevation(opt.stats.elevationGainMeters)}
-                          {score != null ? ` · aptitud ${Math.round(score)}` : ''}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <RouteOptionsPicker
+                    options={activeDraft!.routeOptions!}
+                    selectedOptionId={activeDraft!.selectedOptionId}
+                    isPremium={profile?.plan === 'premium'}
+                    onSelect={selectRouteOption}
+                    onPremiumRequired={() => showPaywall('route_option_premium')}
+                    heading={`Mejores opciones para ${bikeModality.label}`}
+                  />
                 )}
 
                 {status !== 'editing' ? (
@@ -742,7 +722,7 @@ export function RoutePlanner() {
               checked={wantAlternatives}
               onChange={(e) => setWantAlternatives(e.target.checked)}
             />
-            Pedir varias opciones de ruta (hasta 3)
+            Pedir varias opciones (hasta 3 · la 3.ª es Premium)
           </label>
         )}
 
@@ -773,34 +753,13 @@ export function RoutePlanner() {
             )}
 
             {(activeDraft?.routeOptions?.length ?? 0) > 1 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-                  Opciones ({activeDraft!.routeOptions!.length})
-                </p>
-                {activeDraft!.routeOptions!.map((opt) => {
-                  const active =
-                    (activeDraft!.selectedOptionId ?? activeDraft!.routeOptions![0]?.id) === opt.id
-                  const score = opt.stats.surfaceStats?.suitability?.score
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className={clsx(
-                        'w-full rounded-xl px-3 py-2 text-left text-xs ring-1 transition',
-                        active
-                          ? 'bg-[var(--color-signal)] font-semibold ring-[var(--color-trail)]'
-                          : 'bg-[var(--color-mist)] font-semibold ring-[var(--color-fog)]',
-                      )}
-                      onClick={() => selectRouteOption(opt.id)}
-                    >
-                      {opt.label}
-                      {active ? ' · activa' : ''} · {formatDistance(opt.stats.distanceMeters)} ·{' '}
-                      {formatElevation(opt.stats.elevationGainMeters)}
-                      {score != null ? ` · aptitud ${Math.round(score)}` : ''}
-                    </button>
-                  )
-                })}
-              </div>
+              <RouteOptionsPicker
+                options={activeDraft!.routeOptions!}
+                selectedOptionId={activeDraft!.selectedOptionId}
+                isPremium={profile?.plan === 'premium'}
+                onSelect={selectRouteOption}
+                onPremiumRequired={() => showPaywall('route_option_premium')}
+              />
             )}
 
             {!activeDraft?.routeOptions?.length &&
