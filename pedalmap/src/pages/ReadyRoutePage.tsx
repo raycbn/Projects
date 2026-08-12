@@ -108,6 +108,7 @@ export function ReadyRoutePage() {
   const [windLoading, setWindLoading] = useState(false)
   const exportRef = useRef<HTMLDetailsElement | null>(null)
   const actionMsgRef = useRef<HTMLDivElement | null>(null)
+  const optionsRef = useRef<HTMLDivElement | null>(null)
   const handoffEpochRef = useRef(readyRouteEpoch())
 
   const routeIdParam = params.get('routeId')
@@ -234,12 +235,32 @@ export function ReadyRoutePage() {
     return buildSurfaceRouteOverlay(draft.geometry, draft.surfaceEdges)
   }, [draft])
 
+  const alternateGeometries = useMemo(() => {
+    const opts = draft?.routeOptions
+    if (!opts || opts.length < 2) return null
+    const selected = draft.selectedOptionId ?? opts[0]?.id
+    return opts
+      .filter((o) => o.id !== selected)
+      .map((o) => o.geometry)
+      .filter((g) => (g?.coordinates?.length ?? 0) >= 2)
+  }, [draft?.routeOptions, draft?.selectedOptionId])
+
   // Clear wind selection when draft geometry identity changes (avoid stale overlay).
   useEffect(() => {
     setSelectedWindWindow(null)
     setSelectedWindHour(null)
     setBestLine(null)
   }, [fitKey])
+
+  // Bring opciones into view right after calculate handoff.
+  useEffect(() => {
+    if ((draft?.routeOptions?.length ?? 0) < 2) return
+    if (packet?.source !== 'calculate') return
+    const t = window.setTimeout(() => {
+      optionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 120)
+    return () => window.clearTimeout(t)
+  }, [draft?.routeOptions?.length, draft?.selectedOptionId, packet?.source])
 
   // Show map "Cargando viento…" until the first forecast paints an overlay.
   useEffect(() => {
@@ -503,6 +524,7 @@ export function ReadyRoutePage() {
             className="absolute inset-0 h-full w-full"
             waypoints={draft.waypoints}
             geometry={draft.geometry}
+            alternateGeometries={alternateGeometries}
             windOverlay={windOverlay}
             windCaption={windCaption}
             showWindArrows={showWindArrows}
@@ -550,6 +572,37 @@ export function ReadyRoutePage() {
             </button>
           )}
         </div>
+
+        {(draft.routeOptions?.length ?? 0) > 1 ? (
+          <div ref={optionsRef} className="scroll-mt-4">
+            <RouteOptionsPicker
+              options={draft.routeOptions!}
+              selectedOptionId={draft.selectedOptionId}
+              isPremium={profile?.plan === 'premium'}
+              onSelect={(optionId) => {
+                if (!packet?.draft) return
+                const base = ensureRouteOptions(packet.draft)
+                const idx = base.routeOptions?.findIndex((o) => o.id === optionId) ?? -1
+                const opt = idx >= 0 ? base.routeOptions?.[idx] : null
+                if (opt && isRouteOptionPremiumLocked(opt, profile?.plan === 'premium', idx)) {
+                  showPaywall('route_option_premium')
+                  return
+                }
+                const nextDraft = applySelectedOption(base, optionId)
+                const next = { ...packet, draft: nextDraft }
+                stashReadyRoute(next)
+                handoffEpochRef.current = readyRouteEpoch()
+                setPacket(next)
+              }}
+              onPremiumRequired={() => showPaywall('route_option_premium')}
+            />
+          </div>
+        ) : packet?.source === 'calculate' ? (
+          <p className="rounded-2xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-stone)]">
+            En esta zona solo encontramos un camino claro. Prueba otro destino o marca «varias
+            opciones» en el planificador.
+          </p>
+        ) : null}
 
         <div className="space-y-2">
           <Button className="w-full !py-3 text-base" onClick={() => setRideOpen(true)}>
@@ -632,30 +685,6 @@ export function ReadyRoutePage() {
             </div>
           ) : null}
         </div>
-
-        {(draft.routeOptions?.length ?? 0) > 1 && (
-          <RouteOptionsPicker
-            options={draft.routeOptions!}
-            selectedOptionId={draft.selectedOptionId}
-            isPremium={profile?.plan === 'premium'}
-            onSelect={(optionId) => {
-              if (!packet?.draft) return
-              const base = ensureRouteOptions(packet.draft)
-              const idx = base.routeOptions?.findIndex((o) => o.id === optionId) ?? -1
-              const opt = idx >= 0 ? base.routeOptions?.[idx] : null
-              if (opt && isRouteOptionPremiumLocked(opt, profile?.plan === 'premium', idx)) {
-                showPaywall('route_option_premium')
-                return
-              }
-              const nextDraft = applySelectedOption(base, optionId)
-              const next = { ...packet, draft: nextDraft }
-              stashReadyRoute(next)
-              handoffEpochRef.current = readyRouteEpoch()
-              setPacket(next)
-            }}
-            onPremiumRequired={() => showPaywall('route_option_premium')}
-          />
-        )}
 
         <RouteSummary stats={draft.stats} />
         <ElevationChart profile={draft.elevationProfile} />

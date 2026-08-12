@@ -132,6 +132,16 @@ export function RoutePlanner() {
     return buildSurfaceRouteOverlay(activeDraft.geometry, activeDraft.surfaceEdges)
   }, [activeDraft])
 
+  const alternateGeometries = useMemo(() => {
+    const opts = activeDraft?.routeOptions
+    if (!opts || opts.length < 2) return null
+    const selected = activeDraft.selectedOptionId ?? opts[0]?.id
+    return opts
+      .filter((o) => o.id !== selected)
+      .map((o) => o.geometry)
+      .filter((g) => (g?.coordinates?.length ?? 0) >= 2)
+  }, [activeDraft?.routeOptions, activeDraft?.selectedOptionId])
+
   const surfaceAlert = useMemo(() => {
     if (!activeDraft?.stats.surfaceStats) return null
     const unpavedM =
@@ -326,6 +336,7 @@ export function RoutePlanner() {
               className="absolute inset-0 h-full w-full"
               waypoints={waypoints}
               geometry={activeDraft?.geometry}
+              alternateGeometries={alternateGeometries}
               hoverPoint={hoverPoint}
               surfaceOverlay={surfaceOverlay}
               windOverlay={traceWind.overlay}
@@ -470,6 +481,16 @@ export function RoutePlanner() {
 
             {activeDraft && (
               <div className="space-y-2">
+                {(activeDraft?.routeOptions?.length ?? 0) > 1 && (
+                  <RouteOptionsPicker
+                    options={activeDraft!.routeOptions!}
+                    selectedOptionId={activeDraft!.selectedOptionId}
+                    isPremium={profile?.plan === 'premium'}
+                    onSelect={selectRouteOption}
+                    onPremiumRequired={() => showPaywall('route_option_premium')}
+                    heading={`Mejores opciones para ${bikeModality.label}`}
+                  />
+                )}
                 {activeDraft.stats.surfaceStats?.suitability && (
                   <p className="rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_22%,white)] px-3 py-2 text-xs font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-trail)]/25">
                     Aptitud {bikeModality.label}:{' '}
@@ -485,17 +506,6 @@ export function RoutePlanner() {
                   <p className="rounded-2xl bg-[#fff8f0] px-3 py-2 text-xs text-[#9a4b00]">
                     {surfaceAlert}
                   </p>
-                )}
-
-                {(activeDraft?.routeOptions?.length ?? 0) > 1 && (
-                  <RouteOptionsPicker
-                    options={activeDraft!.routeOptions!}
-                    selectedOptionId={activeDraft!.selectedOptionId}
-                    isPremium={profile?.plan === 'premium'}
-                    onSelect={selectRouteOption}
-                    onPremiumRequired={() => showPaywall('route_option_premium')}
-                    heading={`Mejores opciones para ${bikeModality.label}`}
-                  />
                 )}
 
                 {status !== 'editing' ? (

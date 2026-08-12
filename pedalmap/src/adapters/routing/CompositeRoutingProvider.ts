@@ -37,8 +37,7 @@ export class CompositeRoutingProvider implements RoutingProvider {
       try {
         const result = await this.valhalla.calculateRoute(request)
         const altCount = result.alternatives?.length ?? 0
-        // Top up with ORS when Valhalla returned fewer than 2 alternatives
-        // (0 or 1) so /ruta can still offer 2–3 opciones.
+        // Always top up with ORS when under 2 alternatives so /ruta can offer opciones.
         if (
           request.wantAlternatives &&
           altCount < 2 &&

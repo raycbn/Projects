@@ -319,10 +319,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
               : undefined,
           circularSeed: routeType === 'circular' ? seed : undefined,
           wantAlternatives:
-            wantAlternatives &&
-            (routeType === 'a_to_b' || routeType === 'out_and_back' || routeType === 'map_trace')
-              ? true
-              : routeType === 'circular',
+            // Always ask the engine for 2–3 opciones on point-to-point (checkbox is UX-only).
+            routeType === 'a_to_b' ||
+            routeType === 'out_and_back' ||
+            routeType === 'map_trace' ||
+            routeType === 'circular',
         })
         if (gen !== calculateGenRef.current) return null
         setDraft(result)
@@ -761,7 +762,10 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             circularDistanceMeters: editDraft.circularDistanceMeters,
             targetElevationGainMeters: editDraft.targetElevationGainMeters,
             circularSeed: editDraft.circularSeed,
-            wantAlternatives: false,
+            wantAlternatives:
+              editDraft.type === 'a_to_b' ||
+              editDraft.type === 'out_and_back' ||
+              editDraft.type === 'map_trace',
             title: editDraft.title,
           })
           setDraft(result)

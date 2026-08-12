@@ -602,6 +602,58 @@ async function topUpWithCostingVariants(
 }
 
 /**
+ * Force geometric diversity with a mid-corridor via (left/right) when costing
+ * variants collapse to a single corridor — common on short urban A→B.
+ */
+async function topUpWithDetours(
+  env: Env,
+  locations: Array<{ lat: number; lon: number; type: string }>,
+  costing: Record<string, number | string>,
+  language: string,
+  seed: EnrichedRoute[],
+): Promise<EnrichedRoute[]> {
+  let unique = mergeUniqueRoutes(seed, 3)
+  if (unique.length >= 3 || locations.length < 2) return unique
+
+  const start = locations[0]
+  const end = locations[locations.length - 1]
+  const midLat = (start.lat + end.lat) / 2
+  const midLng = (start.lon + end.lon) / 2
+  // Rough corridor length → via offset (400–1800 m).
+  const approxM =
+    Math.acos(
+      Math.min(
+        1,
+        Math.sin((start.lat * Math.PI) / 180) * Math.sin((end.lat * Math.PI) / 180) +
+          Math.cos((start.lat * Math.PI) / 180) *
+            Math.cos((end.lat * Math.PI) / 180) *
+            Math.cos(((end.lon - start.lon) * Math.PI) / 180),
+      ),
+    ) * 6371000
+  const offsetM = Math.max(400, Math.min(1800, approxM * 0.18))
+  const bearing =
+    (Math.atan2(end.lon - start.lon, end.lat - start.lat) * 180) / Math.PI
+  const left = offsetLatLng({ lat: midLat, lng: midLng }, bearing - 90, offsetM)
+  const right = offsetLatLng({ lat: midLat, lng: midLng }, bearing + 90, offsetM)
+
+  for (const via of [left, right]) {
+    if (unique.length >= 3) break
+    try {
+      const withVia = [
+        ...locations.slice(0, -1),
+        { lat: via.lat, lon: via.lng, type: 'through' },
+        locations[locations.length - 1],
+      ]
+      const extra = await routeLocations(env, withVia, costing, language)
+      unique = mergeUniqueRoutes([...unique, extra], 3)
+    } catch (err) {
+      console.warn('[bike-route] detour top-up failed', err)
+    }
+  }
+  return unique
+}
+
+/**
  * Primary Valhalla route + native alternates, topped up with costing variants
  * so A→B / ida-vuelta usually returns 2–3 distinct options.
  */
@@ -622,9 +674,19 @@ async function routeLocationsWithOptions(
     ])
 
     if (mainSettled.status !== 'fulfilled') {
-      const fallback = [roadsSettled, mixedSettled].find((r) => r.status === 'fulfilled')
-      if (!fallback || fallback.status !== 'fulfilled') throw mainSettled.reason
-      return { ...fallback.value, alternatives: [] }
+      const extras: EnrichedRoute[] = []
+      if (roadsSettled.status === 'fulfilled') extras.push(roadsSettled.value)
+      if (mixedSettled.status === 'fulfilled') extras.push(mixedSettled.value)
+      if (!extras.length) throw mainSettled.reason
+      let unique = mergeUniqueRoutes(extras, 3)
+      if (unique.length < 3) {
+        unique = await topUpWithCostingVariants(env, locations, costing, language, unique, true)
+      }
+      if (unique.length < 3) {
+        unique = await topUpWithDetours(env, locations, costing, language, unique)
+      }
+      const primary = unique[0]!
+      return { ...primary, alternatives: unique.slice(1) }
     }
 
     const main = mainSettled.value
@@ -643,13 +705,16 @@ async function routeLocationsWithOptions(
         true,
       )
     }
+    if (unique.length < 3) {
+      unique = await topUpWithDetours(env, locations, costing, language, unique)
+    }
     const primary = unique[0] ?? main
     return { ...primary, alternatives: unique.slice(1) }
   }
 
   // FOSSGIS / out-and-back: native alternates first, then sequential costing top-up.
   const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
-  const unique = await topUpWithCostingVariants(
+  let unique = await topUpWithCostingVariants(
     env,
     locations,
     costing,
@@ -657,6 +722,9 @@ async function routeLocationsWithOptions(
     [main, ...(main.alternatives ?? [])],
     false,
   )
+  if (unique.length < 3) {
+    unique = await topUpWithDetours(env, locations, costing, language, unique)
+  }
   const primary = unique[0] ?? main
   return { ...primary, alternatives: unique.slice(1) }
 }

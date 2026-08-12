@@ -43,6 +43,8 @@ const WIND_COLOR_EXPR: maplibregl.ExpressionSpecification = [
 interface MapViewProps {
   waypoints: Waypoint[]
   geometry?: RouteGeometry | null
+  /** Faded alternate route geometries (non-selected opciones). */
+  alternateGeometries?: RouteGeometry[] | null
   hoverPoint?: LatLng | null
   /** Wind overlay along the route (segments + arrows) for a selected hour/window. */
   windOverlay?: FeatureCollection | null
@@ -109,6 +111,31 @@ function ensureRouteLayers(map: Map) {
         'line-opacity': 1,
       },
     })
+  }
+
+  if (!map.getSource('route-alts')) {
+    map.addSource('route-alts', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
+  }
+  if (!map.getLayer('route-alts-line')) {
+    // Under the main route so the active option stays dominant.
+    map.addLayer(
+      {
+        id: 'route-alts-line',
+        type: 'line',
+        source: 'route-alts',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#64748b',
+          'line-width': 4,
+          'line-opacity': 0.55,
+          'line-dasharray': [1.2, 1.6],
+        },
+      },
+      'route-line-casing',
+    )
   }
 }
 
@@ -506,6 +533,22 @@ function setBaseRoutePaint(map: Map, windActive: boolean) {
   }
 }
 
+function applyAlternateGeometries(map: Map, alts: RouteGeometry[] | null | undefined) {
+  if (!canPaintOverlays(map)) return false
+  ensureRouteLayers(map)
+  const source = map.getSource('route-alts') as maplibregl.GeoJSONSource | undefined
+  if (!source) return false
+  const features = (alts ?? [])
+    .filter((g) => (g.coordinates?.length ?? 0) >= 2)
+    .map((g, i) => ({
+      type: 'Feature' as const,
+      properties: { i },
+      geometry: g,
+    }))
+  source.setData({ type: 'FeatureCollection', features })
+  return true
+}
+
 function applyGeometry(
   map: Map,
   geo: RouteGeometry | null | undefined,
@@ -691,6 +734,7 @@ function rebuildWindLayers(map: Map) {
 export function MapView({
   waypoints,
   geometry,
+  alternateGeometries = null,
   hoverPoint,
   windOverlay,
   windCaption,
@@ -713,6 +757,7 @@ export function MapView({
   const userMarkerRef = useRef<Marker | null>(null)
   const followUserRef = useRef(followUser)
   const geometryRef = useRef<RouteGeometry | null | undefined>(geometry)
+  const altsRef = useRef<RouteGeometry[] | null | undefined>(alternateGeometries)
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
   const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
   const onMapClickRef = useRef(onMapClick)
@@ -726,6 +771,7 @@ export function MapView({
   const hasWindOverlay = Boolean(windOverlay?.features?.length)
   followUserRef.current = followUser
   geometryRef.current = geometry
+  altsRef.current = alternateGeometries
   windRef.current = windOverlay
   surfaceRef.current = surfaceOverlay
   onMapClickRef.current = onMapClick
@@ -927,6 +973,7 @@ export function MapView({
     if (!map) return
     const shouldFit = Boolean(fitKey) && lastFittedKeyRef.current !== fitKey
     const ok = applyGeometry(map, geometry, shouldFit, terrain3dRef.current)
+    applyAlternateGeometries(map, alternateGeometries)
     if (shouldFit && ok && fitKey) {
       lastFittedKeyRef.current = fitKey
     } else if (!ok) {
@@ -941,6 +988,7 @@ export function MapView({
           Boolean(key) && lastFittedKeyRef.current !== key,
           terrain3dRef.current,
         )
+        applyAlternateGeometries(m, altsRef.current)
         if (painted && key) lastFittedKeyRef.current = key
         applySurfaceOverlay(m, surfaceRef.current)
         applyWindOverlay(m, windRef.current)
@@ -949,12 +997,13 @@ export function MapView({
       })
     } else if (!shouldFit) {
       applyGeometry(map, geometry, false, terrain3dRef.current)
+      applyAlternateGeometries(map, alternateGeometries)
     }
     applySurfaceOverlay(map, surfaceRef.current)
     applyWindOverlay(map, windRef.current)
     setWindArrowLayersVisible(map, showWindArrowsRef.current)
     raiseRouteOverlayLayers(map)
-  }, [geometry, fitKey])
+  }, [geometry, alternateGeometries, fitKey])
 
   useEffect(() => {
     const map = mapRef.current
