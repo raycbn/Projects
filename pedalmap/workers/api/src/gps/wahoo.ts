@@ -133,6 +133,7 @@ type WahooSummary = {
   duration_total_accum?: number | string
   heart_rate_avg?: number | string
   power_avg?: number | string
+  power_bike_avg?: number | string
   speed_avg?: number | string
   file?: { url?: string }
 }
@@ -183,7 +184,10 @@ function summaryToActivity(workout: WahooWorkout, summary: WahooSummary) {
       averageCadenceRpm: num(summary.cadence_avg)
         ? Math.round(num(summary.cadence_avg)!)
         : undefined,
-      averagePowerWatts: num(summary.power_avg) ? Math.round(num(summary.power_avg)!) : undefined,
+      averagePowerWatts: (() => {
+        const p = num(summary.power_avg) ?? num(summary.power_bike_avg)
+        return p != null ? Math.round(p) : undefined
+      })(),
       averageSpeedMetersPerSecond: num(summary.speed_avg),
       estimatedCaloriesKcal: num(summary.calories_accum)
         ? Math.round(num(summary.calories_accum)!)
@@ -235,6 +239,7 @@ export async function syncWahooRecent(env: Env, identity: FirebaseIdentity): Pro
 export async function handleWahooWebhook(request: Request, env: Env): Promise<Response> {
   const expected = env.WAHOO_WEBHOOK_TOKEN
   const body = (await request.json()) as {
+    event?: string
     event_type?: string
     webhook_token?: string
     user?: { id?: number | string }
@@ -243,7 +248,9 @@ export async function handleWahooWebhook(request: Request, env: Env): Promise<Re
   if (expected && body.webhook_token !== expected) {
     return json({ error: 'invalid webhook token' }, 401)
   }
-  if (body.event_type && body.event_type !== 'workout_summary') {
+  // Official docs use event_type; some AsyncAPI samples use event.
+  const eventName = body.event_type || body.event
+  if (eventName && eventName !== 'workout_summary') {
     return json({ ok: true, ignored: true })
   }
   const externalUserId = String(body.user?.id ?? '')

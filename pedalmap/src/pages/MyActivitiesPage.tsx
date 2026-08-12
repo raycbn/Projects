@@ -93,9 +93,11 @@ export function MyActivitiesPage() {
     const provider = params.get('provider')
     if (gpsFlag === 'connected') {
       setMessage(
-        provider
-          ? `${provider} conectado. Las nuevas salidas se cargarán solas en PedalMap.`
-          : 'GPS conectado. Las nuevas salidas se cargarán solas en PedalMap.',
+        provider === 'wahoo'
+          ? 'Wahoo conectado. Trayendo tus salidas a PedalMap…'
+          : provider
+            ? `${provider} conectado. Las nuevas salidas se cargarán solas en PedalMap.`
+            : 'GPS conectado. Las nuevas salidas se cargarán solas en PedalMap.',
       )
     }
     if (gpsFlag === 'error') {
@@ -143,6 +145,36 @@ export function MyActivitiesPage() {
         if (!cancelled) await refreshCloudStatus()
         if (!cancelled && params.get('strava') === 'connected') {
           await pullCloudRides(false)
+        }
+        // After Wahoo OAuth, pull recent workouts once (webhooks cover future rides).
+        if (
+          !cancelled &&
+          params.get('gps') === 'connected' &&
+          params.get('provider') === 'wahoo' &&
+          gpsSyncService.isApiReady()
+        ) {
+          try {
+            const result = await gpsSyncService.sync('wahoo')
+            if (!cancelled) {
+              await reload()
+              setMessage(
+                result.imported > 0
+                  ? `Wahoo listo · ${result.imported} salidas nuevas en PedalMap.`
+                  : 'Wahoo listo. No había salidas nuevas; las próximas llegarán solas.',
+              )
+              const st = await gpsSyncService.status()
+              if (!cancelled) setProviders(st)
+            }
+          } catch (err) {
+            console.warn('[activities] wahoo auto-sync', err)
+            if (!cancelled) {
+              setMessage(
+                err instanceof Error
+                  ? `Wahoo conectado, pero el sync falló: ${err.message}`
+                  : 'Wahoo conectado, pero el sync falló. Prueba «Traer salidas».',
+              )
+            }
+          }
         }
       })()
 
@@ -301,7 +333,7 @@ export function MyActivitiesPage() {
           {
             id: 'wahoo',
             label: 'Wahoo',
-            configured: true,
+            configured: false,
             connected: false,
             externalUserId: null,
           },
@@ -325,7 +357,7 @@ export function MyActivitiesPage() {
     ({
       id: 'wahoo' as const,
       label: 'Wahoo',
-      configured: true,
+      configured: false,
       connected: false,
       externalUserId: null,
     } satisfies GpsProviderStatus)
@@ -414,13 +446,21 @@ export function MyActivitiesPage() {
                 <div>
                   <p className="font-display text-xl font-bold">Wahoo</p>
                   <p className="mt-1 text-sm text-white/80">
-                    {wahoo.connected
-                      ? 'Conectado · las nuevas salidas se cargan solas'
-                      : 'API oficial · conecta y olvídate de exportar a mano'}
+                    {!wahoo.configured
+                      ? 'Falta terminar la app en developers.wahooligan.com (redirect + webhook).'
+                      : wahoo.connected
+                        ? 'Conectado · las nuevas salidas se cargan solas'
+                        : 'API oficial · conecta y olvídate de exportar a mano'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {wahoo.connected ? (
+                  {!wahoo.configured ? (
+                    <Link to="/actividades/conectar">
+                      <Button size="sm" variant="ghost" className="!border-white/40 !text-white">
+                        Ver cómo conectar
+                      </Button>
+                    </Link>
+                  ) : wahoo.connected ? (
                     <>
                       <Button
                         size="sm"

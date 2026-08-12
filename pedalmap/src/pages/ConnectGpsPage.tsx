@@ -60,7 +60,7 @@ export function ConnectGpsPage() {
     ({
       id: 'wahoo' as const,
       label: 'Wahoo',
-      configured: true,
+      configured: false,
       connected: false,
       externalUserId: null,
     } satisfies GpsProviderStatus)
@@ -158,11 +158,13 @@ export function ConnectGpsPage() {
         <li className="rounded-3xl bg-[var(--color-forest)] p-5 text-white">
           <h2 className="font-display text-xl font-bold">Wahoo</h2>
           <p className="mt-1 text-sm text-white/80">
-            {wahoo.connected
-              ? 'Conectado · las nuevas salidas se cargan solas'
-              : 'API oficial. Autoriza una vez y sincroniza salidas a PedalMap.'}
+            {!wahoo.configured
+              ? 'Aún falta configurar la app Wahoo Cloud en el Worker.'
+              : wahoo.connected
+                ? 'Conectado · las nuevas salidas se cargan solas'
+                : 'API oficial. Autoriza una vez y sincroniza salidas a PedalMap.'}
           </p>
-          {user && !user.isAnonymous ? (
+          {user && !user.isAnonymous && wahoo.configured ? (
             <div className="mt-4 flex flex-wrap gap-2">
               {wahoo.connected ? (
                 <>

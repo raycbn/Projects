@@ -16,7 +16,7 @@ Ciclocomputador → App del fabricante → Cloud oficial
 
 | Marca | API oficial | Coste tipico | Auto-upload | Estado en PedalMap |
 |-------|-------------|--------------|-------------|--------------------|
-| **Wahoo** | [Cloud API](https://cloud-api.wahooligan.com/) OAuth2 + `workout_summary` webhooks | Sandbox gratis; Production con review | Sí (`offline_data`) | **Código listo** — falta crear app + secrets |
+| **Wahoo** | [Cloud API](https://cloud-api.wahooligan.com/) OAuth2 + `workout_summary` webhooks | Sandbox gratis; Production con review | Sí (`offline_data`) | **Código + secrets en Worker** — verificar redirect/webhook en portal y probar conectar |
 | **iGPSPORT** | OpenAPI partner (`global@igpsport.com`) + `callback_url` | Gratis tras aprobación | Sí (callback) | **Scaffold + webhook** — falta aprobación |
 | **Garmin** | [Connect Developer Program](https://developerportal.garmin.com/) OAuth2 PKCE + Activity Export | Gratis para partners aprobados* | Sí (webhooks) | **Scaffold OAuth/webhook** — falta aprobación |
 | Magene / Bryton / Coros | Sin API self-serve pública estable | — | — | Fuera de alcance hasta partner |
@@ -93,12 +93,20 @@ Application Logo: [adjuntar PNG 120x120]
 
 ## Wahoo (checklist)
 
-1. Crear cuenta en https://developers.wahooligan.com  
-2. App Sandbox → scopes `user_read`, `workouts_read`, `offline_data`  
-3. redirect_uri = callback OAuth arriba  
-4. webhook_url = webhook arriba + webhook_token  
-5. Secrets + deploy  
-6. Pedir Production review cuando Sandbox esté estable  
+Secrets ya en Cloudflare Worker: `WAHOO_CLIENT_ID`, `WAHOO_CLIENT_SECRET`, `WAHOO_WEBHOOK_TOKEN`.
+
+1. Abrir https://developers.wahooligan.com → app PedalMap  
+2. Redirect URI exacta:  
+   `https://pedalmap-api.broken-dietician.workers.dev/gps/wahoo/oauth/callback`  
+3. Webhook URL:  
+   `https://pedalmap-api.broken-dietician.workers.dev/gps/wahoo/webhook`  
+4. Webhook token = mismo valor que `WAHOO_WEBHOOK_TOKEN`  
+5. Scopes: `user_read`, `workouts_read`, `offline_data`  
+6. Probar en https://pedalmap.es/actividades → **Conectar Wahoo**  
+   (tras OAuth, PedalMap hace un sync automático de salidas recientes)  
+7. Pedir Production review cuando Sandbox esté estable  
+
+**Limitación actual:** importamos summary (km, m+, FC, potencia…). El mapa del track queda vacío hasta parsear el FIT (`file.url`).
 
 ## Garmin (checklist)
 
