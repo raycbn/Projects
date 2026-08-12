@@ -21,7 +21,8 @@
 Price ids (**Live**):
 - Mensual `price_1U3Jz2D9NwIvrlQEilHY4AXf` (prod `prod_V3Qq3Wjtf6JDeL`)
 - Anual `price_1U3K1LD9NwIvrlQEIIFS5oTG` (prod `prod_V3QtIN4qXG6R2R`)
-- Grupeta: crear con `scripts/create-grupeta-stripe-prices.mjs` → `STRIPE_PRICE_GRUPETA_*`
+- Grupeta mensual `price_1U3bpPD9NwIvrlQEzgfsjSvB` (14,99 €)
+- Grupeta anual `price_1U3bmtD9NwIvrlQEJc1FhkLw` (119,99 €)
 
 Legacy test prices (retirados del Worker):
 - Mensual `price_1U2i2oDRDu30ohSLy0PIHXtJ`
