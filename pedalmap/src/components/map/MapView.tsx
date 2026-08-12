@@ -145,7 +145,7 @@ function ensureSurfaceLayers(map: Map) {
 }
 
 function applySurfaceOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
-  if (!map.isStyleLoaded()) return false
+  if (!canPaintOverlays(map)) return false
   ensureRouteLayers(map)
   ensureSurfaceLayers(map)
   const source = map.getSource('route-surface') as maplibregl.GeoJSONSource | undefined
@@ -218,6 +218,41 @@ function removeLayerIfExists(map: Map, id: string) {
   if (map.getLayer(id)) map.removeLayer(id)
 }
 
+/**
+ * Style JSON may be ready while DEM tiles are still loading.
+ * MapLibre's isStyleLoaded() waits for ALL sources (including terrain) — too strict
+ * for GeoJSON route/wind overlays and was blanking the map after enabling 3D.
+ */
+function canPaintOverlays(map: Map): boolean {
+  try {
+    return Boolean(map.getStyle()?.layers?.length)
+  } catch {
+    return false
+  }
+}
+
+/** Keep route + wind above basemap / hillshade after terrain swaps. */
+function raiseRouteOverlayLayers(map: Map) {
+  for (const id of [
+    'route-line-casing',
+    'route-line',
+    'route-surface-line',
+    'route-wind-segments',
+    'route-wind-barbs',
+    'route-wind-arrowheads',
+    'route-wind-arrows',
+    'route-wind-labels',
+  ]) {
+    if (map.getLayer(id)) {
+      try {
+        map.moveLayer(id)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 /** Attach free Mapterhorn DEM + hillshade. Safe to call after style load / style swap. */
 export function ensureTerrainLayers(map: Map) {
   if (!map.getSource(MAP_TERRAIN_SOURCE_ID)) {
@@ -238,8 +273,12 @@ export function ensureTerrainLayers(map: Map) {
     })
   }
   if (!map.getLayer(MAP_HILLSHADE_LAYER_ID)) {
-    const before =
-      map.getLayer('route-line-casing') || map.getLayer('route-line') || undefined
+    // Prefer under the route casing so the track stays readable.
+    const beforeId = map.getLayer('route-line-casing')
+      ? 'route-line-casing'
+      : map.getLayer('route-line')
+        ? 'route-line'
+        : undefined
     map.addLayer(
       {
         id: MAP_HILLSHADE_LAYER_ID,
@@ -253,7 +292,7 @@ export function ensureTerrainLayers(map: Map) {
           'hillshade-exaggeration': 0.45,
         },
       },
-      before?.id,
+      beforeId,
     )
   }
 }
@@ -271,6 +310,7 @@ export function setMapTerrainEnabled(map: Map, enabled: boolean) {
       map.setLayoutProperty(MAP_HILLSHADE_LAYER_ID, 'visibility', 'none')
     }
   }
+  raiseRouteOverlayLayers(map)
 }
 
 /**
@@ -472,7 +512,7 @@ function applyGeometry(
   fit: boolean,
   terrain3d = false,
 ) {
-  if (!map.isStyleLoaded()) return false
+  if (!canPaintOverlays(map)) return false
 
   ensureRouteLayers(map)
   ensureSurfaceLayers(map)
@@ -582,7 +622,7 @@ function splitWindOverlay(overlay: FeatureCollection | null | undefined): {
 }
 
 function applyWindOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
-  if (!map.isStyleLoaded()) return false
+  if (!canPaintOverlays(map)) return false
   ensureRouteLayers(map)
   // Upgrade path: older sessions may lack arrowhead layer — rebuild wind stack once.
   if (overlay?.features?.length && !map.getLayer('route-wind-arrowheads')) {
@@ -747,30 +787,43 @@ export function MapView({
         if (key && geo && geo.coordinates.length >= 2 && lastFittedKeyRef.current !== key) {
           requestAnimationFrame(() => {
             if (!mapRef.current) return
-            applyGeometry(mapRef.current, geometryRef.current, true, terrain3dRef.current)
-            lastFittedKeyRef.current = key
+            const ok = applyGeometry(
+              mapRef.current,
+              geometryRef.current,
+              true,
+              terrain3dRef.current,
+            )
+            if (ok) lastFittedKeyRef.current = key
           })
         }
       }
 
       map.on('load', () => {
-        try {
-          setMapTerrainEnabled(map!, terrain3dRef.current)
-        } catch (err) {
-          console.warn('[maplibre] terrain', err)
-        }
+        // Paint route/wind FIRST — enabling DEM before paint makes isStyleLoaded() false
+        // and used to blank the track until a full remount.
         resize()
         requestAnimationFrame(() => {
           resize()
           paintFromRef(true)
+          raiseRouteOverlayLayers(map!)
+          // Terrain after overlays exist; re-assert paint once DEM settles.
+          map!.once('idle', () => {
+            try {
+              setMapTerrainEnabled(map!, terrain3dRef.current)
+            } catch (err) {
+              console.warn('[maplibre] terrain', err)
+            }
+            paintFromRef(false)
+            raiseRouteOverlayLayers(map!)
+          })
         })
       })
-      // Only repair missing overlay layers after a style swap — skip no-op styledata ticks.
-      map.on('styledata', () => {
-        if (!map?.isStyleLoaded()) return
+      // Repair missing overlay layers after style swaps / DEM source churn.
+      const repairOverlays = () => {
+        if (!map || !canPaintOverlays(map)) return
         try {
-          if (!map.getSource(MAP_TERRAIN_SOURCE_ID)) {
-            setMapTerrainEnabled(map, terrain3dRef.current)
+          if (terrain3dRef.current && !map.getSource(MAP_TERRAIN_SOURCE_ID)) {
+            setMapTerrainEnabled(map, true)
           }
         } catch {
           /* ignore */
@@ -784,7 +837,10 @@ export function MapView({
         if (!needsRoute && !needsWind && !needsSurface) return
         if (needsWind) rebuildWindLayers(map)
         paintFromRef(false)
-      })
+        raiseRouteOverlayLayers(map)
+      }
+      map.on('styledata', repairOverlays)
+      map.on('idle', repairOverlays)
       map.on('error', (e: { error?: Error }) => {
         console.error('[maplibre]', e.error ?? e)
       })
@@ -812,12 +868,17 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
+    if (!map || !canPaintOverlays(map)) return
     try {
       setMapTerrainEnabled(map, terrain3d)
     } catch (err) {
       console.warn('[maplibre] terrain toggle', err)
     }
+    applyGeometry(map, geometryRef.current, false, terrain3d)
+    applySurfaceOverlay(map, surfaceRef.current)
+    applyWindOverlay(map, windRef.current)
+    setWindArrowLayersVisible(map, showWindArrowsRef.current)
+    raiseRouteOverlayLayers(map)
     if (!terrain3d) {
       map.easeTo({ pitch: 0, bearing: 0, duration: 500, essential: true })
     } else if (geometryRef.current && geometryRef.current.coordinates.length >= 2) {
@@ -868,16 +929,23 @@ export function MapView({
     const ok = applyGeometry(map, geometry, shouldFit, terrain3dRef.current)
     if (shouldFit && ok && fitKey) {
       lastFittedKeyRef.current = fitKey
-    } else if (shouldFit && !ok) {
-      // Style not ready yet — fit when the map is idle.
+    } else if (!ok) {
+      // Style/DEM not ready — retry once idle so the track is never dropped.
       map.once('idle', () => {
         const m = mapRef.current
-        if (!m) return
+        if (!m || !canPaintOverlays(m)) return
         const key = fitKeyRef.current
-        if (!key || lastFittedKeyRef.current === key) return
-        if (applyGeometry(m, geometryRef.current, true, terrain3dRef.current)) {
-          lastFittedKeyRef.current = key
-        }
+        const painted = applyGeometry(
+          m,
+          geometryRef.current,
+          Boolean(key) && lastFittedKeyRef.current !== key,
+          terrain3dRef.current,
+        )
+        if (painted && key) lastFittedKeyRef.current = key
+        applySurfaceOverlay(m, surfaceRef.current)
+        applyWindOverlay(m, windRef.current)
+        setWindArrowLayersVisible(m, showWindArrowsRef.current)
+        raiseRouteOverlayLayers(m)
       })
     } else if (!shouldFit) {
       applyGeometry(map, geometry, false, terrain3dRef.current)
@@ -885,6 +953,7 @@ export function MapView({
     applySurfaceOverlay(map, surfaceRef.current)
     applyWindOverlay(map, windRef.current)
     setWindArrowLayersVisible(map, showWindArrowsRef.current)
+    raiseRouteOverlayLayers(map)
   }, [geometry, fitKey])
 
   useEffect(() => {
