@@ -75,14 +75,17 @@ export class CommunityService {
   }
 
   async listPublicProfiles(max = 24): Promise<PublicProfile[]> {
+    // Equality-only query — no composite index required. Sort client-side.
     const q = query(
       collection(getDb(), 'publicProfiles'),
       where('isPublic', '==', true),
-      orderBy('updatedAt', 'desc'),
-      limit(max),
+      limit(Math.max(max * 2, 48)),
     )
     const snap = await getDocs(q)
-    return snap.docs.map((d) => mapPublicProfile(d.id, d.data()))
+    return snap.docs
+      .map((d) => mapPublicProfile(d.id, d.data()))
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+      .slice(0, max)
   }
 
   async follow(followerId: string, followeeId: string): Promise<void> {

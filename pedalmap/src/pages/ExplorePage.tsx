@@ -81,15 +81,25 @@ export function ExplorePage() {
       }
       try {
         if (user && !user.isAnonymous) {
-          await communityService.upsertPublicProfile({
-            uid: user.uid,
-            displayName: profile?.displayName || user.displayName || user.email?.split('@')[0] || 'Ciclista',
-            photoURL: profile?.photoURL || user.photoURL || null,
-          })
+          try {
+            await communityService.upsertPublicProfile({
+              uid: user.uid,
+              displayName: profile?.displayName || user.displayName || user.email?.split('@')[0] || 'Ciclista',
+              photoURL: profile?.photoURL || user.photoURL || null,
+            })
+          } catch (error) {
+            console.warn('[explore] upsert profile', error)
+          }
         }
         const [publicRoutes, profiles] = await Promise.all([
-          routeRepository.listPublic(30),
-          communityService.listPublicProfiles(48),
+          routeRepository.listPublic(30).catch((error) => {
+            console.warn('[explore] routes', error)
+            return [] as SavedRoute[]
+          }),
+          communityService.listPublicProfiles(48).catch((error) => {
+            console.warn('[explore] profiles', error)
+            throw error
+          }),
         ])
         if (cancelled) return
         setRoutes(publicRoutes)
@@ -99,9 +109,10 @@ export function ExplorePage() {
           for (const p of profiles) next[p.uid] = p.displayName || 'Ciclista'
           return next
         })
+        setMessage(null)
       } catch (error) {
         console.error('[explore]', error)
-        if (!cancelled) setMessage('No se pudo cargar la comunidad. Despliega reglas/índices Firestore.')
+        if (!cancelled) setMessage('No se pudo cargar la comunidad. Prueba a recargar en unos segundos.')
       } finally {
         if (!cancelled) setLoading(false)
       }
