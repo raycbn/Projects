@@ -294,36 +294,39 @@ export function PremiumPage() {
 
       <section
         id="grupeta"
-        className={`mt-10 space-y-4 rounded-[1.75rem] bg-white/80 p-6 ring-1 ${
-          wantsGrupeta ? 'ring-[var(--color-trail)]' : 'ring-[var(--color-fog)]'
+        className={`mt-10 rounded-[1.75rem] bg-[var(--color-panel)] p-6 text-white ${
+          wantsGrupeta ? 'ring-2 ring-[var(--color-signal)]' : ''
         }`}
       >
-        <div>
-          <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
-            Pack Grupeta · {GRUPETA_SEAT_LIMIT} plazas
-          </h2>
-          <p className="mt-2 text-sm text-[var(--color-stone)]">
-            Tú + {GRUPETA_MEMBER_SEATS} compañeros con Premium. Tras el pago asignas los emails (no
-            hace falta que tengan cuenta aún). Sin cupones: precio fijo del pack. Hecho en España.
-          </p>
-          <p className="mt-2 text-sm text-[var(--color-forest)]">
-            <strong>{GRUPETA_PRICE_YEAR} €/año</strong> (con {ANNUAL_TRIAL_DAYS} días de prueba) ·{' '}
-            <strong>{GRUPETA_PRICE_MONTH} €/mes</strong> sin prueba
-          </p>
-        </div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
+          Pack Grupeta
+        </p>
+        <ul className="mt-4 space-y-2 text-sm text-white/85">
+          <li>{GRUPETA_SEAT_LIMIT} plazas Premium (tú + {GRUPETA_MEMBER_SEATS})</li>
+          <li>Asignas los emails después del pago</li>
+          <li>Mismas ventajas: GPX, Objetivo, filtros, viento</li>
+          <li>Sin cupones · precio fijo del pack</li>
+          <li>Hecho en España</li>
+        </ul>
+        <p className="mt-5 text-sm text-white/65">
+          {ANNUAL_TRIAL_DAYS} días gratis con el anual · luego {GRUPETA_PRICE_YEAR} €/año
+        </p>
+        <p className="mt-1 text-xs text-white/45">
+          o {GRUPETA_PRICE_MONTH} €/mes sin prueba
+        </p>
 
         {!packBillable ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-4 space-y-2">
             <Button
-              type="button"
+              className="w-full"
               disabled={busy}
               onClick={() => void startCheckout('year', 'grupeta')}
             >
-              Pack anual {GRUPETA_PRICE_YEAR} €
+              Probar {ANNUAL_TRIAL_DAYS} días · Pack anual
             </Button>
             <Button
-              type="button"
-              variant="secondary"
+              variant="ghost"
+              className="w-full !border-white/30 !text-white"
               disabled={busy}
               onClick={() => void startCheckout('month', 'grupeta')}
             >
@@ -331,15 +334,15 @@ export function PremiumPage() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-[var(--color-trail)]">
+          <div className="mt-5 space-y-3">
+            <p className="text-sm font-semibold text-[var(--color-signal)]">
               Pack activo ({pack?.status}
-              {pack?.interval ? ` · ${pack.interval === 'year' ? 'anual' : 'mensual'}` : ''}). Asigna
-              hasta {GRUPETA_MEMBER_SEATS} emails:
+              {pack?.interval ? ` · ${pack.interval === 'year' ? 'anual' : 'mensual'}` : ''}).
+              Asigna hasta {GRUPETA_MEMBER_SEATS} emails:
             </p>
             {seatDrafts.map((value, idx) => (
               <label key={idx} className="block space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
                   Compañero {idx + 1}
                 </span>
                 <input
@@ -351,19 +354,29 @@ export function PremiumPage() {
                     setSeatDrafts(next)
                   }}
                   placeholder="email@ejemplo.com"
-                  className="min-h-11 w-full rounded-xl border-0 bg-[var(--color-mist)]/50 px-3 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] outline-none placeholder:text-[var(--color-stone)] focus:ring-2 focus:ring-[var(--color-trail)]"
+                  className="min-h-11 w-full rounded-xl border-0 bg-white/10 px-3 text-sm text-white ring-1 ring-white/20 outline-none placeholder:text-white/40 focus:ring-2 focus:ring-[var(--color-signal)]"
                 />
               </label>
             ))}
-            <p className="text-xs text-[var(--color-stone)]">
-              Tu email ({profile?.email || 'cuenta'}) ya ocupa 1 plaza. Solo el Worker puede activar
-              Premium: nadie se cuela cambiando Firestore.
+            <p className="text-xs text-white/50">
+              Tu email ({profile?.email || 'cuenta'}) ya ocupa 1 plaza.
             </p>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" disabled={seatsBusy} onClick={() => void saveSeats()}>
+            <div className="space-y-2">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={seatsBusy}
+                onClick={() => void saveSeats()}
+              >
                 {seatsBusy ? 'Guardando…' : 'Guardar plazas'}
               </Button>
-              <Button type="button" variant="ghost" disabled={busy} onClick={() => void openPortal()}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full !border-white/30 !text-white"
+                disabled={busy}
+                onClick={() => void openPortal()}
+              >
                 Portal de facturación
               </Button>
             </div>
