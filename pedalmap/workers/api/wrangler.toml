@@ -31,11 +31,9 @@ workers_dev = true
 FIREBASE_PROJECT_ID = "pedalmap-79b3a"
 STRIPE_PRICE_MONTHLY = "price_1U3Jz2D9NwIvrlQEilHY4AXf"
 STRIPE_PRICE_YEARLY = "price_1U3K1LD9NwIvrlQEIIFS5oTG"
-# Pack Grupeta (4 seats). LIVE: create prices in Stripe Dashboard / scripts/create-grupeta-stripe-prices.mjs
-# TEST ids (sk_test): price_1U3bTpDRDu30ohSLAjHzG2bx (14,99) / price_1U3bTpDRDu30ohSLxl8VRpE6 (119,99)
-# Leave empty until LIVE prices exist — solo Premium keeps working.
-STRIPE_PRICE_GRUPETA_MONTHLY = ""
-STRIPE_PRICE_GRUPETA_YEARLY = ""
+# Pack Grupeta (4 seats) — LIVE prices
+STRIPE_PRICE_GRUPETA_MONTHLY = "price_1U3bpPD9NwIvrlQEzgfsjSvB"
+STRIPE_PRICE_GRUPETA_YEARLY = "price_1U3bmtD9NwIvrlQEJc1FhkLw"
 APP_URL = "https://pedalmap.es"
 ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
 # Transactional From (Resend). Receiving still uses IONOS MX.
