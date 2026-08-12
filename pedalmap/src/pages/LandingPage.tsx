@@ -4,7 +4,15 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/app/AuthContext'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
-import { FREE_LIMITS, FREE_TRIALS, ANNUAL_TRIAL_DAYS } from '@/domain/types'
+import {
+  FREE_LIMITS,
+  FREE_TRIALS,
+  ANNUAL_TRIAL_DAYS,
+  GRUPETA_MEMBER_SEATS,
+  GRUPETA_PRICE_MONTH,
+  GRUPETA_PRICE_YEAR,
+  GRUPETA_SEAT_LIMIT,
+} from '@/domain/types'
 import { landingFaqs } from '@/content/faqs'
 import { BRAND_CLAIMS } from '@/content/growthContent'
 // TESTIMONIALS: sección oculta a petición (2026-08-12). Re-mostrar cuando el usuario lo pida.
@@ -152,11 +160,13 @@ export function LandingPage() {
           </h2>
           <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
             Sin tarjeta para probar. Los límites Free están pensados para salidas reales; Premium quita
-            el techo.
+            el techo. Pack Grupeta para salir juntos.
           </p>
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
+          <div className="mt-8 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl bg-white/80 p-6 ring-1 ring-[var(--color-fog)]">
-              <h3 className="font-display text-2xl font-bold text-[var(--color-forest)]">Free</h3>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-stone)]">
+                Free
+              </p>
               <ul className="mt-4 space-y-2 text-sm text-[var(--color-stone)]">
                 <li>· Hasta {FREE_LIMITS.maxRoutesSaved} rutas guardadas</li>
                 <li>· {FREE_LIMITS.maxRoutesCreatedPerMonth} creaciones al mes</li>
@@ -168,8 +178,10 @@ export function LandingPage() {
                 <Button>Probar gratis</Button>
               </Link>
             </div>
-            <div className="rounded-3xl bg-[var(--color-forest)] p-6 text-white">
-              <h3 className="font-display text-2xl font-bold">Premium</h3>
+            <div className="rounded-3xl bg-[var(--color-panel)] p-6 text-white">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
+                Premium individual
+              </p>
               <ul className="mt-4 space-y-2 text-sm text-white/85">
                 <li>· Rutas y filtros ilimitados</li>
                 <li>· Objetivo y GPX ilimitados</li>
@@ -188,6 +200,23 @@ export function LandingPage() {
                   </Button>
                 </Link>
               )}
+            </div>
+            <div className="rounded-3xl bg-[var(--color-panel)] p-6 text-white">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-signal)]">
+                Pack Grupeta
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-white/85">
+                <li>· {GRUPETA_SEAT_LIMIT} plazas Premium (tú + {GRUPETA_MEMBER_SEATS})</li>
+                <li>· Asignas emails tras el pago</li>
+                <li>· Mismas ventajas ilimitadas</li>
+                <li>· {ANNUAL_TRIAL_DAYS} días de prueba · {GRUPETA_PRICE_YEAR} €/año</li>
+                <li>· o {GRUPETA_PRICE_MONTH} €/mes</li>
+              </ul>
+              <Link to="/premium#grupeta" className="mt-6 inline-block">
+                <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
+                  Ver Pack Grupeta
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
