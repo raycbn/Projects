@@ -16,6 +16,7 @@ import type {
   Challenge,
   ChallengeEntry,
   FollowEdge,
+  InboxNotification,
   PublicProfile,
   RankingEntry,
   SavedRoute,
@@ -23,6 +24,7 @@ import type {
   SegmentEffort,
 } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
+import { resolvePublicDisplayName } from '@/lib/communityIdentity'
 import { routeRepository } from '@/services/RouteRepository'
 
 function mapPublicProfile(id: string, data: DocumentData): PublicProfile {
@@ -49,13 +51,17 @@ export class CommunityService {
     displayName: string | null
     photoURL: string | null
     bio?: string
+    email?: string | null
   }): Promise<void> {
     const ref = doc(getDb(), 'publicProfiles', input.uid)
     const existing = await getDoc(ref)
+    const displayName =
+      resolvePublicDisplayName(input.displayName, input.email) ??
+      resolvePublicDisplayName(existing.data()?.displayName as string | null, input.email)
     await setDoc(
       ref,
       {
-        displayName: input.displayName,
+        displayName,
         photoURL: input.photoURL,
         bio: input.bio ?? existing.data()?.bio ?? '',
         isPublic: true,
@@ -128,12 +134,12 @@ export class CommunityService {
         { merge: true },
       )
     } else {
-      // Lean create so follow works before the followee visits Explorar.
+      // Lean stub so follow counts work — keep private so it does not pollute Ciclistas.
       batch.set(followeeProfile, {
         followersCount: 1,
         followingCount: 0,
         routesPublicCount: 0,
-        isPublic: true,
+        isPublic: false,
         displayName: null,
         photoURL: null,
         bio: '',
@@ -217,6 +223,58 @@ export class CommunityService {
     const ids = edges.map((e) => e.followeeId)
     if (!ids.length) return []
     return routeRepository.listPublicByUserIds(ids, max)
+  }
+
+  /** Soft in-app inbox item when A follows B. */
+  async notifyFollowInbox(input: {
+    followeeId: string
+    followerId: string
+    followerDisplayName: string
+  }): Promise<void> {
+    const ref = doc(collection(getDb(), 'notifications', input.followeeId, 'items'))
+    await setDoc(ref, {
+      type: 'follow',
+      fromUserId: input.followerId,
+      fromDisplayName: input.followerDisplayName,
+      toUserId: input.followeeId,
+      createdAt: serverTimestamp(),
+      read: false,
+    })
+  }
+
+  async listUnreadFollowNotifications(userId: string, max = 20): Promise<InboxNotification[]> {
+    const q = query(
+      collection(getDb(), 'notifications', userId, 'items'),
+      where('read', '==', false),
+      limit(max),
+    )
+    const snap = await getDocs(q)
+    return snap.docs
+      .map((d) => {
+        const data = d.data()
+        return {
+          id: d.id,
+          type: 'follow' as const,
+          fromUserId: String(data.fromUserId || ''),
+          fromDisplayName: String(data.fromDisplayName || 'Ciclista'),
+          createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? new Date().toISOString(),
+          read: Boolean(data.read),
+        }
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+
+  async markNotificationsRead(userId: string, ids: string[]): Promise<void> {
+    if (!ids.length) return
+    const batch = writeBatch(getDb())
+    for (const id of ids) {
+      batch.set(
+        doc(getDb(), 'notifications', userId, 'items', id),
+        { read: true },
+        { merge: true },
+      )
+    }
+    await batch.commit()
   }
 
   async listSegments(max = 30): Promise<Segment[]> {

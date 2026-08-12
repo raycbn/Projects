@@ -160,6 +160,20 @@ export interface UserNotifications {
   windAlertsEnabled?: boolean
   /** Also try email (Worker stub until Resend is wired). */
   windAlertsEmail?: boolean
+  /** Email when someone follows you (default on if unset). */
+  followAlertsEmail?: boolean
+  /** Browser/PWA notification when someone follows you (opt-in). */
+  followAlertsPush?: boolean
+}
+
+/** In-app / PWA inbox item (follows, etc.). */
+export interface InboxNotification {
+  id: string
+  type: 'follow'
+  fromUserId: string
+  fromDisplayName: string
+  createdAt: string
+  read: boolean
 }
 
 export interface UserProfile {

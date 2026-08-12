@@ -10,6 +10,9 @@ import { formatDistance, formatElevation } from '@/lib/stats'
 import { seoPages } from '@/content/seoPages'
 import { DEMO_PUBLIC_ROUTES } from '@/content/demoPublicRoutes'
 import { track } from '@/lib/analytics'
+import { isDiscoverableCyclist, resolvePublicDisplayName } from '@/lib/communityIdentity'
+import { alertService } from '@/services/AlertService'
+import { deliverPendingFollowNotifications } from '@/lib/followNotify'
 
 type Tab = 'rutas' | 'siguiendo' | 'ciclistas' | 'mas'
 
@@ -32,6 +35,7 @@ export function ExplorePage() {
   const [loading, setLoading] = useState(true)
   const [feedLoading, setFeedLoading] = useState(false)
   const [busyFollowId, setBusyFollowId] = useState<string | null>(null)
+  const [peopleQuery, setPeopleQuery] = useState('')
   const ready = firebaseReady && communityService.isConfigured()
   const signedIn = Boolean(user && !user.isAnonymous)
 
@@ -86,6 +90,7 @@ export function ExplorePage() {
               uid: user.uid,
               displayName: profile?.displayName || user.displayName || user.email?.split('@')[0] || 'Ciclista',
               photoURL: profile?.photoURL || user.photoURL || null,
+              email: user.email || profile?.email,
             })
           } catch (error) {
             console.warn('[explore] upsert profile', error)
@@ -145,6 +150,11 @@ export function ExplorePage() {
     }
   }, [ready, user, refreshFollowing, refreshFeed])
 
+  useEffect(() => {
+    if (!signedIn || !user) return
+    void deliverPendingFollowNotifications(user.uid)
+  }, [signedIn, user])
+
   const tabs = useMemo(
     () =>
       [
@@ -156,10 +166,18 @@ export function ExplorePage() {
     [],
   )
 
-  const visiblePeople = useMemo(
-    () => people.filter((p) => !user || p.uid !== user.uid),
-    [people, user],
-  )
+  const visiblePeople = useMemo(() => {
+    const q = peopleQuery.trim().toLowerCase()
+    return people
+      .filter((p) => !user || p.uid !== user.uid)
+      .filter(isDiscoverableCyclist)
+      .filter((p) => {
+        if (!q) return true
+        const name = (p.displayName || '').toLowerCase()
+        const bio = (p.bio || '').toLowerCase()
+        return name.includes(q) || bio.includes(q)
+      })
+  }, [people, user, peopleQuery])
 
   async function handleFollow(followeeId: string) {
     if (!signedIn || !user) {
@@ -170,10 +188,16 @@ export function ExplorePage() {
     setBusyFollowId(followeeId)
     setMessage(null)
     try {
+      const followerName =
+        resolvePublicDisplayName(
+          profile?.displayName ?? user.displayName,
+          user.email ?? profile?.email,
+        ) || 'Un ciclista'
       await communityService.upsertPublicProfile({
         uid: user.uid,
         displayName: profile?.displayName ?? user.displayName,
         photoURL: profile?.photoURL ?? user.photoURL,
+        email: user.email ?? profile?.email,
       })
       await communityService.follow(user.uid, followeeId)
       track('community_follow', { followee: followeeId })
@@ -181,6 +205,14 @@ export function ExplorePage() {
       setPeople((prev) =>
         prev.map((p) => (p.uid === followeeId ? { ...p, followersCount: p.followersCount + 1 } : p)),
       )
+      void communityService
+        .notifyFollowInbox({
+          followeeId,
+          followerId: user.uid,
+          followerDisplayName: followerName,
+        })
+        .catch((err) => console.warn('[follow] inbox', err))
+      void alertService.notifyFollow(followeeId, followerName)
       await refreshFollowing()
       await refreshFeed()
       setMessage('Ahora sigues a este ciclista.')
@@ -391,8 +423,27 @@ export function ExplorePage() {
                 </div>
               ) : null}
 
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                  Buscar ciclista
+                </span>
+                <input
+                  type="search"
+                  value={peopleQuery}
+                  onChange={(e) => setPeopleQuery(e.target.value)}
+                  placeholder="Nombre o bio…"
+                  className="min-h-11 w-full rounded-xl border-0 bg-white/80 px-3 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] outline-none placeholder:text-[var(--color-stone)] focus:ring-2 focus:ring-[var(--color-trail)]"
+                />
+              </label>
+
               {visiblePeople.length === 0 ? (
-                <Empty hint="No hay perfiles públicos todavía. Entra y sigue a alguien tras el primer login." />
+                <Empty
+                  hint={
+                    peopleQuery.trim()
+                      ? 'Ningún ciclista coincide con esa búsqueda.'
+                      : 'Aún no hay ciclistas con perfil público real. Cuando alguien entre con nombre o publique rutas, aparecerá aquí.'
+                  }
+                />
               ) : (
                 visiblePeople.map((person) => {
                   const isFollowing = followingIds.has(person.uid)

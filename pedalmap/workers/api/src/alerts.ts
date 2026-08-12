@@ -2,6 +2,7 @@ import type { Env } from './types'
 import { json, resolveAppUrl } from './types'
 import type { FirebaseIdentity } from './firebaseAuth'
 import { sendMail } from './mail'
+import { readUserFollowNotifyTarget } from './firestore'
 
 type WindAlertBody = {
   routeId?: string
@@ -64,5 +65,91 @@ export async function handleWindAlertEmail(
     sent: result.sent,
     reason: result.reason,
     id: result.id,
+  })
+}
+
+type FollowAlertBody = {
+  followeeId?: string
+  followerDisplayName?: string
+}
+
+function pwaInstallSteps(appUrl: string): string {
+  return [
+    `Para recibir avisos al instante en el móvil (como una app):`,
+    ``,
+    `1) Abre ${appUrl} en el navegador (Safari en iPhone, Chrome en Android).`,
+    `2) iPhone (Safari): toca Compartir → «Añadir a pantalla de inicio».`,
+    `3) Android (Chrome): menú ⋮ → «Instalar app» o «Añadir a la pantalla de inicio».`,
+    `4) Abre PedalMap desde el icono, inicia sesión y acepta notificaciones en Perfil.`,
+    ``,
+    `Así te llegarán los «te siguen» aunque no tengas el correo a mano.`,
+  ].join('\n')
+}
+
+/**
+ * Notify followee that someone followed them (email + soft PWA guidance).
+ * Soft-fails without RESEND / missing email so follow UX never breaks.
+ */
+export async function handleFollowAlertEmail(
+  request: Request,
+  env: Env,
+  identity: FirebaseIdentity,
+): Promise<Response> {
+  if (identity.isAnonymous) {
+    return json({ error: 'Se requiere una cuenta real' }, 401)
+  }
+
+  const body = (await request.json().catch(() => ({}))) as FollowAlertBody
+  const followeeId = String(body.followeeId || '').trim()
+  if (!followeeId || followeeId === identity.uid) {
+    return json({ error: 'followeeId inválido' }, 400)
+  }
+
+  const followerName = String(body.followerDisplayName || 'Un ciclista').slice(0, 80)
+  const appUrl = resolveAppUrl(env, request)
+  const target = await readUserFollowNotifyTarget(env, followeeId)
+  if (!target) {
+    return json({ ok: true, sent: false, reason: 'service_account_missing', push: false })
+  }
+
+  if (!target.followAlertsEmail) {
+    return json({ ok: true, sent: false, reason: 'opted_out', push: false })
+  }
+
+  const to = target.email?.trim()
+  if (!to) {
+    return json({ ok: true, sent: false, reason: 'no_followee_email', push: false })
+  }
+
+  const hasPwaPush = target.followAlertsPush && target.hasPushSubscription
+  const subject = `PedalMap · ${followerName} te sigue`
+  const text = [
+    `Hola${target.displayName ? ` ${target.displayName}` : ''},`,
+    ``,
+    `${followerName} ha empezado a seguirte en PedalMap.`,
+    `Mira tu comunidad: ${appUrl}/explorar`,
+    ``,
+    hasPwaPush
+      ? `También puedes ver el aviso en la app PedalMap (PWA) si la tienes instalada.`
+      : pwaInstallSteps(appUrl),
+    ``,
+    `— PedalMap`,
+    `Puedes desactivar estos correos en Perfil → Avisos de comunidad.`,
+  ].join('\n')
+
+  const result = await sendMail(env, {
+    to,
+    subject,
+    text,
+    from: env.MAIL_FROM || 'PedalMap <aviso@pedalmap.es>',
+  })
+
+  return json({
+    ok: true,
+    sent: result.sent,
+    reason: result.reason,
+    id: result.id,
+    push: hasPwaPush,
+    pwaHint: !hasPwaPush,
   })
 }

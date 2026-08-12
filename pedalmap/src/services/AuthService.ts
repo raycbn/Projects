@@ -113,6 +113,7 @@ export class AuthService {
           uid: user.uid,
           displayName: user.displayName ?? (snap.data() as UserProfile).displayName,
           photoURL: user.photoURL ?? (snap.data() as UserProfile).photoURL,
+          email: user.email ?? (snap.data() as UserProfile).email,
         })
       } catch (error) {
         console.warn('[auth] public profile', error)
@@ -133,6 +134,7 @@ export class AuthService {
         uid: user.uid,
         displayName: user.displayName,
         photoURL: user.photoURL,
+        email: user.email,
       })
     } catch (error) {
       console.warn('[auth] public profile', error)

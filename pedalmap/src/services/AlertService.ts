@@ -52,6 +52,26 @@ export class AlertService {
     }
     return { ok: Boolean(data.ok), sent: Boolean(data.sent) }
   }
+
+  /** Fire-and-forget: email the followee (+ PWA install hint when no push). */
+  async notifyFollow(followeeId: string, followerDisplayName: string): Promise<void> {
+    if (!this.isConfigured()) return
+    const user = getFirebaseAuth().currentUser
+    if (!user || user.isAnonymous) return
+    try {
+      const token = await user.getIdToken()
+      await fetch(`${apiBase()}/alerts/follow`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ followeeId, followerDisplayName }),
+      })
+    } catch (error) {
+      console.warn('[alerts] follow notify', error)
+    }
+  }
 }
 
 export const alertService = new AlertService()

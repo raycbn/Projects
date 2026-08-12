@@ -151,6 +151,14 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.auth.uid == followerId;
     }
 
+    match /notifications/{userId}/items/{itemId} {
+      allow read, update, delete: if isOwner(userId);
+      allow create: if isSignedIn()
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.toUserId == userId
+        && request.resource.data.type == 'follow';
+    }
+
     match /segments/{segmentId} {
       allow read: if resource.data.isPublic == true || (isSignedIn() && resource.data.createdBy == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;

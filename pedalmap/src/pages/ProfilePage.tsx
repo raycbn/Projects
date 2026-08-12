@@ -8,6 +8,7 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 import { track } from '@/lib/analytics'
 import { WIND_ALERT } from '@/lib/windAlerts'
 import { BRAND_EMAILS } from '@/lib/brandEmails'
+import { enableFollowPushPreference } from '@/lib/followNotify'
 import { ANNUAL_TRIAL_DAYS, FREE_TRIALS, type BikeType, type RoutePreference } from '@/domain/types'
 
 export function ProfilePage() {
@@ -28,6 +29,8 @@ export function ProfilePage() {
 
   const windAlertsEnabled = Boolean(profile?.notifications?.windAlertsEnabled)
   const windAlertsEmail = Boolean(profile?.notifications?.windAlertsEmail)
+  const followAlertsEmail = profile?.notifications?.followAlertsEmail !== false
+  const followAlertsPush = Boolean(profile?.notifications?.followAlertsPush)
 
   useEffect(() => {
     if (!profile) return
@@ -55,8 +58,11 @@ export function ProfilePage() {
     setMessage(null)
     try {
       const notifications = {
+        ...profile.notifications,
         windAlertsEnabled: next.windAlertsEnabled ?? windAlertsEnabled,
         windAlertsEmail: next.windAlertsEmail ?? windAlertsEmail,
+        followAlertsEmail,
+        followAlertsPush,
       }
       if (!notifications.windAlertsEnabled) {
         notifications.windAlertsEmail = false
@@ -73,6 +79,40 @@ export function ProfilePage() {
     } catch (error) {
       console.error('[profile] alerts', error)
       setMessage('No se pudieron guardar los avisos.')
+    } finally {
+      setAlertsBusy(false)
+    }
+  }
+
+  async function setFollowAlerts(next: {
+    followAlertsEmail?: boolean
+    followAlertsPush?: boolean
+  }) {
+    if (!profile || !user || user.isAnonymous) return
+    setAlertsBusy(true)
+    setMessage(null)
+    try {
+      let push = next.followAlertsPush ?? followAlertsPush
+      if (next.followAlertsPush === true) {
+        const ok = await enableFollowPushPreference(user.uid)
+        push = ok
+        if (!ok) {
+          setMessage('Activa las notificaciones del navegador para avisos en la PWA.')
+        }
+      }
+      await updateNotifications({
+        ...profile.notifications,
+        windAlertsEnabled,
+        windAlertsEmail,
+        followAlertsEmail: next.followAlertsEmail ?? followAlertsEmail,
+        followAlertsPush: push,
+      })
+      if (next.followAlertsPush !== true || push) {
+        setMessage('Avisos de comunidad guardados.')
+      }
+    } catch (error) {
+      console.error('[profile] follow alerts', error)
+      setMessage('No se pudieron guardar los avisos de comunidad.')
     } finally {
       setAlertsBusy(false)
     }
@@ -191,6 +231,54 @@ export function ProfilePage() {
                 </Link>
                 .
               </p>
+            </div>
+          )}
+
+          {!user.isAnonymous && (
+            <div className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                Avisos de comunidad
+              </h2>
+              <p className="text-sm leading-relaxed text-[var(--color-stone)]">
+                Cuando alguien te sigue, te avisamos por correo. Si instalas la PWA y activas
+                notificaciones, también lo verás al abrir la app.
+              </p>
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--color-forest)]">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={followAlertsEmail}
+                  disabled={alertsBusy}
+                  onChange={(e) =>
+                    void setFollowAlerts({ followAlertsEmail: e.target.checked })
+                  }
+                />
+                <span>
+                  Email cuando alguien me sigue
+                  <span className="block text-xs text-[var(--color-stone)]">
+                    Desde {BRAND_EMAILS.alerts}. Si no tienes la PWA, el correo incluye los pasos
+                    para instalarla.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--color-forest)]">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={followAlertsPush}
+                  disabled={alertsBusy}
+                  onChange={(e) =>
+                    void setFollowAlerts({ followAlertsPush: e.target.checked })
+                  }
+                />
+                <span>
+                  Notificación en la app (PWA)
+                  <span className="block text-xs text-[var(--color-stone)]">
+                    iPhone: Safari → Compartir → Añadir a pantalla de inicio. Android: Chrome →
+                    Instalar app. Luego abre PedalMap desde el icono y acepta avisos.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 

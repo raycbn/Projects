@@ -261,6 +261,56 @@ export async function readUserEntitlements(
   }
 }
 
+/** Follow-alert target: email + prefs from users/{uid}. */
+export async function readUserFollowNotifyTarget(
+  env: Env,
+  uid: string,
+): Promise<{
+  email: string | null
+  displayName: string | null
+  followAlertsEmail: boolean
+  followAlertsPush: boolean
+  hasPushSubscription: boolean
+} | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, token, `users/${uid}`)
+  if (!doc) {
+    return {
+      email: null,
+      displayName: null,
+      followAlertsEmail: true,
+      followAlertsPush: false,
+      hasPushSubscription: false,
+    }
+  }
+  const fields = doc.fields as Record<string, unknown> | undefined
+  const email = fieldString(doc, 'email')
+  const displayName = fieldString(doc, 'displayName')
+  const notifications = (
+    fields?.notifications as { mapValue?: { fields?: Record<string, unknown> } } | undefined
+  )?.mapValue?.fields
+  const followEmailField = notifications?.followAlertsEmail as { booleanValue?: boolean } | undefined
+  const followPushField = notifications?.followAlertsPush as { booleanValue?: boolean } | undefined
+  // Default email ON when unset; push only when explicitly enabled.
+  const followAlertsEmail =
+    followEmailField?.booleanValue === undefined ? true : Boolean(followEmailField.booleanValue)
+  const followAlertsPush = Boolean(followPushField?.booleanValue)
+  const pushSub = fields?.pushSubscription as
+    | { mapValue?: { fields?: Record<string, unknown> } }
+    | undefined
+  const hasPushSubscription = Boolean(pushSub?.mapValue?.fields?.endpoint)
+  return {
+    email,
+    displayName,
+    followAlertsEmail,
+    followAlertsPush,
+    hasPushSubscription,
+  }
+}
+
 /** 403 when Free monthly create cap is exhausted. null = allowed (or cannot read). */
 export async function assertRoutingCreateAllowed(
   env: Env,
