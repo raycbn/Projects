@@ -130,6 +130,29 @@ describe('WeatherService.buildWindows', () => {
     expect(windows[0].startHour.startsWith('2026-08-11')).toBe(true)
   })
 
+  it('prefers afternoon cola over morning calm cara', () => {
+    const hours = dayHours('2026-08-13', 6, 21, (t, h) =>
+      hour(t, {
+        // Morning: east wind = headwind when traveling east.
+        // Afternoon: west wind = useful tailwind (must win).
+        windSpeedKmh: h < 12 ? 8 : 22,
+        windDirectionDeg: h < 12 ? 90 : 270,
+        windGustsKmh: h < 12 ? 10 : 28,
+        temperatureC: h < 12 ? 18 : 24,
+      }),
+    )
+    const windows = svc.buildWindows(hours, 90, {
+      timeZone: 'Europe/Madrid',
+      now: new Date('2026-08-13T05:00:00+02:00'),
+    })
+    expect(windows.length).toBeGreaterThan(0)
+    expect(windows[0].relative).toBe('cola')
+    expect(windows[0].startHour >= '2026-08-13T12:00').toBe(true)
+    expect(windows[0].score).toBeGreaterThan(
+      windows.find((w) => w.relative === 'cara')?.score ?? 0,
+    )
+  })
+
   it('keeps early morning when the day has not started', () => {
     const hours = dayHours('2026-08-11', 6, 12, (t) =>
       hour(t, { windSpeedKmh: 8, windDirectionDeg: 270 }),

@@ -52,8 +52,15 @@ const RIDE_HOUR_END = 21 // inclusive last start hour
 /** Prefer ~3 h blocks (typical salida); allow 2 h near end of day. */
 const PREFERRED_WINDOW_HOURS = 3
 const MIN_WINDOW_HOURS = 2
-/** When scores are within this margin, prefer the sooner window. */
-const SCORE_TIE_MARGIN = 3
+/** When scores are within this margin, prefer cola then sooner start. */
+const SCORE_TIE_MARGIN = 2
+
+function relativeRank(relative: RideWindowAdvice['relative']): number {
+  // Higher = better when scores are nearly tied.
+  if (relative === 'cola') return 2
+  if (relative === 'lateral') return 1
+  return 0
+}
 
 function midpoint(geometry: RouteGeometry): LatLng {
   const coords = geometry.coordinates
@@ -177,7 +184,10 @@ export function scoreHourSlice(
 function compareWindows(a: RideWindowAdvice, b: RideWindowAdvice): number {
   const scoreDiff = b.score - a.score
   if (Math.abs(scoreDiff) > SCORE_TIE_MARGIN) return scoreDiff
-  // Prefer sooner when nearly tied — more actionable for the rider.
+  // Near-ties: prefer cola over cara before "sooner" (old bug picked calm cara).
+  const byRelative = relativeRank(b.relative) - relativeRank(a.relative)
+  if (byRelative !== 0) return byRelative
+  // Prefer sooner when still nearly tied — more actionable for the rider.
   const byStart = a.startHour.localeCompare(b.startHour)
   if (byStart !== 0) return byStart
   // Prefer longer (~3 h) over short when same start/score.

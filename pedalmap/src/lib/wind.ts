@@ -134,60 +134,59 @@ export function scoreRideWindow(input: {
   relativeWind: number // +head / -tail
 }): { score: number; notes: string[] } {
   const notes: string[] = []
-  let score = 100
+  // Mid baseline so cola bonuses and cara penalties separate without both
+  // saturating at 100 (old bug: calm cara ≈ solid cola → "sooner" wins).
+  let score = 72
 
   const relative = windRelativeLabel(input.relativeWind)
-  // Headwind hurts; moderate tailwind helps; gale-force "favor" is still rough.
-  const windEffect = input.relativeWind * input.windSpeedKmh
+  // Along-route component (km/h): +headwind, −tailwind.
+  const along = input.relativeWind * input.windSpeedKmh
+  const headComponent = Math.max(0, along)
+  const tailComponent = Math.max(0, -along)
 
-  // Notes must match the same relative/speed used for the score — never claim
-  // "lateral" when the factor is clearly cola/cara (old bug with light winds).
-  if (input.windSpeedKmh < 8) {
-    score += 4
-    if (relative === 'cola') notes.push('Cola suave')
-    else if (relative === 'cara') notes.push('Cara suave')
-    else notes.push('Viento flojo')
-  } else if (relative === 'cola') {
-    if (windEffect < -6 && input.windSpeedKmh <= 28) {
-      score += Math.min(10, Math.abs(windEffect) * 0.5)
-      notes.push('Viento a favor')
-    } else {
-      notes.push('Viento de cola')
+  // Use label thresholds (cara/cola/lateral) so light factors stay consistent
+  // with the card text — never score as cara while labeled lateral.
+  if (relative === 'cola') {
+    // Sweet spot ~8–18 km/h of useful push; beyond that comfort drops.
+    const sweet = Math.min(tailComponent, 18)
+    score += Math.min(16, 3 + sweet * 0.7)
+    if (tailComponent > 22) {
+      score -= Math.min(10, (tailComponent - 22) * 0.55)
     }
+    if (input.windSpeedKmh < 8) notes.push('Cola suave')
+    else if (tailComponent >= 8) notes.push('Viento a favor')
+    else notes.push('Viento de cola')
   } else if (relative === 'cara') {
-    if (windEffect > 8) {
-      score -= Math.min(35, windEffect * 1.2)
-      notes.push('Viento de cara relevante')
-    } else {
-      score -= Math.min(12, windEffect * 0.8)
-      notes.push('Viento de cara')
-    }
+    score -= Math.min(42, 3 + headComponent * 1.35)
+    if (input.windSpeedKmh < 8) notes.push('Cara suave')
+    else if (headComponent >= 10) notes.push('Viento de cara relevante')
+    else notes.push('Viento de cara')
+  } else if (input.windSpeedKmh <= 14) {
+    score += 3
+    notes.push('Viento flojo')
   } else {
-    // Crosswind
-    if (input.windSpeedKmh <= 18) {
-      score += 4
-      notes.push('Viento flojo')
-    } else {
-      notes.push('Viento lateral')
-    }
+    score -= Math.min(14, (input.windSpeedKmh - 14) * 0.45)
+    notes.push('Viento lateral')
   }
 
-  // Absolute wind: comfort matters more than a hurricane tailwind.
-  if (input.windSpeedKmh >= 40) {
-    score -= 22
+  // Absolute gale — milder for cola, but still prefer calm over a gale push.
+  if (input.windSpeedKmh >= 45) {
+    score -= relative === 'cola' ? 14 : 22
     notes.push('Viento muy fuerte')
-  } else if (input.windSpeedKmh >= 28) {
-    score -= 12
+  } else if (input.windSpeedKmh >= 36) {
+    score -= relative === 'cola' ? 8 : 14
     notes.push('Viento fuerte')
-  } else if (input.windSpeedKmh >= 20) {
-    score -= 5
+  } else if (input.windSpeedKmh >= 28) {
+    score -= relative === 'cola' ? 6 : 12
+    if (relative !== 'cola') notes.push('Viento fuerte')
   }
 
+  // Gusts hurt more when they are not pushing along the route.
   if (input.gustKmh > 45) {
-    score -= 20
+    score -= relative === 'cola' ? 10 : 20
     notes.push('Rachas fuertes')
-  } else if (input.gustKmh > 30) {
-    score -= 10
+  } else if (input.gustKmh > 32) {
+    score -= relative === 'cola' ? 5 : 10
     notes.push('Rachas moderadas')
   }
 

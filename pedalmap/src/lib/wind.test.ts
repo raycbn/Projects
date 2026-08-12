@@ -47,6 +47,45 @@ describe('wind helpers', () => {
     expect(good.score).toBeGreaterThan(80)
   })
 
+  it('prefers useful tailwind over calm headwind', () => {
+    const calmCara = scoreRideWindow({
+      windSpeedKmh: 8,
+      gustKmh: 10,
+      precipMm: 0,
+      tempC: 18,
+      relativeWind: 0.95,
+    })
+    const solidCola = scoreRideWindow({
+      windSpeedKmh: 22,
+      gustKmh: 28,
+      precipMm: 0,
+      tempC: 24,
+      relativeWind: -0.95,
+    })
+    expect(solidCola.score).toBeGreaterThan(calmCara.score)
+    expect(solidCola.score - calmCara.score).toBeGreaterThan(8)
+    expect(solidCola.notes.some((n) => /favor|cola/i.test(n))).toBe(true)
+    expect(calmCara.notes.some((n) => /cara/i.test(n))).toBe(true)
+  })
+
+  it('still rewards moderate cola when absolute wind is 25–32 km/h', () => {
+    const cola = scoreRideWindow({
+      windSpeedKmh: 30,
+      gustKmh: 36,
+      precipMm: 0,
+      tempC: 20,
+      relativeWind: -1,
+    })
+    const cara = scoreRideWindow({
+      windSpeedKmh: 12,
+      gustKmh: 16,
+      precipMm: 0,
+      tempC: 20,
+      relativeWind: 1,
+    })
+    expect(cola.score).toBeGreaterThan(cara.score)
+  })
+
   it('notes match light tailwind (never "lateral" when factor is cola)', () => {
     const lightCola = scoreRideWindow({
       windSpeedKmh: 2,
