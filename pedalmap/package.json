@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite-node scripts/prerender.ts",
+    "build": "npm run blog:validate && npm run sitemap:sync && tsc -b && vite build && vite-node scripts/prerender.ts",
     "prerender": "vite-node scripts/prerender.ts",
+    "sitemap:sync": "vite-node scripts/sync-sitemap.ts",
+    "blog:validate": "vite-node scripts/validate-blog.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

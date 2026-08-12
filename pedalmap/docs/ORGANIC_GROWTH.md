@@ -6,9 +6,21 @@ Google ya encuentra **PedalMap** por marca. Ahora: rankear por intención + **se
 
 ---
 
-## Automatización 90 días (1 post/día)
+## Automatización (sin Instagram por ahora)
 
-### Qué hay listo en código
+Instagram API **aparcada**. El crecimiento automatizable ahora es **blog + landings SEO**:
+
+- Lote live: `src/content/blogPostsExtra.ts` (+20 posts)
+- Validar: `npm run blog:validate`
+- Sitemap auto: `npm run sitemap:sync` (también en `npm run build`)
+- Plan 100 users agosto: `docs/GROWTH_AUGUST_100.md`
+- GEO / IAs: `docs/GEO.md`
+
+Cola social CSV sigue disponible si más adelante programas a mano en Buffer.
+
+---
+
+## Automatización Instagram (opcional, más adelante)
 
 | Artefacto | Uso |
 |-----------|-----|

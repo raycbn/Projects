@@ -620,6 +620,138 @@ export const seoPages: SeoPageContent[] = [
       { to: '/rutas-bicicleta-barcelona', label: 'Rutas Barcelona' },
       { to: '/ruta-circular-bicicleta', label: 'Ruta circular / Objetivo' },
       { to: '/crear-ruta-gpx', label: 'Crear GPX' },
+      { to: '/blog/mallorca-entreno-bici-palma', label: 'Entreno Mallorca' },
+    ],
+  },
+  {
+    path: '/alternativa-strava-planificar',
+    kind: 'compare',
+    title: 'Planificar rutas bici sin Strava | PedalMap',
+    description:
+      'Strava registra la actividad; PedalMap planifica la salida (desnivel, viento, GPX). Úsalos juntos o planifica solo con PedalMap.',
+    heading: 'Planificar rutas sin depender de Strava',
+    body: [
+      'Strava es excelente para guardar lo que ya rodaste y la capa social. No está pensado como planificador profundo de la salida del domingo. PedalMap cubre esa capa: origen/destino o circular, perfil de bici, desnivel, superficie y viento relativo, con GPX a Garmin/Wahoo.',
+      'Flujo habitual: planifica en PedalMap → exporta GPX si usas GPS → rueda → sube la actividad a Strava. Así cada app hace su trabajo.',
+      'Empieza Free en pedalmap.es. Comparativa detallada en el blog.',
+    ],
+    faqs: [
+      {
+        q: '¿PedalMap sustituye a Strava?',
+        a: 'No. PedalMap planifica; Strava registra y socializa. Se complementan.',
+      },
+      {
+        q: '¿Puedo exportar la ruta al Edge?',
+        a: 'Sí, vía GPX (1/semana en Free; ilimitado en Premium).',
+      },
+    ],
+    related: [
+      { to: '/blog/pedalmap-vs-strava', label: 'PedalMap vs Strava' },
+      { to: '/alternativa-komoot', label: 'Alternativa a Komoot' },
+      { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
+      { to: '/crear-ruta-gpx', label: 'GPX' },
+    ],
+  },
+  {
+    path: '/alternativa-ride-with-gps',
+    kind: 'compare',
+    title: 'Alternativa a Ride with GPS en España | PedalMap',
+    description:
+      'PedalMap como alternativa a Ride with GPS para planificar en España: español, perfiles de bici, viento, desnivel y GPX.',
+    heading: 'Alternativa a Ride with GPS (España)',
+    body: [
+      'Ride with GPS es un referente de planificación en el mundo anglosajón. Si tu día a día es España y quieres un flujo en español con viento relativo a la ruta y perfiles gravel/MTB/carretera, PedalMap está diseñado para eso.',
+      'Ambos exportan GPX. PedalMap añade énfasis en superficie según bici y freemium claro en pedalmap.es.',
+      'Prueba Free y decide con una salida real cerca de casa.',
+    ],
+    faqs: [
+      {
+        q: '¿PedalMap tiene comunidad de tracks como RwGPS?',
+        a: 'El foco es planificar tú la ruta. Explorar comunidad irá creciendo; hoy priorizamos el planificador y GPX.',
+      },
+    ],
+    related: [
+      { to: '/blog/pedalmap-vs-ride-with-gps', label: 'Comparativa blog' },
+      { to: '/alternativa-komoot', label: 'vs Komoot' },
+      { to: '/planificador-rutas-bici', label: 'Planificador' },
+    ],
+  },
+  {
+    path: '/rutas-casa-de-campo-madrid',
+    kind: 'city',
+    title: 'Rutas bici Casa de Campo Madrid | PedalMap',
+    description:
+      'Planifica salidas por Casa de Campo y Madrid Río: perfil urbana, desnivel suave y GPX con PedalMap.',
+    heading: 'Rutas en bici por Casa de Campo (Madrid)',
+    body: [
+      'Casa de Campo es el circuito urbano de referencia en Madrid: parque, carriles y conexión con Madrid Río. Ideal para rodajes suaves y grupetas de inicio.',
+      'Con PedalMap eliges perfil urbana o carretera, trazas el recorrido y revisas el desnivel (suele ser moderado) antes de salir. Exporta GPX si alguien lleva Edge.',
+      'Para sierra o gravel, combina con las guías MTB/gravel Madrid.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-madrid', label: 'Hub Madrid' },
+      { to: '/blog/ruta-bici-casa-de-campo-madrid', label: 'Artículo Casa de Campo' },
+      { to: '/route-planner', label: 'Planificador' },
+    ],
+  },
+  {
+    path: '/rutas-collserola-barcelona',
+    kind: 'city',
+    title: 'Rutas bici Collserola Barcelona | PedalMap',
+    description:
+      'Planifica subidas a Collserola desde Barcelona: desnivel, carretera/gravel/MTB y GPX con PedalMap.',
+    heading: 'Rutas en bici por Collserola (Barcelona)',
+    body: [
+      'Collserola es donde Barcelona deja de ser llana. Antes de salir del Eixample, mira el desnivel y elige carretera, gravel o MTB según el firme que quieras.',
+      'PedalMap calcula el track, muestra elevación y superficie, y te deja exportar GPX. Respeta normativa del parque y otros usuarios.',
+      'Guías hermanas: rutas Barcelona, MTB y gravel Barcelona.',
+    ],
+    related: [
+      { to: '/rutas-bicicleta-barcelona', label: 'Hub Barcelona' },
+      { to: '/blog/ruta-bici-collserola-barcelona', label: 'Artículo Collserola' },
+      { to: '/rutas-mtb-barcelona', label: 'MTB Barcelona' },
+    ],
+  },
+  {
+    path: '/calor-verano-rutas-bici',
+    kind: 'intent',
+    title: 'Rutas en bici con calor en verano | PedalMap',
+    description:
+      'Planifica salidas estivales en España: menos desnivel, mejor hora, viento y GPX. Guía práctica con PedalMap.',
+    heading: 'Rutas en bici con calor (verano)',
+    body: [
+      'En julio y agosto los kilómetros engañan: el desnivel y la hora deciden si la salida es entrenable o peligrosa. PedalMap te deja ver el perfil y el viento antes de comprometerte.',
+      'Acorta Objetivo circular, evita las horas centrales y prioriza sombra/agua en el plan mental. Especialmente crítico en Sevilla, Córdoba, Murcia y meseta.',
+      'Calcula Free en el planificador; lleva GPX si sales lejos.',
+    ],
+    faqs: [
+      {
+        q: '¿Qué desnivel es razonable con mucho calor?',
+        a: 'Depende de tu forma, pero baja metros respecto a tu entreno de primavera y sal al amanecer. Revisa siempre el perfil.',
+      },
+    ],
+    related: [
+      { to: '/blog/entrenar-calor-verano-bici', label: 'Artículo verano' },
+      { to: '/ruta-circular-bicicleta', label: 'Circular corta' },
+      { to: '/rutas-bicicleta-sevilla', label: 'Sevilla' },
+    ],
+  },
+  {
+    path: '/puerto-navacerrada-bici',
+    kind: 'city',
+    title: 'Puerto de Navacerrada en bicicleta | PedalMap',
+    description:
+      'Planifica la subida al Puerto de Navacerrada: desnivel, perfil carretera y GPX con PedalMap.',
+    heading: 'Puerto de Navacerrada en bicicleta',
+    body: [
+      'Navacerrada es un clásico de carretera en la sierra de Madrid. Improvisar el puerto sin mirar el perfil es el error más común.',
+      'Con PedalMap trazas la aproximación, ves el desnivel acumulado y exportas GPX a Garmin o Wahoo. Perfil carretera recomendado.',
+      'Combina con guías Madrid y gravel/MTB de sierra si buscas variantes.',
+    ],
+    related: [
+      { to: '/blog/puerto-navacerrada-bici', label: 'Artículo Navacerrada' },
+      { to: '/rutas-bicicleta-madrid', label: 'Madrid' },
+      { to: '/crear-ruta-gpx', label: 'GPX' },
     ],
   },
 ]

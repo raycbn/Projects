@@ -28,7 +28,10 @@ PedalMap es un planificador web de rutas ciclistas para España. No es una red s
 Madrid, Barcelona, Valencia, Sevilla, Bilbao, Zaragoza, Málaga, Granada, Alicante, Murcia, Santander, Córdoba, Valladolid, Pamplona, Palma — bajo https://pedalmap.es/rutas-bicicleta-{ciudad}
 
 ## Blog
-Índice: https://pedalmap.es/blog
+Índice: https://pedalmap.es/blog (38+ guías)
+Comparativas: vs Strava, vs Ride with GPS, vs Bikemap, vs Komoot
+Destinos: Casa de Campo, Collserola, Navacerrada, Guadarrama gravel, Palma/Mallorca
+Tutoriales: GPX, waypoints, e-bike, calor en verano, marchas cicloturistas
 
 ## Diferenciadores
 - Routing orientado a tipo de bici y superficie (Valhalla primero, ORS respaldo)

@@ -1,28 +1,13 @@
-export type BlogBlock = { type: 'h2'; text: string } | { type: 'p'; text: string }
+import type { BlogPost } from './blogTypes'
 
-export interface BlogPost {
-  slug: string
-  title: string
-  description: string
-  date: string
-  readMinutes: number
-  tags: string[]
-  socialHook: string
-  socialCaption: string
-  /** Intro under the H1 */
-  lead: string
-  blocks: BlogBlock[]
-  /** Main button → product surface that does the thing */
-  primaryCta: { to: string; label: string }
-  secondaryCtas?: Array<{ to: string; label: string }>
-  relatedPaths?: Array<{ to: string; label: string }>
-}
+export type { BlogBlock, BlogPost } from './blogTypes'
+import { blogPostsExtra } from './blogPostsExtra'
 
 /**
  * Inline links use markdown: [texto](/ruta-interna)
  * Keep paths absolute-from-root so they deep-link into the app.
  */
-export const blogPosts: BlogPost[] = [
+const blogPostsCore: BlogPost[] = [
   {
     slug: 'exportar-gpx-garmin',
     title: 'Cómo exportar una ruta GPX a Garmin desde PedalMap',
@@ -922,6 +907,11 @@ export const blogPosts: BlogPost[] = [
     ],
   },
 ]
+
+/** Newest first. Core + SEO growth batches. */
+export const blogPosts: BlogPost[] = [...blogPostsCore, ...blogPostsExtra].sort((a, b) =>
+  a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
+)
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return blogPosts.find((p) => p.slug === slug)
