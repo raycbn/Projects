@@ -8,6 +8,7 @@ import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 interface RouteCardProps {
   route: SavedRoute
   onShare?: (route: SavedRoute) => void
+  onTogglePublic?: (route: SavedRoute) => void
   onDuplicate?: (route: SavedRoute) => void
   onDelete?: (route: SavedRoute) => void
   onExport?: (route: SavedRoute) => void
@@ -15,17 +16,20 @@ interface RouteCardProps {
   showWindAlertToggle?: boolean
   onToggleWindAlert?: (route: SavedRoute) => void
   windAlertBusy?: boolean
+  visibilityBusy?: boolean
 }
 
 export function RouteCard({
   route,
   onShare,
+  onTogglePublic,
   onDuplicate,
   onDelete,
   onExport,
   showWindAlertToggle,
   onToggleWindAlert,
   windAlertBusy,
+  visibilityBusy,
 }: RouteCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -63,8 +67,12 @@ export function RouteCard({
               {route.bestWindWindow.score != null ? ` · ${route.bestWindWindow.score}/100` : ''}
             </p>
           ) : null}
-          {route.isPublic && (
-            <p className="mt-1 text-xs font-medium text-[var(--color-trail)]">Pública</p>
+          {route.isPublic ? (
+            <p className="mt-1 text-xs font-medium text-[var(--color-trail)]">
+              Pública · Explorar / perfil / Cheers
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-[var(--color-stone)]">Privada</p>
           )}
         </div>
         <div className="relative" ref={menuRef}>
@@ -79,6 +87,19 @@ export function RouteCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-[var(--color-fog)]">
+              {onTogglePublic && (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-mist)]"
+                  disabled={visibilityBusy}
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onTogglePublic(route)
+                  }}
+                >
+                  {route.isPublic ? 'Hacer privada' : 'Hacer pública'}
+                </button>
+              )}
               {onShare && (
                 <button
                   type="button"
@@ -142,13 +163,30 @@ export function RouteCard({
         <Link
           to={`/ruta?routeId=${route.id}`}
           onClick={() =>
-            stashReadyRoute({ draft: route, savedRouteId: route.id, shareSlug: route.shareSlug })
+            stashReadyRoute({
+              draft: route,
+              savedRouteId: route.id,
+              shareSlug: route.shareSlug,
+              isPublic: route.isPublic === true,
+            })
           }
         >
           <Button variant="secondary" className="!py-2">
             Abrir
           </Button>
         </Link>
+        {onTogglePublic ? (
+          <button
+            type="button"
+            disabled={visibilityBusy}
+            className={`text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-50 ${
+              route.isPublic ? 'text-[var(--color-trail)]' : 'text-[var(--color-stone)]'
+            }`}
+            onClick={() => onTogglePublic(route)}
+          >
+            {visibilityBusy ? '…' : route.isPublic ? 'Pública' : 'Hacer pública'}
+          </button>
+        ) : null}
         {showWindAlertToggle && onToggleWindAlert && (
           <button
             type="button"

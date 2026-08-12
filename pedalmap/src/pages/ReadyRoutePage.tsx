@@ -155,6 +155,7 @@ export function ReadyRoutePage() {
           draft: ensureRouteOptions(route),
           savedRouteId: route.id,
           shareSlug: route.shareSlug ?? null,
+          isPublic: route.isPublic === true,
           source: 'saved',
         }
         stashReadyRoute(next)
@@ -331,6 +332,7 @@ export function ReadyRoutePage() {
           draft: draftToSave,
           savedRouteId: saved.id,
           shareSlug: saved.shareSlug ?? null,
+          isPublic: false,
           source: 'saved' as const,
         }
         stashReadyRoute(next)
@@ -378,6 +380,7 @@ export function ReadyRoutePage() {
       draft,
       savedRouteId: published.routeId,
       shareSlug: published.shareSlug,
+      isPublic: true,
       source: packet?.source ?? ('calculate' as const),
     }
     stashReadyRoute(next)
@@ -435,6 +438,32 @@ export function ReadyRoutePage() {
     } catch (error) {
       console.error('[ready-route] publish', error)
       flashMessage('No se pudo publicar en Explorar.')
+    } finally {
+      setPublishBusy(false)
+    }
+  }
+
+  async function handleMakePrivate() {
+    if (!packet?.savedRouteId || !user || user.isAnonymous) {
+      flashMessage('Guarda la ruta antes de cambiar la visibilidad.')
+      return
+    }
+    setPublishBusy(true)
+    try {
+      await routeRepository.makePrivate(packet.savedRouteId, user.uid)
+      const next = {
+        ...packet,
+        isPublic: false,
+        shareSlug: null as string | null,
+      }
+      stashReadyRoute(next)
+      handoffEpochRef.current = readyRouteEpoch()
+      setPacket(next)
+      flashMessage('Ruta privada · ya no aparece en Explorar ni en tu perfil público.')
+      track('route_shared', { via: 'ready_route', public: false })
+    } catch (error) {
+      console.error('[ready-route] private', error)
+      flashMessage('No se pudo hacer privada.')
     } finally {
       setPublishBusy(false)
     }
@@ -634,15 +663,31 @@ export function ReadyRoutePage() {
               </div>
             ) : null}
           </div>
-          {packet?.savedRouteId && !packet.shareSlug ? (
-            <Button
-              variant="ghost"
-              className="w-full"
-              disabled={publishBusy}
-              onClick={() => void handlePublishExplore()}
-            >
-              {publishBusy ? 'Publicando…' : 'Publicar en Explorar'}
-            </Button>
+          {packet?.savedRouteId ? (
+            packet.isPublic ? (
+              <Button
+                variant="ghost"
+                className="w-full"
+                disabled={publishBusy}
+                onClick={() => void handleMakePrivate()}
+              >
+                {publishBusy ? 'Guardando…' : 'Hacer privada'}
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                className="w-full"
+                disabled={publishBusy}
+                onClick={() => void handlePublishExplore()}
+              >
+                {publishBusy ? 'Publicando…' : 'Hacer pública · Explorar'}
+              </Button>
+            )
+          ) : null}
+          {packet?.isPublic ? (
+            <p className="text-center text-xs text-[var(--color-trail)]">
+              Pública · visible en Explorar, perfil y Cheers
+            </p>
           ) : null}
           {postSaveHint === 'wind' && packet?.savedRouteId ? (
             <div className="rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_18%,white)] px-3 py-3 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-trail)]/25">
@@ -664,11 +709,11 @@ export function ReadyRoutePage() {
               </div>
             </div>
           ) : null}
-          {postSaveHint === 'explore' && packet?.savedRouteId && !packet.shareSlug ? (
+          {postSaveHint === 'explore' && packet?.savedRouteId && !packet.isPublic ? (
             <div className="rounded-2xl bg-[var(--color-mist)] px-3 py-3 text-sm text-[var(--color-forest)]">
-              <p className="font-semibold">¿Publicar en Explorar?</p>
+              <p className="font-semibold">¿Hacer pública en Explorar?</p>
               <p className="mt-1 text-[var(--color-stone)]">
-                Aparece en la comunidad para que otros ciclistas la descubran.
+                Aparece en la comunidad, en tu perfil público y se pueden dar Cheers.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
@@ -676,7 +721,7 @@ export function ReadyRoutePage() {
                   disabled={publishBusy}
                   onClick={() => void handlePublishExplore()}
                 >
-                  {publishBusy ? 'Publicando…' : 'Publicar'}
+                  {publishBusy ? 'Publicando…' : 'Hacer pública'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setPostSaveHint(null)}>
                   Mantener privada

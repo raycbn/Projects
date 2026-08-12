@@ -169,16 +169,21 @@ export function ExplorePage() {
   }, [signedIn, user])
 
   useEffect(() => {
-    if (!feed.length || !ready) return
+    const pool = [...feed, ...routes]
+    if (!pool.length || !ready) return
     let cancelled = false
     async function loadCheers() {
       const next: Record<string, { count: number; cheered: boolean }> = {}
+      const ids = [...new Set(pool.map((r) => r.id))].slice(0, 24)
       await Promise.all(
-        feed.slice(0, 12).map(async (route) => {
+        ids.map(async (id) => {
           try {
-            next[route.id] = await communityService.getCheersState(route.id, user && !user.isAnonymous ? user.uid : null)
+            next[id] = await communityService.getCheersState(
+              id,
+              user && !user.isAnonymous ? user.uid : null,
+            )
           } catch {
-            next[route.id] = { count: 0, cheered: false }
+            next[id] = { count: 0, cheered: false }
           }
         }),
       )
@@ -188,7 +193,8 @@ export function ExplorePage() {
     return () => {
       cancelled = true
     }
-  }, [feed, ready, user])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feed, routes, ready, user?.uid])
 
   const tabs = useMemo(
     () =>
@@ -372,7 +378,16 @@ export function ExplorePage() {
                   ))}
                 </div>
               ) : (
-                routes.map((route) => <RouteRow key={route.id} route={route} />)
+                routes.map((route) => (
+                  <RouteRow
+                    key={route.id}
+                    route={route}
+                    authorLabel={authorNames[route.userId]}
+                    cheers={cheers[route.id]}
+                    onCheers={() => void handleCheers(route.id)}
+                    canCheer={signedIn}
+                  />
+                ))
               )}
             </>
           )}
@@ -718,6 +733,13 @@ function RouteRow({
               >
                 Cheers{typeof cheers?.count === 'number' ? ` · ${cheers.count}` : ''}
               </button>
+            ) : canCheer === false ? (
+              <Link
+                to="/login"
+                className="min-h-10 rounded-xl px-3 text-sm font-semibold text-[var(--color-stone)] ring-1 ring-[var(--color-fog)] inline-flex items-center"
+              >
+                Cheers · entrar
+              </Link>
             ) : null}
           </div>
         </div>

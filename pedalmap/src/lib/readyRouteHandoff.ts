@@ -11,6 +11,8 @@ export type ReadyRoutePacket = {
   draft: RouteDraft
   savedRouteId?: string | null
   shareSlug?: string | null
+  /** Whether the saved route is public in Explorar / perfil. */
+  isPublic?: boolean
   source?: 'calculate' | 'saved' | 'import'
   /** Bumps MapView fit when the same geometry is re-imported / reopened. */
   fitNonce?: number

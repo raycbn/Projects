@@ -38,6 +38,7 @@ export function MyRoutesPage() {
   const [share, setShare] = useState<{ url: string; title: string } | null>(null)
   const [windAlert, setWindAlert] = useState<WindAlertCandidate | null>(null)
   const [windBusyId, setWindBusyId] = useState<string | null>(null)
+  const [visibilityBusyId, setVisibilityBusyId] = useState<string | null>(null)
   const [alertHint, setAlertHint] = useState<string | null>(null)
 
   const alertsMasterOn = Boolean(profile?.notifications?.windAlertsEnabled)
@@ -264,7 +265,40 @@ export function MyRoutesPage() {
           routes={routes}
           showWindAlertToggle={alertsMasterOn}
           windAlertBusyId={windBusyId}
+          visibilityBusyId={visibilityBusyId}
           onToggleWindAlert={(route) => void toggleWindAlert(route)}
+          onTogglePublic={async (route) => {
+            if (!user) return
+            setVisibilityBusyId(route.id)
+            setAlertHint(null)
+            try {
+              if (route.isPublic) {
+                await routeRepository.makePrivate(route.id, user.uid)
+                setRoutes((prev) =>
+                  prev.map((r) => (r.id === route.id ? { ...r, isPublic: false } : r)),
+                )
+                setAlertHint('Ruta privada · fuera de Explorar y perfil público.')
+              } else {
+                const published = await routeRepository.publishForShare(user.uid, route, {
+                  routeId: route.id,
+                })
+                setRoutes((prev) =>
+                  prev.map((r) =>
+                    r.id === route.id
+                      ? { ...r, isPublic: true, shareSlug: published.shareSlug }
+                      : r,
+                  ),
+                )
+                setAlertHint('Ruta pública · visible en Explorar, perfil y Cheers.')
+                track('route_shared', { via: 'my_routes_toggle', public: true })
+              }
+            } catch (error) {
+              console.error('[my-routes] visibility', error)
+              setAlertHint('No se pudo cambiar la visibilidad. Inténtalo de nuevo.')
+            } finally {
+              setVisibilityBusyId(null)
+            }
+          }}
           onShare={async (route) => {
             if (!user) return
             try {

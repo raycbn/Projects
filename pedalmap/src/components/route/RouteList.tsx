@@ -4,12 +4,14 @@ import { RouteCard } from '@/components/route/RouteCard'
 interface RouteListProps {
   routes: SavedRoute[]
   onShare?: (route: SavedRoute) => void
+  onTogglePublic?: (route: SavedRoute) => void
   onDuplicate?: (route: SavedRoute) => void
   onDelete?: (route: SavedRoute) => void
   onExport?: (route: SavedRoute) => void
   showWindAlertToggle?: boolean
   onToggleWindAlert?: (route: SavedRoute) => void
   windAlertBusyId?: string | null
+  visibilityBusyId?: string | null
 }
 
 export function RouteList({
@@ -17,6 +19,7 @@ export function RouteList({
   showWindAlertToggle,
   onToggleWindAlert,
   windAlertBusyId,
+  visibilityBusyId,
   ...actions
 }: RouteListProps) {
   if (!routes.length) {
@@ -40,6 +43,7 @@ export function RouteList({
           showWindAlertToggle={showWindAlertToggle}
           onToggleWindAlert={onToggleWindAlert}
           windAlertBusy={windAlertBusyId === route.id}
+          visibilityBusy={visibilityBusyId === route.id}
         />
       ))}
     </div>

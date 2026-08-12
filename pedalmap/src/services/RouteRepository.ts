@@ -309,8 +309,16 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
     draft: RouteDraft,
     options?: { routeId?: string | null },
   ): Promise<{ shareSlug: string; routeId: string }> {
+    let wasPublic = false
+    if (options?.routeId) {
+      const existing = await this.getById(options.routeId)
+      wasPublic = Boolean(existing?.isPublic)
+    }
+
     const payload = toSharePublishPayload(draft, { routeId: options?.routeId })
     const base = apiBase()
+    let result: { shareSlug: string; routeId: string } | null = null
+
     if (base) {
       try {
         const res = await fetch(`${base}/routes/publish`, {
@@ -326,29 +334,41 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
           code?: string
         }
         if (res.ok && body.shareSlug && body.routeId) {
-          return { shareSlug: body.shareSlug, routeId: body.routeId }
+          result = { shareSlug: body.shareSlug, routeId: body.routeId }
+        } else {
+          const detail = body.error || body.code || `http_${res.status}`
+          console.warn('[routes] worker publish failed', detail)
+          if (res.status === 401 || res.status === 400) {
+            throw new Error(`save_failed:${detail}`)
+          }
+          throw new Error(`worker_publish:${detail}`)
         }
-        const detail = body.error || body.code || `http_${res.status}`
-        console.warn('[routes] worker publish failed', detail)
-        // Auth / validation errors should not silently fall back.
-        if (res.status === 401 || res.status === 400) {
-          throw new Error(`save_failed:${detail}`)
-        }
-        throw new Error(`worker_publish:${detail}`)
       } catch (error) {
         if (error instanceof Error && error.message.startsWith('save_failed:')) throw error
-        console.warn('[routes] worker publish error, falling back to client', error)
+        if (result) {
+          /* already have result */
+        } else {
+          console.warn('[routes] worker publish error, falling back to client', error)
+        }
       }
     }
 
-    // Client fallback (older deploys / Worker down).
-    if (options?.routeId) {
-      const shareSlug = await this.makePublic(options.routeId, userId)
-      return { shareSlug, routeId: options.routeId }
+    if (!result) {
+      // Client fallback (older deploys / Worker down).
+      if (options?.routeId) {
+        const shareSlug = await this.makePublic(options.routeId, userId)
+        return { shareSlug, routeId: options.routeId }
+      }
+      const saved = await this.save(userId, draft, { isPublic: true })
+      if (!saved.shareSlug) throw new Error('missing_slug')
+      return { shareSlug: saved.shareSlug, routeId: saved.id }
     }
-    const saved = await this.save(userId, draft, { isPublic: true })
-    if (!saved.shareSlug) throw new Error('missing_slug')
-    return { shareSlug: saved.shareSlug, routeId: saved.id }
+
+    // Worker publish path: makePublic already bumps when used as fallback.
+    if (!wasPublic) {
+      await this.bumpRoutesPublicCount(userId, 1)
+    }
+    return result
   }
 
   /**
@@ -418,6 +438,7 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
         console.error('[routes] routeShares write failed', firestoreErrorMessage(error), error)
         throw new Error(`save_failed:${firestoreErrorMessage(error)}`)
       }
+      await this.bumpRoutesPublicCount(userId, 1)
     }
 
     return {
@@ -476,6 +497,7 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
     const routeRef = doc(db, 'routes', routeId)
     const userRef = doc(db, 'users', userId)
     let slug: string | undefined
+    let wasPublic = false
 
     await runTransaction(db, async (tx) => {
       const existing = await tx.get(routeRef)
@@ -483,6 +505,7 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
         throw new Error('No tienes permiso para eliminar esta ruta')
       }
       slug = existing.data().shareSlug as string | undefined
+      wasPublic = Boolean(existing.data().isPublic)
       const userSnap = await tx.get(userRef)
       const usage = (userSnap.data()?.usage as
         | { routesCreatedThisMonth?: number; routesSaved?: number; monthKey?: string }
@@ -509,6 +532,9 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
     if (slug) {
       await deleteDoc(doc(db, 'routeShares', slug)).catch(() => undefined)
     }
+    if (wasPublic) {
+      await this.bumpRoutesPublicCount(userId, -1)
+    }
   }
 
   async makePublic(routeId: string, userId: string): Promise<string> {
@@ -517,6 +543,7 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
     if (!existing.exists() || existing.data().userId !== userId) {
       throw new Error('No tienes permiso para compartir esta ruta')
     }
+    const wasPublic = Boolean(existing.data().isPublic)
     const shareSlug = (existing.data().shareSlug as string) || createShareSlug(existing.data().title)
     try {
       await updateDoc(ref, { isPublic: true, shareSlug, updatedAt: serverTimestamp() })
@@ -525,11 +552,60 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
         userId,
         createdAt: serverTimestamp(),
       })
+      if (!wasPublic) {
+        await this.bumpRoutesPublicCount(userId, 1)
+      }
     } catch (error) {
       console.error('[routes] makePublic failed', firestoreErrorMessage(error), error)
       throw new Error(`save_failed:${firestoreErrorMessage(error)}`)
     }
     return shareSlug
+  }
+
+  /** Hide from Explorar / perfil público. Keeps the doc; share links stop resolving. */
+  async makePrivate(routeId: string, userId: string): Promise<void> {
+    const ref = doc(getDb(), 'routes', routeId)
+    const existing = await getDoc(ref)
+    if (!existing.exists() || existing.data().userId !== userId) {
+      throw new Error('No tienes permiso para modificar esta ruta')
+    }
+    const wasPublic = Boolean(existing.data().isPublic)
+    const slug = existing.data().shareSlug ? String(existing.data().shareSlug) : null
+    try {
+      await updateDoc(ref, { isPublic: false, updatedAt: serverTimestamp() })
+      if (slug) {
+        await deleteDoc(doc(getDb(), 'routeShares', slug)).catch(() => undefined)
+      }
+      if (wasPublic) {
+        await this.bumpRoutesPublicCount(userId, -1)
+      }
+    } catch (error) {
+      console.error('[routes] makePrivate failed', firestoreErrorMessage(error), error)
+      throw new Error(`save_failed:${firestoreErrorMessage(error)}`)
+    }
+  }
+
+  /** Keep publicProfiles.routesPublicCount in sync for perfil / Explorar ciclistas. */
+  async bumpRoutesPublicCount(userId: string, delta: number): Promise<void> {
+    if (!delta) return
+    const ref = doc(getDb(), 'publicProfiles', userId)
+    try {
+      await runTransaction(getDb(), async (tx) => {
+        const snap = await tx.get(ref)
+        const current = Number(snap.data()?.routesPublicCount ?? 0) || 0
+        tx.set(
+          ref,
+          {
+            routesPublicCount: Math.max(0, current + delta),
+            updatedAt: serverTimestamp(),
+            ...(snap.exists() ? {} : { isPublic: true, followersCount: 0, followingCount: 0 }),
+          },
+          { merge: true },
+        )
+      })
+    } catch (error) {
+      console.warn('[routes] bumpRoutesPublicCount', firestoreErrorMessage(error), error)
+    }
   }
 
   currentMonthKey(): string {
