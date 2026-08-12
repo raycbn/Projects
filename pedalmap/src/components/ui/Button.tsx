@@ -19,8 +19,9 @@ const styles: Record<Variant, string> = {
 }
 
 const sizes: Record<Size, string> = {
-  sm: 'px-3 py-2 text-xs',
-  md: 'px-4 py-2.5 text-sm',
+  // Soft floor so primary actions stay tappable on phones without blowing dense chips.
+  sm: 'min-h-9 px-3 py-2 text-xs',
+  md: 'min-h-10 px-4 py-2.5 text-sm',
 }
 
 export function Button({

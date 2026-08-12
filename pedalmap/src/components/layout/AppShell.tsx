@@ -25,8 +25,8 @@ export function AppShell() {
 
   return (
     <div className={clsx('min-h-dvh', wash && 'page-wash')}>
-      <header className="sticky top-0 z-40 h-[var(--header-h)] border-b border-[var(--color-fog)]/80 bg-[color-mix(in_oklab,var(--color-mist)_88%,white)]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-2 px-3 md:gap-4 md:px-6">
+      <header className="sticky top-0 z-40 h-[var(--header-h)] border-b border-[var(--color-fog)]/80 bg-[color-mix(in_oklab,var(--color-mist)_88%,white)]/95 pt-[env(safe-area-inset-top,0px)] backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-3 md:gap-4 md:px-6">
           <Link
             to="/"
             className="font-display text-lg font-extrabold tracking-tight text-[var(--color-forest)] md:text-xl"
@@ -50,22 +50,22 @@ export function AppShell() {
               Premium
             </NavLink>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {user && !user.isAnonymous ? (
               <>
                 <Link
                   to="/perfil"
-                  className="hidden text-sm font-medium text-[var(--color-forest)] sm:inline"
+                  className="hidden max-w-[9rem] truncate text-sm font-medium text-[var(--color-forest)] sm:inline"
                 >
                   {profile?.displayName || 'Perfil'}
                 </Link>
-                <Button variant="ghost" size="sm" onClick={() => void logout()}>
+                <Button variant="ghost" size="sm" className="!min-h-10" onClick={() => void logout()}>
                   Cerrar sesión
                 </Button>
               </>
             ) : (
               <Link to="/login">
-                <Button variant="secondary" size="sm">
+                <Button variant="secondary" size="sm" className="!min-h-10">
                   Entrar
                 </Button>
               </Link>
@@ -152,7 +152,7 @@ export function AppShell() {
               to={to}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center justify-center rounded-lg text-center text-[11px] font-semibold leading-tight',
+                  'flex min-h-11 items-center justify-center rounded-lg px-1 text-center text-[11px] font-semibold leading-tight',
                   isActive
                     ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
                     : 'text-[var(--color-stone)]',

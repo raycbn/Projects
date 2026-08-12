@@ -14,12 +14,12 @@ export function ShareDialog({ url, title, onClose }: ShareDialogProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-title"
     >
-      <div className="w-full max-w-md animate-rise rounded-3xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md animate-rise rounded-t-3xl bg-white p-6 shadow-xl safe-pb sm:rounded-3xl">
         <h2 id="share-title" className="font-display text-2xl font-extrabold text-[var(--color-forest)]">
           Compartir ruta
         </h2>

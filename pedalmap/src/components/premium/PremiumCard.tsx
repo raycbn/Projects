@@ -37,12 +37,12 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[color-mix(in_oklab,black_28%,transparent)] p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[color-mix(in_oklab,black_28%,transparent)] p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="premium-title"
     >
-      <div className="w-full max-w-md animate-rise rounded-[1.75rem] bg-[var(--color-panel)] p-6 text-white shadow-xl">
+      <div className="w-full max-w-md animate-rise rounded-t-[1.75rem] bg-[var(--color-panel)] p-6 text-white shadow-xl safe-pb sm:rounded-[1.75rem]">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-signal)]/90">
           PedalMap Premium
         </p>

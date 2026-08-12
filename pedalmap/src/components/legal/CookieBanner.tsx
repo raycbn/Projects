@@ -9,6 +9,9 @@ export function CookieBanner() {
   const { pathname } = useLocation()
   const onPlanner = pathname.startsWith('/route-planner')
   const onNav = pathname.startsWith('/navegacion')
+  const onReadyRoute = pathname === '/ruta'
+  // Same routes where AppShell hides the tab bar — don't offset for a bar that isn't there.
+  const hideTabbar = onPlanner || onNav || onReadyRoute
   const compact = onPlanner || onNav
 
   useEffect(() => {
@@ -33,13 +36,13 @@ export function CookieBanner() {
 
   if (!visible) return null
 
+  const bottomClass = hideTabbar
+    ? 'bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:bottom-4'
+    : 'bottom-[calc(var(--tabbar-h)+0.5rem)] md:bottom-4'
+
   return (
     <div
-      className={
-        compact
-          ? 'fixed inset-x-0 bottom-[calc(var(--tabbar-h,0px)+0.35rem)] z-[40] mx-auto max-w-lg px-3 md:bottom-3'
-          : 'fixed inset-x-0 z-[70] mx-auto max-w-lg px-3 bottom-[calc(var(--tabbar-h)+0.5rem)] md:bottom-4'
-      }
+      className={`fixed inset-x-0 z-[70] mx-auto max-w-lg px-3 ${bottomClass}`}
       role="dialog"
       aria-modal="true"
       aria-label="Consentimiento de cookies"
@@ -59,12 +62,12 @@ export function CookieBanner() {
                 Info
               </Link>
             </p>
-            <Button className="!min-h-9 shrink-0 !px-3 !py-1.5 !text-xs" onClick={() => choose('accepted')}>
+            <Button className="!min-h-10 shrink-0 !px-3 !py-1.5 !text-xs" onClick={() => choose('accepted')}>
               OK
             </Button>
             <Button
               variant="ghost"
-              className="!min-h-9 shrink-0 !border-white/30 !px-2 !py-1.5 !text-xs !text-white"
+              className="!min-h-10 shrink-0 !border-white/30 !px-2.5 !py-1.5 !text-xs !text-white"
               onClick={() => choose('rejected')}
             >
               No

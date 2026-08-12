@@ -18,7 +18,7 @@
 
 @layer base {
   :root {
-    --header-h: 3.5rem;
+    --header-h: calc(3.5rem + env(safe-area-inset-top, 0px));
     --tabbar-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
     color: var(--color-ink);
     background-color: var(--color-mist);

@@ -282,7 +282,7 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
             {windOverlay?.features?.length ? (
               <button
                 type="button"
-                className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+                className="inline-flex min-h-9 shrink-0 items-center rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
                 aria-pressed={showWindArrows}
                 onClick={() => setShowWindArrows((v) => !v)}
               >

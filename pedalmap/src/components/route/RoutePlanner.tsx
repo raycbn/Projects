@@ -625,8 +625,8 @@ export function RoutePlanner() {
             {waypoints
               .filter((w) => w.kind === 'via')
               .map((w) => (
-                <div key={w.id} className="flex items-end gap-2">
-                  <div className="flex-1">
+                <div key={w.id} className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[12rem] flex-1 basis-[12rem]">
                     <SearchLocation
                       label="Waypoint"
                       placeholder="Punto intermedio"
@@ -636,15 +636,17 @@ export function RoutePlanner() {
                       }}
                     />
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => removeWaypoint(w.id)}>
-                    Quitar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => moveWaypoint(w.id, -1)}>
-                    ↑
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => moveWaypoint(w.id, 1)}>
-                    ↓
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => removeWaypoint(w.id)}>
+                      Quitar
+                    </Button>
+                    <Button size="sm" variant="ghost" aria-label="Subir waypoint" onClick={() => moveWaypoint(w.id, -1)}>
+                      ↑
+                    </Button>
+                    <Button size="sm" variant="ghost" aria-label="Bajar waypoint" onClick={() => moveWaypoint(w.id, 1)}>
+                      ↓
+                    </Button>
+                  </div>
                 </div>
               ))}
             <Button size="sm" variant="ghost" onClick={() => setViaQueryOpen((v) => !v)}>

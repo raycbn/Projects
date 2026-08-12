@@ -70,7 +70,7 @@ export function RouteCard({
         <div className="relative" ref={menuRef}>
           <button
             type="button"
-            className="rounded-xl px-2 py-1 text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-lg font-bold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
             aria-label="Más acciones"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
