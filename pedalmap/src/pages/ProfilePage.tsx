@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -9,12 +9,51 @@ import { track } from '@/lib/analytics'
 import { WIND_ALERT } from '@/lib/windAlerts'
 import { BRAND_EMAILS } from '@/lib/brandEmails'
 import { enableFollowPushPreference } from '@/lib/followNotify'
-import { ANNUAL_TRIAL_DAYS, FREE_TRIALS, type BikeType, type RoutePreference } from '@/domain/types'
+import { resolvePublicDisplayName } from '@/lib/communityIdentity'
+import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
+import { communityService } from '@/services/CommunityService'
+import { activityRepository } from '@/services/ActivityRepository'
+import { routeRepository } from '@/services/RouteRepository'
+import {
+  ANNUAL_TRIAL_DAYS,
+  FREE_TRIALS,
+  type Activity,
+  type BikeType,
+  type PublicProfile,
+  type RoutePreference,
+  type SavedRoute,
+} from '@/domain/types'
+
+type YearStats = {
+  rides: number
+  distanceMeters: number
+  elevationGainMeters: number
+  movingSeconds: number
+}
+
+function yearKey(iso: string): number {
+  const t = Date.parse(iso)
+  return Number.isFinite(t) ? new Date(t).getFullYear() : new Date().getFullYear()
+}
+
+function sumYearStats(activities: Activity[]): YearStats {
+  const year = new Date().getFullYear()
+  const rows = activities.filter((a) => a.status === 'finished' && yearKey(a.startedAt) === year)
+  return {
+    rides: rows.length,
+    distanceMeters: rows.reduce((s, a) => s + (a.stats.distanceMeters || 0), 0),
+    elevationGainMeters: rows.reduce((s, a) => s + (a.stats.elevationGainMeters || 0), 0),
+    movingSeconds: rows.reduce(
+      (s, a) => s + (a.stats.movingTimeSeconds ?? a.stats.durationSeconds ?? 0),
+      0,
+    ),
+  }
+}
 
 export function ProfilePage() {
   usePageMeta({
     title: 'Perfil | PedalMap',
-    description: 'Gestiona tu cuenta y preferencias de ciclismo en PedalMap.',
+    description: 'Tu perfil de ciclista en PedalMap: salidas, rutas y comunidad.',
     path: '/perfil',
     noindex: true,
   })
@@ -26,17 +65,83 @@ export function ProfilePage() {
   const [message, setMessage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [alertsBusy, setAlertsBusy] = useState(false)
+  const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
+  const [bioDraft, setBioDraft] = useState('')
+  const [bioSaving, setBioSaving] = useState(false)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [routes, setRoutes] = useState<SavedRoute[]>([])
+  const [statsLoading, setStatsLoading] = useState(false)
 
   const windAlertsEnabled = Boolean(profile?.notifications?.windAlertsEnabled)
   const windAlertsEmail = Boolean(profile?.notifications?.windAlertsEmail)
   const followAlertsEmail = profile?.notifications?.followAlertsEmail !== false
   const followAlertsPush = Boolean(profile?.notifications?.followAlertsPush)
 
+  const displayName = useMemo(
+    () =>
+      resolvePublicDisplayName(profile?.displayName ?? user?.displayName, profile?.email ?? user?.email) ||
+      (user?.isAnonymous ? 'Invitado' : 'Ciclista'),
+    [profile?.displayName, profile?.email, user?.displayName, user?.email, user?.isAnonymous],
+  )
+  const photoURL = profile?.photoURL || user?.photoURL || null
+  const yearStats = useMemo(() => sumYearStats(activities), [activities])
+  const recentActivities = useMemo(
+    () => activities.filter((a) => a.status === 'finished').slice(0, 5),
+    [activities],
+  )
+  const recentRoutes = useMemo(() => routes.slice(0, 5), [routes])
+
   useEffect(() => {
     if (!profile) return
     setBikeType(profile.bikePreferences.bikeType)
     setPreferences(profile.bikePreferences.preferences)
   }, [profile])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadAthlete() {
+      if (!user || user.isAnonymous || !communityService.isConfigured()) {
+        setPublicProfile(null)
+        setActivities([])
+        setRoutes([])
+        return
+      }
+      setStatsLoading(true)
+      try {
+        await communityService.upsertPublicProfile({
+          uid: user.uid,
+          displayName: profile?.displayName ?? user.displayName,
+          photoURL: profile?.photoURL ?? user.photoURL,
+          email: user.email ?? profile?.email,
+        }).catch(() => undefined)
+
+        const [pub, acts, ownRoutes] = await Promise.all([
+          communityService.getPublicProfile(user.uid),
+          activityRepository.isConfigured()
+            ? activityRepository.listForUser(user.uid)
+            : Promise.resolve([] as Activity[]),
+          routeRepository.isConfigured()
+            ? routeRepository.listByUser(user.uid)
+            : Promise.resolve([] as SavedRoute[]),
+        ])
+        if (cancelled) return
+        setPublicProfile(pub)
+        setBioDraft(pub?.bio || '')
+        setActivities(acts)
+        setRoutes(ownRoutes)
+      } catch (error) {
+        console.warn('[perfil] athlete load', error)
+      } finally {
+        if (!cancelled) setStatsLoading(false)
+      }
+    }
+    void loadAthlete()
+    return () => {
+      cancelled = true
+    }
+    // Intentionally omit publicProfile.bio to avoid loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile?.displayName, profile?.photoURL, profile?.email])
 
   async function handleSavePrefs() {
     setSaving(true)
@@ -49,6 +154,29 @@ export function ProfilePage() {
       setMessage('No se pudieron guardar las preferencias.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSaveBio() {
+    if (!user || user.isAnonymous) return
+    setBioSaving(true)
+    setMessage(null)
+    try {
+      await communityService.upsertPublicProfile({
+        uid: user.uid,
+        displayName: profile?.displayName ?? user.displayName,
+        photoURL: profile?.photoURL ?? user.photoURL,
+        email: user.email ?? profile?.email,
+        bio: bioDraft.trim().slice(0, 280),
+      })
+      const pub = await communityService.getPublicProfile(user.uid)
+      setPublicProfile(pub)
+      setMessage('Bio pública actualizada.')
+    } catch (error) {
+      console.error('[profile] bio', error)
+      setMessage('No se pudo guardar la bio.')
+    } finally {
+      setBioSaving(false)
     }
   }
 
@@ -130,33 +258,210 @@ export function ProfilePage() {
         </div>
       ) : (
         <div className="mt-6 space-y-5">
-          <div className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
-            <p>
-              <span className="text-sm text-[var(--color-stone)]">Nombre</span>
-              <br />
-              <strong>{profile?.displayName || (user.isAnonymous ? 'Invitado' : 'Ciclista')}</strong>
-            </p>
-            <p>
-              <span className="text-sm text-[var(--color-stone)]">Email</span>
-              <br />
-              <strong>{profile?.email || '—'}</strong>
-            </p>
-            <p>
-              <span className="text-sm text-[var(--color-stone)]">Plan</span>
-              <br />
-              <strong className="capitalize">{profile?.plan || 'free'}</strong>
-            </p>
-            <Link
-              to="/my-routes"
-              className="inline-flex text-sm font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
-            >
-              Mis rutas
-            </Link>
-          </div>
+          {/* Athlete hero */}
+          <section className="overflow-hidden rounded-3xl bg-white/80 ring-1 ring-[var(--color-fog)]">
+            <div className="h-20 bg-[linear-gradient(135deg,var(--color-forest),var(--color-trail))] sm:h-24" />
+            <div className="relative px-5 pb-5 pt-0">
+              <div className="-mt-10 flex items-end gap-4">
+                {photoURL ? (
+                  <img
+                    src={photoURL}
+                    alt=""
+                    className="h-20 w-20 rounded-full object-cover ring-4 ring-white"
+                  />
+                ) : (
+                  <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-mist)] font-display text-2xl font-bold text-[var(--color-forest)] ring-4 ring-white">
+                    {displayName.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <div className="min-w-0 flex-1 pb-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="truncate font-display text-2xl font-extrabold text-[var(--color-forest)]">
+                      {displayName}
+                    </h2>
+                    <span className="rounded-full bg-[var(--color-mist)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-forest)]">
+                      {profile?.plan === 'premium' ? 'Premium' : 'Free'}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-sm text-[var(--color-stone)]">
+                    {profile?.email || (user.isAnonymous ? 'Sesión de invitado' : '—')}
+                  </p>
+                </div>
+              </div>
+
+              {!user.isAnonymous ? (
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-2xl bg-[var(--color-mist)]/70 px-2 py-3">
+                    <p className="font-display text-xl font-bold text-[var(--color-forest)]">
+                      {publicProfile?.followersCount ?? 0}
+                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                      Seguidores
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[var(--color-mist)]/70 px-2 py-3">
+                    <p className="font-display text-xl font-bold text-[var(--color-forest)]">
+                      {publicProfile?.followingCount ?? 0}
+                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                      Siguiendo
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[var(--color-mist)]/70 px-2 py-3">
+                    <p className="font-display text-xl font-bold text-[var(--color-forest)]">
+                      {publicProfile?.routesPublicCount ?? routes.filter((r) => r.isPublic).length}
+                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                      Rutas
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {!user.isAnonymous ? (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                    Bio pública
+                  </label>
+                  <textarea
+                    value={bioDraft}
+                    onChange={(e) => setBioDraft(e.target.value.slice(0, 280))}
+                    rows={3}
+                    placeholder="Cuéntanos cómo ruedas: zona, bici, objetivos…"
+                    className="w-full rounded-2xl border-0 bg-[var(--color-mist)]/50 px-3 py-2 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] outline-none placeholder:text-[var(--color-stone)] focus:ring-2 focus:ring-[var(--color-trail)]"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-[var(--color-stone)]">{bioDraft.length}/280</p>
+                    <Button type="button" variant="secondary" disabled={bioSaving} onClick={() => void handleSaveBio()}>
+                      {bioSaving ? 'Guardando…' : 'Guardar bio'}
+                    </Button>
+                  </div>
+                  <Link
+                    to={`/ciclista/${user.uid}`}
+                    className="inline-flex text-sm font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
+                  >
+                    Ver mi perfil público →
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          {/* YTD stats */}
+          {!user.isAnonymous ? (
+            <section className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Este año
+                </h2>
+                <Link to="/actividades" className="text-sm font-semibold text-[var(--color-trail)]">
+                  Ver todo
+                </Link>
+              </div>
+              {statsLoading ? (
+                <p className="text-sm text-[var(--color-stone)]">Cargando estadísticas…</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat label="Salidas" value={String(yearStats.rides)} />
+                  <Stat label="Distancia" value={formatDistance(yearStats.distanceMeters)} />
+                  <Stat label="Desnivel" value={formatElevation(yearStats.elevationGainMeters)} />
+                  <Stat label="Tiempo" value={formatDuration(yearStats.movingSeconds)} />
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {/* Recent activities */}
+          {!user.isAnonymous ? (
+            <section className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Últimas salidas
+                </h2>
+                <Link to="/actividades" className="text-sm font-semibold text-[var(--color-trail)]">
+                  Rodadas
+                </Link>
+              </div>
+              {recentActivities.length === 0 ? (
+                <p className="text-sm text-[var(--color-stone)]">
+                  Aún no hay salidas. Graba en vivo o sincroniza tu GPS.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {recentActivities.map((activity) => (
+                    <li key={activity.id}>
+                      <Link
+                        to={`/actividades/${activity.id}`}
+                        className="flex items-start justify-between gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-[var(--color-forest)]">
+                            {activity.title}
+                          </p>
+                          <p className="text-xs text-[var(--color-stone)]">
+                            {formatDistance(activity.stats.distanceMeters)} ·{' '}
+                            {formatElevation(activity.stats.elevationGainMeters)} ·{' '}
+                            {formatDuration(activity.stats.movingTimeSeconds ?? activity.stats.durationSeconds)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold text-[var(--color-trail)]">Ver</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/actividades/conectar" className="inline-flex text-sm font-semibold text-[var(--color-trail)]">
+                Conectar GPS →
+              </Link>
+            </section>
+          ) : null}
+
+          {/* Recent routes */}
+          {!user.isAnonymous ? (
+            <section className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Mis rutas
+                </h2>
+                <Link to="/my-routes" className="text-sm font-semibold text-[var(--color-trail)]">
+                  Todas
+                </Link>
+              </div>
+              {recentRoutes.length === 0 ? (
+                <p className="text-sm text-[var(--color-stone)]">
+                  Todavía no has guardado rutas. Crea una y guárdala.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {recentRoutes.map((route) => (
+                    <li key={route.id}>
+                      <Link
+                        to={route.shareSlug ? `/route/${route.shareSlug}` : '/my-routes'}
+                        className="flex items-start justify-between gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-[var(--color-forest)]">{route.title}</p>
+                          <p className="text-xs text-[var(--color-stone)]">
+                            {formatDistance(route.stats.distanceMeters)} ·{' '}
+                            {formatElevation(route.stats.elevationGainMeters)}
+                            {route.isPublic ? ' · Pública' : ''}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold text-[var(--color-trail)]">Ver</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/route-planner" className="inline-flex text-sm font-semibold text-[var(--color-trail)]">
+                Crear ruta →
+              </Link>
+            </section>
+          ) : null}
 
           <div className="space-y-4 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
             <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
-              Perfil ciclista
+              Preferencias de bici
             </h2>
             <BikeSelector value={bikeType} onChange={setBikeType} />
             <RoutePreferencesPanel
@@ -320,5 +625,16 @@ export function ProfilePage() {
         </div>
       )}
     </main>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-[var(--color-mist)]/70 px-3 py-3 text-center">
+      <p className="font-display text-lg font-bold text-[var(--color-forest)]">{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+        {label}
+      </p>
+    </div>
   )
 }

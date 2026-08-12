@@ -348,16 +348,18 @@ export function ExplorePage() {
                         key={person.uid}
                         className="flex min-w-[7.5rem] shrink-0 flex-col items-center gap-2 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-[var(--color-fog)]"
                       >
-                        {person.photoURL ? (
-                          <img src={person.photoURL} alt="" className="h-11 w-11 rounded-full object-cover" />
-                        ) : (
-                          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-mist)] text-sm font-bold text-[var(--color-forest)]">
-                            {name.slice(0, 1).toUpperCase()}
-                          </span>
-                        )}
-                        <p className="w-full truncate text-center text-xs font-semibold text-[var(--color-forest)]">
-                          {name}
-                        </p>
+                        <Link to={`/ciclista/${person.uid}`} className="flex w-full flex-col items-center gap-2">
+                          {person.photoURL ? (
+                            <img src={person.photoURL} alt="" className="h-11 w-11 rounded-full object-cover" />
+                          ) : (
+                            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-mist)] text-sm font-bold text-[var(--color-forest)]">
+                              {name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <p className="w-full truncate text-center text-xs font-semibold text-[var(--color-forest)]">
+                            {name}
+                          </p>
+                        </Link>
                         <button
                           type="button"
                           className="min-h-8 text-[11px] font-semibold text-[var(--color-stone)] underline-offset-2 hover:underline"
@@ -454,7 +456,10 @@ export function ExplorePage() {
                       key={person.uid}
                       className="flex items-center justify-between gap-3 rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
                     >
-                      <div className="flex min-w-0 items-center gap-3">
+                      <Link
+                        to={`/ciclista/${person.uid}`}
+                        className="flex min-w-0 flex-1 items-center gap-3"
+                      >
                         {person.photoURL ? (
                           <img src={person.photoURL} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
                         ) : (
@@ -473,7 +478,7 @@ export function ExplorePage() {
                             <p className="mt-1 line-clamp-2 text-sm text-[var(--color-stone)]">{person.bio}</p>
                           ) : null}
                         </div>
-                      </div>
+                      </Link>
                       <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
                         {isFollowing ? (
                           <>

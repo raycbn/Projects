@@ -63,7 +63,7 @@ export class CommunityService {
       {
         displayName,
         photoURL: input.photoURL,
-        bio: input.bio ?? existing.data()?.bio ?? '',
+        ...(input.bio !== undefined ? { bio: input.bio } : {}),
         isPublic: true,
         followersCount: existing.data()?.followersCount ?? 0,
         followingCount: existing.data()?.followingCount ?? 0,

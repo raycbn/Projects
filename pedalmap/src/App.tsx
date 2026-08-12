@@ -12,6 +12,7 @@ import { AuthBridgePage } from '@/pages/AuthBridgePage'
 import { PremiumPage } from '@/pages/PremiumPage'
 import { SharedRoutePage } from '@/pages/SharedRoutePage'
 import { ProfilePage } from '@/pages/ProfilePage'
+import { PublicCyclistPage } from '@/pages/PublicCyclistPage'
 import { ExplorePage } from '@/pages/ExplorePage'
 import { PrivacyPage, CookiesPage, TermsPage } from '@/pages/LegalPages'
 import { SeoContentPage } from '@/pages/SeoContentPage'
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="blog/:slug" element={<BlogPostPage />} />
               <Route path="premium" element={<PremiumPage />} />
               <Route path="perfil" element={<ProfilePage />} />
+              <Route path="ciclista/:uid" element={<PublicCyclistPage />} />
               <Route path="login" element={<LoginPage />} />
               <Route path="auth/bridge" element={<AuthBridgePage />} />
               <Route path="register" element={<RegisterPage />} />
