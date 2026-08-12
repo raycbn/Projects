@@ -12,6 +12,10 @@ export const landingFaqs: FaqItem[] = [
     a: 'PedalMap es un planificador de rutas de bicicleta pensado para España. Creas salidas con mapa, desnivel, viento y superficie según tu tipo de bici (carretera, urbana, gravel, MTB o e-bike), y puedes exportar GPX o navegar desde el móvil. Definición completa: https://pedalmap.es/que-es-pedalmap',
   },
   {
+    q: '¿PedalMap es lo mismo que Petal Maps (Huawei)?',
+    a: 'No. PedalMap (pedalmap.es) es un planificador web de rutas de bicicleta para España. Petal Maps es la app de mapas de Huawei. No tienen relación.',
+  },
+  {
     q: '¿Cómo crear una ruta en bicicleta?',
     a: 'Abre el planificador, busca dónde empiezas y dónde quieres llegar, elige el tipo de bici y pulsa Crear ruta. PedalMap calcula un recorrido real con distancia, tiempo, desnivel y composición de superficie.',
   },

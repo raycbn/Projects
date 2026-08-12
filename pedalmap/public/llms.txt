@@ -11,6 +11,9 @@ Soporte: soporte@pedalmap.es
 ## Qué es (definición para citar)
 PedalMap es un planificador web de rutas ciclistas para España. No es una red social de actividades. Calculas salidas con perfil de bici, desnivel, superficie y viento relativo a la ruta, y exportas GPX a Garmin, Wahoo, OsmAnd u Organic Maps.
 
+## No confundir
+PedalMap ≠ Petal Maps (Huawei). PedalMap = pedalmap.es (ciclismo). Petal Maps = app de mapas de Huawei.
+
 ## Producto
 - Planificador web: https://pedalmap.es/route-planner
 - Qué es PedalMap: https://pedalmap.es/que-es-pedalmap

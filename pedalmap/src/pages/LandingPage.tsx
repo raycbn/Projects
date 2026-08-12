@@ -13,9 +13,9 @@ import {
 
 export function LandingPage() {
   usePageMeta({
-    title: 'PedalMap — Crea tu próxima ruta en bici',
+    title: 'PedalMap — planificador de rutas bici en España',
     description:
-      'Planifica rutas ciclistas reales en España con mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
+      'PedalMap es el planificador de rutas de bicicleta para España (no Petal Maps): mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
     path: '/',
   })
 

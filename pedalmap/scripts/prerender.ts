@@ -124,6 +124,9 @@ function writePage(template: string, page: PageSpec) {
   html = upsertMeta(html, 'property', 'og:description', page.description)
   html = upsertMeta(html, 'property', 'og:url', url)
   html = upsertMeta(html, 'property', 'og:image', DEFAULT_OG_IMAGE)
+  html = upsertMeta(html, 'property', 'og:image:width', '1200')
+  html = upsertMeta(html, 'property', 'og:image:height', '630')
+  html = upsertMeta(html, 'property', 'og:image:alt', page.title)
   html = upsertMeta(html, 'name', 'twitter:title', page.title)
   html = upsertMeta(html, 'name', 'twitter:description', page.description)
   html = upsertMeta(html, 'name', 'twitter:image', DEFAULT_OG_IMAGE)
@@ -143,9 +146,9 @@ function writePage(template: string, page: PageSpec) {
 const pages: PageSpec[] = [
   {
     path: '/',
-    title: 'PedalMap — Crea tu próxima ruta en bici',
+    title: 'PedalMap — planificador de rutas bici en España',
     description:
-      'Planifica rutas ciclistas reales en España con mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
+      'PedalMap es el planificador de rutas de bicicleta para España (no Petal Maps): mapa, desnivel, viento y superficie según tu bici. Free para empezar, Premium cuando lo necesites.',
     heading: 'Crea tu próxima ruta en bici',
     paragraphs: [
       'PedalMap es el planificador de rutas de bicicleta para España: mapa, desnivel, viento y superficie según carretera, gravel, MTB, urbana o e-bike.',

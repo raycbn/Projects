@@ -9,10 +9,11 @@ export function organizationJsonLd() {
     name: SITE_NAME,
     legalName: 'PedalMap',
     url: SITE_ORIGIN,
-    logo: `${SITE_ORIGIN}/favicon.svg`,
+    logo: `${SITE_ORIGIN}/logo.png`,
+    image: `${SITE_ORIGIN}/og-square.jpg`,
     email: BRAND_EMAILS.hello,
     description:
-      'PedalMap es un planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según el tipo de bici y exportación GPX.',
+      'PedalMap es un planificador de rutas de bicicleta para España (no confundir con Petal Maps de Huawei): mapa, desnivel, viento, superficie según el tipo de bici y exportación GPX.',
     foundingDate: '2026',
     sameAs: [] as string[],
     knowsAbout: [
