@@ -62,16 +62,7 @@ export function LandingPage() {
             <Link to="/route-planner">
               <Button className="!px-6 !py-3 text-base">Crear una ruta</Button>
             </Link>
-            {isPremium ? (
-              <Link to="/explorar">
-                <Button
-                  variant="ghost"
-                  className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
-                >
-                  Explorar
-                </Button>
-              </Link>
-            ) : (
+            {!isPremium ? (
               <Link to="/premium">
                 <Button
                   variant="ghost"
@@ -80,7 +71,15 @@ export function LandingPage() {
                   Ver Premium
                 </Button>
               </Link>
-            )}
+            ) : null}
+            <Link to="/explorar">
+              <Button
+                variant="ghost"
+                className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
+              >
+                Explorar
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

@@ -2,7 +2,7 @@
  * NEVER intercept Firebase Auth helper routes (/__/auth, /__/firebase):
  * a cached or SPA fallback response there breaks Google redirect login.
  */
-const CACHE = 'pedalmap-shell-v32'
+const CACHE = 'pedalmap-shell-v33'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/og-default.jpg', '/llms.txt']
 const APEX = 'https://pedalmap.es'
 

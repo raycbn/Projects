@@ -140,12 +140,13 @@ export function AppShell() {
 
       {!hideTabbar && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-5 border-t border-[var(--color-fog)] bg-white/95 px-1 safe-pb md:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-6 border-t border-[var(--color-fog)] bg-white/95 px-0.5 safe-pb md:hidden"
           aria-label="Móvil"
         >
           {[
             ['/', 'Inicio'],
             ['/route-planner', 'Crear'],
+            ['/explorar', 'Explorar'],
             ['/my-routes', 'Mis rutas'],
             ['/actividades', 'Rodadas'],
             ['/perfil', 'Perfil'],
@@ -153,9 +154,10 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
+              end={to === '/'}
               className={({ isActive }) =>
                 clsx(
-                  'flex min-h-11 items-center justify-center rounded-lg px-1 text-center text-[11px] font-semibold leading-tight',
+                  'flex min-h-11 items-center justify-center rounded-lg px-0.5 text-center text-[10px] font-semibold leading-tight sm:text-[11px]',
                   isActive
                     ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
                     : 'text-[var(--color-stone)]',

@@ -1049,7 +1049,7 @@ export function MapView({
         <button
           type="button"
           onClick={toggleTerrain}
-          className="absolute bottom-3 right-3 z-10 rounded-xl bg-white/95 px-3 py-1.5 text-xs font-semibold text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]"
+          className="absolute bottom-3 right-3 z-10 min-h-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]"
           aria-pressed={terrain3d}
           title={terrain3d ? 'Cambiar a mapa plano' : 'Cambiar a mapa 3D con relieve'}
         >
