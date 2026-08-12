@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applySelectedOption, rankRouteOptions } from './routeOptions'
+import { applySelectedOption, ensureRouteOptions, rankRouteOptions } from './routeOptions'
 import type { RouteStats } from '@/domain/types'
 
 function stats(distanceMeters: number, score: number): RouteStats {
@@ -67,5 +67,22 @@ describe('rankRouteOptions', () => {
     expect(next.stats.distanceMeters).toBe(10000)
     expect(next.routeOptions).toHaveLength(2)
     expect(next.title).toContain('Opción 2')
+  })
+})
+
+describe('ensureRouteOptions', () => {
+  it('rebuilds routeOptions from legacy alternatives', () => {
+    const bundle = rankRouteOptions([candidate(10000, 50), candidate(9000, 80)])
+    const draft = {
+      title: 'A → B',
+      geometry: bundle.active.geometry,
+      elevationProfile: bundle.active.elevationProfile,
+      stats: bundle.active.stats,
+      instructions: bundle.active.instructions,
+      alternatives: bundle.routeOptions.filter((o) => o.id !== bundle.selectedOptionId),
+    }
+    const next = ensureRouteOptions(draft)
+    expect(next.routeOptions?.length).toBeGreaterThan(1)
+    expect(next.selectedOptionId).toBeTruthy()
   })
 })

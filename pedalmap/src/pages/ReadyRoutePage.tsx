@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { usePlanner } from '@/app/PlannerContext'
 import { Button } from '@/components/ui/Button'
@@ -10,7 +10,13 @@ import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
 import { RideChooserSheet } from '@/components/route/RideChooserSheet'
 import { PremiumCard } from '@/components/premium/PremiumCard'
 import { usePageMeta } from '@/hooks/usePageMeta'
-import { peekReadyRoute, stashReadyRoute, type ReadyRoutePacket } from '@/lib/readyRouteHandoff'
+import {
+  peekReadyRoute,
+  readyRouteEpoch,
+  richerPacket,
+  stashReadyRoute,
+  type ReadyRoutePacket,
+} from '@/lib/readyRouteHandoff'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { shareRouteCard } from '@/lib/shareCard'
 import { routeCameraKey } from '@/lib/mapCamera'
@@ -28,7 +34,7 @@ import { buildRouteWindOverlay } from '@/lib/routeWindOverlay'
 import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
 import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
-import { applySelectedOption } from '@/lib/routeOptions'
+import { applySelectedOption, ensureRouteOptions } from '@/lib/routeOptions'
 import type { RouteDraft } from '@/domain/types'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 
@@ -54,17 +60,27 @@ function bikeLabel(bike: RouteDraft['bikeType']): string {
 }
 
 function normalizeDraftGeometry(draft: RouteDraft): RouteDraft {
+  const withOpts = ensureRouteOptions(draft)
   return {
-    ...draft,
-    geometry: geometryFromStored(draft.geometry),
+    ...withOpts,
+    geometry: geometryFromStored(withOpts.geometry),
+    routeOptions: withOpts.routeOptions?.map((opt) => ({
+      ...opt,
+      geometry: geometryFromStored(opt.geometry),
+    })),
+    alternatives: withOpts.alternatives?.map((opt) => ({
+      ...opt,
+      geometry: geometryFromStored(opt.geometry),
+    })),
   }
 }
 
 export function ReadyRoutePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [params] = useSearchParams()
   const { user, profile, firebaseReady } = useAuth()
-  const { showPaywall, paywallReason, clearPaywall } = usePlanner()
+  const { draft: plannerDraft, showPaywall, paywallReason, clearPaywall } = usePlanner()
 
   const [packet, setPacket] = useState<ReadyRoutePacket | null>(() => peekReadyRoute())
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -84,9 +100,20 @@ export function ReadyRoutePage() {
   const [showWindArrows, setShowWindArrows] = useState(true)
   const [windLoading, setWindLoading] = useState(false)
   const exportRef = useRef<HTMLDetailsElement | null>(null)
+  const actionMsgRef = useRef<HTMLDivElement | null>(null)
+  const handoffEpochRef = useRef(readyRouteEpoch())
 
   const routeIdParam = params.get('routeId')
   const draft = packet?.draft ? normalizeDraftGeometry(packet.draft) : null
+
+  function flashMessage(next: string | null) {
+    setMessage(next)
+    if (next) {
+      window.requestAnimationFrame(() => {
+        actionMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }
+  }
 
   usePageMeta({
     title: draft ? `${draft.title || 'Ruta lista'} | PedalMap` : 'Ruta lista | PedalMap',
@@ -117,7 +144,7 @@ export function ReadyRoutePage() {
           return
         }
         const next: ReadyRoutePacket = {
-          draft: route,
+          draft: ensureRouteOptions(route),
           savedRouteId: route.id,
           shareSlug: route.shareSlug ?? null,
           source: 'saved',
@@ -138,15 +165,37 @@ export function ReadyRoutePage() {
     }
   }, [routeIdParam, firebaseReady])
 
-  // Sin routeId: usar handoff de session (tras Crear ruta) si hace falta.
+  // Tras Crear ruta / Ver ruta lista: re-leer handoff + draft del planner (con opciones).
   useEffect(() => {
     if (routeIdParam) return
-    if (packet?.draft) return
     const peeked = peekReadyRoute()
-    if (peeked?.draft) {
-      setPacket(peeked)
+    const fromPlanner: ReadyRoutePacket | null = plannerDraft?.geometry?.coordinates?.length
+      ? {
+          draft: ensureRouteOptions(plannerDraft),
+          savedRouteId: packet?.savedRouteId ?? null,
+          shareSlug: packet?.shareSlug ?? null,
+          source: packet?.source ?? 'calculate',
+          fitNonce: packet?.fitNonce,
+        }
+      : null
+    const best = richerPacket(richerPacket(packet, peeked), fromPlanner)
+    if (!best?.draft) return
+    const epoch = readyRouteEpoch()
+    const curOpts = packet?.draft.routeOptions?.length ?? 0
+    const bestOpts = best.draft.routeOptions?.length ?? 0
+    const curAlts = packet?.draft.alternatives?.length ?? 0
+    const bestAlts = best.draft.alternatives?.length ?? 0
+    const newerHandoff = epoch !== handoffEpochRef.current
+    if (!packet?.draft || bestOpts > curOpts || bestAlts > curAlts || newerHandoff) {
+      handoffEpochRef.current = epoch
+      setPacket({
+        ...best,
+        draft: ensureRouteOptions(best.draft),
+      })
     }
-  }, [routeIdParam, packet?.draft])
+    // packet intentionally omitted — we merge toward richer handoff/planner only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeIdParam, location.key, plannerDraft])
 
   const fitKey = useMemo(
     () => routeCameraKey(draft?.geometry, packet?.fitNonce ?? packet?.source ?? 'ready'),
@@ -213,7 +262,7 @@ export function ReadyRoutePage() {
   async function handleSave() {
     if (!draft) return
     if (!user || user.isAnonymous) {
-      setMessage('Inicia sesión para guardar esta ruta.')
+      flashMessage('Inicia sesión para guardar esta ruta.')
       return
     }
     const entitlement = canSaveRoute(profile)
@@ -222,11 +271,11 @@ export function ReadyRoutePage() {
       return
     }
     if (!firebaseReady || !routeRepository.isConfigured()) {
-      setMessage('Firebase no está configurado.')
+      flashMessage('Firebase no está configurado.')
       return
     }
     setSaveBusy(true)
-    setMessage(null)
+    flashMessage(null)
     try {
       const draftToSave: RouteDraft =
         selectedWindWindow && draft
@@ -246,7 +295,7 @@ export function ReadyRoutePage() {
           : draft
       if (packet?.savedRouteId) {
         await routeRepository.update(packet.savedRouteId, user.uid, draftToSave)
-        setMessage('Ruta actualizada en Mis rutas.')
+        flashMessage('Ruta actualizada en Mis rutas.')
         setPostSaveHint('explore')
       } else {
         const saved = await routeRepository.save(user.uid, draftToSave, { isPublic: false })
@@ -257,8 +306,9 @@ export function ReadyRoutePage() {
           source: 'saved' as const,
         }
         stashReadyRoute(next)
+        handoffEpochRef.current = readyRouteEpoch()
         setPacket(next)
-        setMessage(
+        flashMessage(
           draftToSave.bestWindWindow
             ? `Guardada · mejor ventana ${draftToSave.bestWindWindow.caption}`
             : 'Ruta guardada en Mis rutas.',
@@ -273,7 +323,7 @@ export function ReadyRoutePage() {
         showPaywall('save_limit')
         return
       }
-      setMessage('No se pudo guardar la ruta.')
+      flashMessage('No se pudo guardar la ruta.')
     } finally {
       setSaveBusy(false)
     }
@@ -282,7 +332,7 @@ export function ReadyRoutePage() {
   async function publishPublic(shareAfter = false): Promise<string | null> {
     if (!draft) return null
     if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
-      setMessage('Inicia sesión con una cuenta real para publicar.')
+      flashMessage('Inicia sesión con una cuenta real para publicar.')
       return null
     }
     const published = await routeRepository.publishForShare(user.uid, draft, {
@@ -295,11 +345,12 @@ export function ReadyRoutePage() {
       source: packet?.source ?? ('calculate' as const),
     }
     stashReadyRoute(next)
+    handoffEpochRef.current = readyRouteEpoch()
     setPacket(next)
     const url = `${window.location.origin}/route/${published.shareSlug}`
     if (shareAfter) {
       const result = await shareRouteCard(draft, url)
-      setMessage(
+      flashMessage(
         result === 'whatsapp' || result === 'shared'
           ? `WhatsApp listo · ${url}`
           : result === 'copied'
@@ -307,7 +358,7 @@ export function ReadyRoutePage() {
             : `Enlace: ${url}`,
       )
     } else {
-      setMessage(`Publicada en Explorar · ${url}`)
+      flashMessage(`Publicada en Explorar · ${url}`)
       setPostSaveHint(null)
     }
     track('route_shared', { via: 'ready_route', public: true, share_after: shareAfter })
@@ -316,7 +367,7 @@ export function ReadyRoutePage() {
 
   async function handleShare() {
     setShareBusy(true)
-    setMessage('Publicando ruta…')
+    flashMessage('Publicando ruta…')
     try {
       await publishPublic(true)
     } catch (error) {
@@ -324,10 +375,10 @@ export function ReadyRoutePage() {
       const msg = error instanceof Error ? error.message : ''
       if (msg.includes('save_limit')) {
         showPaywall('save_limit')
-        setMessage('Has alcanzado el límite de rutas guardadas en Free.')
+        flashMessage('Has alcanzado el límite de rutas guardadas en Free.')
         return
       }
-      setMessage(
+      flashMessage(
         msg
           ? `No se pudo publicar (${msg.replace(/^(save_failed:|worker_publish:)/, '')}).`
           : 'No se pudo compartir la ruta.',
@@ -343,7 +394,7 @@ export function ReadyRoutePage() {
       await publishPublic(false)
     } catch (error) {
       console.error('[ready-route] publish', error)
-      setMessage('No se pudo publicar en Explorar.')
+      flashMessage('No se pudo publicar en Explorar.')
     } finally {
       setPublishBusy(false)
     }
@@ -351,11 +402,11 @@ export function ReadyRoutePage() {
 
   async function handleEnableWindWatch() {
     if (!user || user.isAnonymous || !packet?.savedRouteId) {
-      setMessage('Guarda la ruta primero para activar el aviso de viento.')
+      flashMessage('Guarda la ruta primero para activar el aviso de viento.')
       return
     }
     setWindWatchBusy(true)
-    setMessage(null)
+    flashMessage(null)
     try {
       if (!profile?.notifications?.windAlertsEnabled) {
         await authService.updateNotifications(user.uid, {
@@ -365,11 +416,11 @@ export function ReadyRoutePage() {
       }
       await routeRepository.setWindAlertEnabled(packet.savedRouteId, user.uid, true)
       setPostSaveHint(null)
-      setMessage('Vigilancia de viento activa · te avisamos si hay buena ventana.')
+      flashMessage('Vigilancia de viento activa · te avisamos si hay buena ventana.')
       track('wind_alert_opt_in', { via: 'ready_route_save', email: true })
     } catch (error) {
       console.error('[ready-route] wind watch', error)
-      setMessage('No se pudo activar el aviso. Prueba en Perfil → avisos de viento.')
+      flashMessage('No se pudo activar el aviso. Prueba en Perfil → avisos de viento.')
     } finally {
       setWindWatchBusy(false)
     }
@@ -493,6 +544,24 @@ export function ReadyRoutePage() {
               {saveBusy ? 'Guardando…' : packet?.savedRouteId ? 'Actualizar' : 'Guardar'}
             </Button>
           </div>
+          <div ref={actionMsgRef}>
+            {message ? (
+              <div
+                className="rounded-2xl bg-[var(--color-mist)] px-3 py-3 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)]"
+                role="status"
+              >
+                <p>{message}</p>
+                {message.includes('Inicia sesión') ? (
+                  <Link
+                    className="mt-2 inline-block font-semibold text-[var(--color-trail)] underline"
+                    to="/login"
+                  >
+                    Ir a login
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           {packet?.savedRouteId && !packet.shareSlug ? (
             <Button
               variant="ghost"
@@ -550,6 +619,9 @@ export function ReadyRoutePage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
               Opciones ({draft.routeOptions!.length})
             </p>
+            <p className="text-xs text-[var(--color-stone)]">
+              Elige la variante con mejor superficie o menos desnivel antes de salir.
+            </p>
             {draft.routeOptions!.map((opt) => {
               const active = (draft.selectedOptionId ?? draft.routeOptions![0]?.id) === opt.id
               const suit = opt.stats.surfaceStats?.suitability?.score
@@ -563,10 +635,12 @@ export function ReadyRoutePage() {
                       : 'w-full rounded-xl bg-[var(--color-mist)] px-3 py-2 text-left text-xs font-semibold ring-1 ring-[var(--color-fog)]'
                   }
                   onClick={() => {
-                    if (!packet?.draft?.routeOptions) return
-                    const nextDraft = applySelectedOption(packet.draft, opt.id)
+                    if (!packet?.draft) return
+                    const base = ensureRouteOptions(packet.draft)
+                    const nextDraft = applySelectedOption(base, opt.id)
                     const next = { ...packet, draft: nextDraft }
                     stashReadyRoute(next)
+                    handoffEpochRef.current = readyRouteEpoch()
                     setPacket(next)
                   }}
                 >
@@ -663,17 +737,6 @@ export function ReadyRoutePage() {
             Mis rutas
           </Link>
         </div>
-
-        {message && (
-          <p className="text-sm text-[var(--color-trail)]">
-            {message}{' '}
-            {message.includes('Inicia sesión') && (
-              <Link className="underline" to="/login">
-                Ir a login
-              </Link>
-            )}
-          </p>
-        )}
       </div>
 
       <RideChooserSheet
@@ -683,7 +746,7 @@ export function ReadyRoutePage() {
           stashForRide()
           setRideOpen(false)
           if (!draft.instructions?.length) {
-            setMessage('Navegación abierta. Esta ruta no tiene indicaciones paso a paso guardadas.')
+            flashMessage('Navegación abierta. Esta ruta no tiene indicaciones paso a paso guardadas.')
           }
           navigate('/navegacion')
         }}

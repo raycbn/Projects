@@ -166,7 +166,11 @@ export function RoutePlanner() {
   function goToReady(result = activeDraft) {
     if (!result) return
     if (status === 'editing') return
-    stashReadyRoute({ draft: result, source: 'calculate' })
+    // Prefer planner draft if it still holds more ranked options than the arg.
+    const fromContext = draft && (draft.routeOptions?.length ?? 0) > (result.routeOptions?.length ?? 0)
+      ? draft
+      : result
+    stashReadyRoute({ draft: fromContext, source: 'calculate' })
     navigate('/ruta')
   }
 
@@ -452,14 +456,15 @@ export function RoutePlanner() {
                   </p>
                 )}
 
-                {(draft?.routeOptions?.length ?? 0) > 1 && (
+                {(activeDraft?.routeOptions?.length ?? 0) > 1 && (
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
                       Mejores opciones para {bikeModality.label}
                     </p>
-                    {draft!.routeOptions!.map((opt) => {
+                    {activeDraft!.routeOptions!.map((opt) => {
                       const active =
-                        (draft!.selectedOptionId ?? draft!.routeOptions![0]?.id) === opt.id
+                        (activeDraft!.selectedOptionId ?? activeDraft!.routeOptions![0]?.id) ===
+                        opt.id
                       const score = opt.stats.surfaceStats?.suitability?.score
                       return (
                         <button
@@ -727,14 +732,14 @@ export function RoutePlanner() {
               </p>
             )}
 
-            {(draft?.routeOptions?.length ?? 0) > 1 && (
+            {(activeDraft?.routeOptions?.length ?? 0) > 1 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-                  Opciones ({draft!.routeOptions!.length})
+                  Opciones ({activeDraft!.routeOptions!.length})
                 </p>
-                {draft!.routeOptions!.map((opt) => {
+                {activeDraft!.routeOptions!.map((opt) => {
                   const active =
-                    (draft!.selectedOptionId ?? draft!.routeOptions![0]?.id) === opt.id
+                    (activeDraft!.selectedOptionId ?? activeDraft!.routeOptions![0]?.id) === opt.id
                   const score = opt.stats.surfaceStats?.suitability?.score
                   return (
                     <button
@@ -758,9 +763,9 @@ export function RoutePlanner() {
               </div>
             )}
 
-            {!draft?.routeOptions?.length &&
-              draft?.alternatives &&
-              draft.alternatives.length > 0 && (
+            {!activeDraft?.routeOptions?.length &&
+              activeDraft?.alternatives &&
+              activeDraft.alternatives.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -769,7 +774,7 @@ export function RoutePlanner() {
                   >
                     Principal
                   </button>
-                  {draft.alternatives.map((alt, index) => (
+                  {activeDraft.alternatives.map((alt, index) => (
                     <button
                       key={alt.id}
                       type="button"

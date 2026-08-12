@@ -89,3 +89,47 @@ export function applySelectedOption<
     title: `${baseTitle} · ${selected.label}`,
   }
 }
+
+/**
+ * Rebuild `routeOptions` from legacy `alternatives` when the ranked list is missing
+ * (older handoffs / lean cloud drafts).
+ */
+export function ensureRouteOptions<
+  T extends {
+    geometry: RouteGeometry
+    elevationProfile: ElevationPoint[]
+    stats: RouteStats
+    instructions?: string[]
+    surfaceEdges?: SurfaceEdges
+    routeOptions?: RouteAlternative[]
+    selectedOptionId?: string
+    alternatives?: RouteAlternative[]
+  },
+>(
+  draft: T,
+): T & { routeOptions?: RouteAlternative[]; selectedOptionId?: string } {
+  if ((draft.routeOptions?.length ?? 0) > 1) return draft
+  const legacy = draft.alternatives
+  if (!legacy?.length) return draft
+  const ranked = rankRouteOptions([
+    {
+      geometry: draft.geometry,
+      elevationProfile: draft.elevationProfile,
+      stats: draft.stats,
+      instructions: draft.instructions,
+      surfaceEdges: draft.surfaceEdges,
+    },
+    ...legacy.map((alt) => ({
+      geometry: alt.geometry,
+      elevationProfile: alt.elevationProfile,
+      stats: alt.stats,
+      instructions: alt.instructions,
+      surfaceEdges: alt.surfaceEdges,
+    })),
+  ])
+  return {
+    ...draft,
+    routeOptions: ranked.routeOptions,
+    selectedOptionId: draft.selectedOptionId ?? ranked.selectedOptionId,
+  }
+}
