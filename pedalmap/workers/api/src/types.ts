@@ -6,6 +6,10 @@ export interface Env {
   FIREBASE_PROJECT_ID: string
   STRIPE_PRICE_MONTHLY: string
   STRIPE_PRICE_YEARLY: string
+  /** Pack Grupeta 4 seats — 14,99 €/mes */
+  STRIPE_PRICE_GRUPETA_MONTHLY?: string
+  /** Pack Grupeta 4 seats — 119,99 €/año */
+  STRIPE_PRICE_GRUPETA_YEARLY?: string
   APP_URL: string
   ALLOWED_ORIGINS?: string
   /** Optional: Stadia Maps API key → commercial Valhalla hosting. */

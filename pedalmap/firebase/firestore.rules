@@ -160,6 +160,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Pack Grupeta — Admin/Worker only. Clients read via /grupeta/pack API.
+    match /grupetaPacks/{ownerUid} {
+      allow read: if isOwner(ownerUid);
+      allow write: if false;
+    }
+
+    match /grupetaSeatIndex/{emailKey} {
+      allow read, write: if false;
+    }
+
     match /follows/{userId}/following/{followeeId} {
       allow read: if isSignedIn();
       allow write: if isOwner(userId);

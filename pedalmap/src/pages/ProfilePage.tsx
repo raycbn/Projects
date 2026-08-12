@@ -466,23 +466,26 @@ export function ProfilePage() {
             <section className="space-y-2 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
               <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Pack Grupeta</h2>
               <p className="text-sm text-[var(--color-stone)]">
-                Invita a 2 amigos: en el checkout anual pueden usar el código{' '}
-                <strong className="text-[var(--color-forest)]">GRUPETA</strong> (promo Stripe) o este
-                enlace.
+                4 plazas Premium (tú + 3). Tras contratar el pack en Premium, asignas los emails de
+                tus compañeros.
               </p>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const url = `${window.location.origin}/premium?grupeta=1&ref=${user.uid}`
-                  const text = `Únete a mi grupeta en PedalMap (planificador de rutas bici). Prueba Premium: ${url} — código GRUPETA en el checkout anual.`
-                  void navigator.clipboard?.writeText(text)
-                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
-                  setMessage('Invitación Grupeta lista para WhatsApp.')
-                }}
-              >
-                Invitar por WhatsApp
-              </Button>
+              <Link to="/premium#grupeta">
+                <Button type="button" variant="secondary">
+                  Gestionar Pack Grupeta
+                </Button>
+              </Link>
+            </section>
+          ) : !user.isAnonymous ? (
+            <section className="space-y-2 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Pack Grupeta</h2>
+              <p className="text-sm text-[var(--color-stone)]">
+                4 Premium por 14,99 €/mes o 119,99 €/año. Ideal para salir juntos.
+              </p>
+              <Link to="/premium#grupeta">
+                <Button type="button" variant="secondary">
+                  Ver Pack Grupeta
+                </Button>
+              </Link>
             </section>
           ) : null}
 

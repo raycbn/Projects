@@ -9,6 +9,7 @@ import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 import { handleMintCustomToken } from './customToken'
 import { handleEntitlements, handleClaimGpx, handleSyncPlan } from './entitlements'
+import { handleGetGrupetaPack, handleSetGrupetaSeats } from './grupetaPack'
 import {
   handleStravaDisconnect,
   handleStravaImportActivity,
@@ -281,6 +282,32 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleClaimGpx(env, identity))
+      }
+
+      if (path === '/grupeta/pack' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 60,
+          windowSec: 60,
+          prefix: 'grupeta-pack',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleGetGrupetaPack(env, identity))
+      }
+
+      if (path === '/grupeta/seats' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 10,
+          windowSec: 3600,
+          prefix: 'grupeta-seats',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleSetGrupetaSeats(request, env, identity))
       }
 
       if (path === '/routes/publish' && request.method === 'POST') {

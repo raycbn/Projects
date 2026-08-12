@@ -68,7 +68,7 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             'Objetivo ilimitado',
             'Más de 2 filtros a la vez',
             'Avisos de viento en todas tus rutas',
-            'Pack Grupeta: invita amigos (código GRUPETA)',
+            'Pack Grupeta: 4 Premium (14,99 €/mes · 119,99 €/año)',
           ].map((item) => (
             <li key={item} className="flex gap-2">
               <span className="text-[var(--color-signal)]" aria-hidden>

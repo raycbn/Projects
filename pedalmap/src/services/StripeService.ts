@@ -2,6 +2,7 @@ import { getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { track } from '@/lib/analytics'
 
 export type CheckoutInterval = 'month' | 'year'
+export type CheckoutProduct = 'solo' | 'grupeta'
 
 function apiBase(): string {
   const url =
@@ -34,15 +35,18 @@ export class StripeService {
     )
   }
 
-  async startCheckout(interval: CheckoutInterval = 'month'): Promise<{ url: string }> {
+  async startCheckout(
+    interval: CheckoutInterval = 'month',
+    product: CheckoutProduct = 'solo',
+  ): Promise<{ url: string }> {
     if (!this.isConfigured()) {
       throw new Error('Stripe aún no está activado (Worker API + VITE_STRIPE_ENABLED)')
     }
-    track('premium_clicked', { source: 'stripe_checkout', interval })
+    track('premium_clicked', { source: 'stripe_checkout', interval, product })
     const response = await fetch(`${apiBase()}/stripe/checkout`, {
       method: 'POST',
       headers: await authHeader(),
-      body: JSON.stringify({ interval }),
+      body: JSON.stringify({ interval, product }),
     })
     const data = (await response.json()) as { url?: string; error?: string }
     if (!response.ok || !data.url) {

@@ -13,9 +13,15 @@
 - Ilimitado (rutas, filtros, GPX, circulares, avisos)
 - Anual: 7 días de prueba
 
+### Pack Grupeta — 14,99 €/mes · 119,99 €/año (4 plazas)
+- Tú + 3 emails Premium; asignación **después** del pago
+- Anual: 7 días de prueba · mensual sin trial
+- Ver `docs/GRUPETA_PACK.md`
+
 Price ids (**Live**):
 - Mensual `price_1U3Jz2D9NwIvrlQEilHY4AXf` (prod `prod_V3Qq3Wjtf6JDeL`)
 - Anual `price_1U3K1LD9NwIvrlQEIIFS5oTG` (prod `prod_V3QtIN4qXG6R2R`)
+- Grupeta: crear con `scripts/create-grupeta-stripe-prices.mjs` → `STRIPE_PRICE_GRUPETA_*`
 
 Legacy test prices (retirados del Worker):
 - Mensual `price_1U2i2oDRDu30ohSLy0PIHXtJ`

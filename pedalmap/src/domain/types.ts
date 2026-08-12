@@ -233,6 +233,13 @@ export const FREE_TRIALS = {
 /** Stripe Checkout trial on yearly plan only (Worker). */
 export const ANNUAL_TRIAL_DAYS = 7
 
+/** Pack Grupeta — fixed seat bundle (Worker + Stripe prices). */
+export const GRUPETA_SEAT_LIMIT = 4
+export const GRUPETA_MEMBER_SEATS = GRUPETA_SEAT_LIMIT - 1
+/** Display euros (Stripe unit_amount / 100). */
+export const GRUPETA_PRICE_MONTH = '14,99'
+export const GRUPETA_PRICE_YEAR = '119,99'
+
 export const PREMIUM_LIMITS: FreemiumLimits = {
   maxRoutesSaved: Number.POSITIVE_INFINITY,
   maxRoutesCreatedPerMonth: Number.POSITIVE_INFINITY,

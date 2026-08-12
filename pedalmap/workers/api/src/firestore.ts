@@ -84,6 +84,7 @@ export async function upsertSubscriptionAndPlan(
     status: string
     stripeCustomerId?: string
     stripeSubscriptionId?: string
+    product?: 'solo' | 'grupeta'
   },
 ): Promise<void> {
   const sa = parseServiceAccount(env)
@@ -103,6 +104,7 @@ export async function upsertSubscriptionAndPlan(
       userId: { stringValue: input.uid },
       status: { stringValue: input.status },
       plan: { stringValue: input.plan },
+      ...(input.product ? { product: { stringValue: input.product } } : {}),
       ...(input.stripeCustomerId
         ? { stripeCustomerId: { stringValue: input.stripeCustomerId } }
         : {}),
@@ -472,6 +474,283 @@ export async function writeUserPlan(
   if (!res.ok) {
     const t = await res.text()
     throw new Error(`users.plan write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
+// --- Pack Grupeta (Admin-only docs) -------------------------------------------------
+
+export type GrupetaSeat = {
+  email: string
+  role: 'owner' | 'member'
+  uid?: string
+  assignedAt: string
+}
+
+export type GrupetaPack = {
+  ownerUid: string
+  ownerEmail: string | null
+  status: string
+  interval: 'month' | 'year'
+  seatLimit: number
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+  seats: GrupetaSeat[]
+  createdAt: string
+  updatedAt: string
+  product: 'grupeta'
+}
+
+export type GrupetaSeatIndex = {
+  packId: string
+  email: string
+  role: 'owner' | 'member'
+  status: string
+  updatedAt: string
+}
+
+function seatToFields(seat: GrupetaSeat): Record<string, unknown> {
+  return {
+    mapValue: {
+      fields: {
+        email: { stringValue: seat.email },
+        role: { stringValue: seat.role },
+        assignedAt: { stringValue: seat.assignedAt },
+        ...(seat.uid ? { uid: { stringValue: seat.uid } } : {}),
+      },
+    },
+  }
+}
+
+function parseSeat(raw: unknown): GrupetaSeat | null {
+  const fields = (raw as { mapValue?: { fields?: Record<string, unknown> } })?.mapValue?.fields
+  if (!fields) return null
+  const email = (fields.email as { stringValue?: string } | undefined)?.stringValue
+  const role = (fields.role as { stringValue?: string } | undefined)?.stringValue
+  if (!email || (role !== 'owner' && role !== 'member')) return null
+  return {
+    email,
+    role,
+    assignedAt: (fields.assignedAt as { stringValue?: string } | undefined)?.stringValue || '',
+    uid: (fields.uid as { stringValue?: string } | undefined)?.stringValue,
+  }
+}
+
+export async function readGrupetaPack(env: Env, ownerUid: string): Promise<GrupetaPack | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, token, `grupetaPacks/${ownerUid}`)
+  if (!doc) return null
+  const fields = doc.fields as Record<string, unknown> | undefined
+  if (!fields) return null
+  const seatsRaw =
+    (fields.seats as { arrayValue?: { values?: unknown[] } } | undefined)?.arrayValue?.values || []
+  const seats = seatsRaw.map(parseSeat).filter((s): s is GrupetaSeat => Boolean(s))
+  return {
+    ownerUid,
+    ownerEmail: fieldString(doc, 'ownerEmail'),
+    status: fieldString(doc, 'status') || 'inactive',
+    interval: fieldString(doc, 'interval') === 'month' ? 'month' : 'year',
+    seatLimit: Number(
+      (fields.seatLimit as { integerValue?: string; doubleValue?: number } | undefined)
+        ?.integerValue ??
+        (fields.seatLimit as { doubleValue?: number } | undefined)?.doubleValue ??
+        4,
+    ),
+    stripeCustomerId: fieldString(doc, 'stripeCustomerId') || undefined,
+    stripeSubscriptionId: fieldString(doc, 'stripeSubscriptionId') || undefined,
+    seats,
+    createdAt: fieldString(doc, 'createdAt') || '',
+    updatedAt: fieldString(doc, 'updatedAt') || '',
+    product: 'grupeta',
+  }
+}
+
+export async function writeGrupetaPack(env: Env, pack: GrupetaPack): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT missing — grupeta pack not persisted')
+    return
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/grupetaPacks/${pack.ownerUid}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        ownerUid: { stringValue: pack.ownerUid },
+        ...(pack.ownerEmail ? { ownerEmail: { stringValue: pack.ownerEmail } } : {}),
+        status: { stringValue: pack.status },
+        interval: { stringValue: pack.interval },
+        seatLimit: { integerValue: String(pack.seatLimit) },
+        product: { stringValue: 'grupeta' },
+        ...(pack.stripeCustomerId
+          ? { stripeCustomerId: { stringValue: pack.stripeCustomerId } }
+          : {}),
+        ...(pack.stripeSubscriptionId
+          ? { stripeSubscriptionId: { stringValue: pack.stripeSubscriptionId } }
+          : {}),
+        seats: { arrayValue: { values: pack.seats.map(seatToFields) } },
+        createdAt: { stringValue: pack.createdAt },
+        updatedAt: { stringValue: pack.updatedAt },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`grupetaPacks write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
+export async function readSeatIndex(env: Env, emailKey: string): Promise<GrupetaSeatIndex | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, token, `grupetaSeatIndex/${emailKey}`)
+  if (!doc) return null
+  const packId = fieldString(doc, 'packId')
+  const email = fieldString(doc, 'email')
+  const role = fieldString(doc, 'role')
+  const status = fieldString(doc, 'status')
+  if (!packId || !email || (role !== 'owner' && role !== 'member') || !status) return null
+  return {
+    packId,
+    email,
+    role,
+    status,
+    updatedAt: fieldString(doc, 'updatedAt') || '',
+  }
+}
+
+export async function writeSeatIndex(
+  env: Env,
+  emailKey: string,
+  index: GrupetaSeatIndex,
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/grupetaSeatIndex/${emailKey}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        packId: { stringValue: index.packId },
+        email: { stringValue: index.email },
+        role: { stringValue: index.role },
+        status: { stringValue: index.status },
+        updatedAt: { stringValue: index.updatedAt },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`grupetaSeatIndex write failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
+
+/** Find users/{uid} by email (exact match on stored profile email). */
+export async function findUserUidByEmail(env: Env, email: string): Promise<string | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const needle = email.trim().toLowerCase()
+  // Try exact + as-is (profiles may store original casing).
+  for (const candidate of Array.from(new Set([needle, email.trim()]))) {
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'users' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'email' },
+              op: 'EQUAL',
+              value: { stringValue: candidate },
+            },
+          },
+          limit: 1,
+        },
+      }),
+    })
+    if (!res.ok) continue
+    const rows = (await res.json()) as Array<{ document?: { name?: string } }>
+    const name = rows?.[0]?.document?.name
+    if (name) {
+      const uid = name.split('/').pop()
+      if (uid) return uid
+    }
+  }
+  return null
+}
+
+export async function readSubscriptionRecord(
+  env: Env,
+  uid: string,
+): Promise<{ status?: string; plan?: string; stripeSubscriptionId?: string } | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, token, `subscriptions/${uid}`)
+  if (!doc) return null
+  return {
+    status: fieldString(doc, 'status') || undefined,
+    plan: fieldString(doc, 'plan') || undefined,
+    stripeSubscriptionId: fieldString(doc, 'stripeSubscriptionId') || undefined,
+  }
+}
+
+/**
+ * Downgrade to free unless allowlist-equivalent protection:
+ * - has another active/trialing subscription (not the ignored grupeta sub id)
+ */
+export async function revokePremiumUnlessProtected(
+  env: Env,
+  uid: string,
+  opts?: { ignoreSubscriptionId?: string; keepIfSubscriptionId?: string },
+): Promise<void> {
+  const sub = await readSubscriptionRecord(env, uid)
+  const status = sub?.status || ''
+  const subId = sub?.stripeSubscriptionId
+  if (opts?.keepIfSubscriptionId && subId === opts.keepIfSubscriptionId) {
+    return
+  }
+  if (
+    (status === 'active' || status === 'trialing') &&
+    subId &&
+    subId !== opts?.ignoreSubscriptionId
+  ) {
+    // Own solo (or other) subscription still paying — keep premium.
+    return
+  }
+  // If their only sub is the cancelled grupeta one, clear it to free.
+  await writeUserPlan(env, uid, 'free')
+  if (subId && subId === opts?.ignoreSubscriptionId) {
+    await upsertSubscriptionAndPlan(env, {
+      uid,
+      plan: 'free',
+      status: 'canceled',
+      stripeSubscriptionId: subId,
+    })
   }
 }
 

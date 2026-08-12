@@ -9,11 +9,12 @@ import {
   readUserEntitlements,
   writeUserPlan,
 } from './firestore'
+import { grantPremiumFromGrupetaSeat } from './grupetaPack'
 
 const FREE_MAX_SAVED = 5
 
 /**
- * Persist allowlist Premium to Firestore (Admin) and return effective entitlements.
+ * Persist allowlist / Grupeta seat Premium to Firestore (Admin) and return effective entitlements.
  * Spark-friendly: no Cloud Functions / custom claims required.
  */
 export async function handleSyncPlan(
@@ -24,47 +25,19 @@ export async function handleSyncPlan(
   const allowlisted = isAllowlistedPremiumEmail(env, email)
   const current = await readUserEntitlements(env, identity.uid)
   let plan: 'free' | 'premium' = current?.plan ?? 'free'
+  let grupetaSeat = false
 
   if (allowlisted && plan !== 'premium') {
     await writeUserPlan(env, identity.uid, 'premium')
     plan = 'premium'
   }
 
-  const week = isoWeekKey()
-  const used =
-    current?.freeGpxWeekKey === week ? (current.freeGpxUsedThisWeek ?? 0) : 0
-  const freeGpxRemaining =
-    plan === 'premium' ? null : Math.max(0, FREE_GPX_PER_WEEK - used)
-
-  return json({
-    ok: true,
-    uid: identity.uid,
-    email,
-    plan,
-    allowlisted,
-    gpxExport: plan === 'premium' || (freeGpxRemaining ?? 0) > 0,
-    freeGpxRemaining,
-    maxRoutesSaved: plan === 'premium' ? null : FREE_MAX_SAVED,
-    routesSaved: current?.routesSaved ?? 0,
-  })
-}
-
-export async function handleEntitlements(
-  env: Env,
-  identity: FirebaseIdentity,
-): Promise<Response> {
-  const email = identity.email ?? null
-  const allowlisted = isAllowlistedPremiumEmail(env, email)
-  const current = await readUserEntitlements(env, identity.uid)
-  const plan: 'free' | 'premium' =
-    allowlisted || current?.plan === 'premium' ? 'premium' : 'free'
-
-  // Soft-heal: if allowlisted but Firestore still free, sync now.
-  if (allowlisted && current?.plan !== 'premium') {
+  if (plan !== 'premium') {
     try {
-      await writeUserPlan(env, identity.uid, 'premium')
+      grupetaSeat = await grantPremiumFromGrupetaSeat(env, identity)
+      if (grupetaSeat) plan = 'premium'
     } catch (error) {
-      console.warn('[entitlements] allowlist sync failed', error)
+      console.warn('[sync-plan] grupeta seat', error)
     }
   }
 
@@ -80,6 +53,55 @@ export async function handleEntitlements(
     email,
     plan,
     allowlisted,
+    grupetaSeat,
+    gpxExport: plan === 'premium' || (freeGpxRemaining ?? 0) > 0,
+    freeGpxRemaining,
+    maxRoutesSaved: plan === 'premium' ? null : FREE_MAX_SAVED,
+    routesSaved: current?.routesSaved ?? 0,
+  })
+}
+
+export async function handleEntitlements(
+  env: Env,
+  identity: FirebaseIdentity,
+): Promise<Response> {
+  const email = identity.email ?? null
+  const allowlisted = isAllowlistedPremiumEmail(env, email)
+  const current = await readUserEntitlements(env, identity.uid)
+  let plan: 'free' | 'premium' =
+    allowlisted || current?.plan === 'premium' ? 'premium' : 'free'
+  let grupetaSeat = false
+
+  if (allowlisted && current?.plan !== 'premium') {
+    try {
+      await writeUserPlan(env, identity.uid, 'premium')
+    } catch (error) {
+      console.warn('[entitlements] allowlist sync failed', error)
+    }
+  }
+
+  if (plan !== 'premium') {
+    try {
+      grupetaSeat = await grantPremiumFromGrupetaSeat(env, identity)
+      if (grupetaSeat) plan = 'premium'
+    } catch (error) {
+      console.warn('[entitlements] grupeta seat', error)
+    }
+  }
+
+  const week = isoWeekKey()
+  const used =
+    current?.freeGpxWeekKey === week ? (current.freeGpxUsedThisWeek ?? 0) : 0
+  const freeGpxRemaining =
+    plan === 'premium' ? null : Math.max(0, FREE_GPX_PER_WEEK - used)
+
+  return json({
+    ok: true,
+    uid: identity.uid,
+    email,
+    plan,
+    allowlisted,
+    grupetaSeat,
     gpxExport: plan === 'premium' || (freeGpxRemaining ?? 0) > 0,
     freeGpxRemaining,
     maxRoutesSaved: plan === 'premium' ? null : FREE_MAX_SAVED,
