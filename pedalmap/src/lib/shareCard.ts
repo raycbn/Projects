@@ -104,6 +104,51 @@ export function buildWhatsAppShareUrl(text: string): string {
 }
 
 /**
+ * Call synchronously from a click handler (before any await). After async publish,
+ * browsers block window.open — navigating this placeholder still works.
+ * Do not pass `noopener` here: Chrome then returns null and we cannot set location.
+ */
+export function openWhatsAppPlaceholder(): Window | null {
+  try {
+    return window.open('about:blank', 'pedalmap_wa')
+  } catch {
+    return null
+  }
+}
+
+export function closeWhatsAppPlaceholder(waWindow: Window | null | undefined): void {
+  if (!waWindow || waWindow.closed) return
+  try {
+    waWindow.close()
+  } catch {
+    /* ignore */
+  }
+}
+
+function navigateWhatsAppWindow(waWindow: Window | null | undefined, waUrl: string): boolean {
+  if (waWindow && !waWindow.closed) {
+    try {
+      waWindow.location.href = waUrl
+      return true
+    } catch {
+      closeWhatsAppPlaceholder(waWindow)
+    }
+  }
+  try {
+    // Named target reuses the placeholder tab when the handle was lost.
+    const popup = window.open(waUrl, 'pedalmap_wa')
+    return Boolean(popup)
+  } catch {
+    return false
+  }
+}
+
+export type ShareCardOptions = {
+  /** Window opened via openWhatsAppPlaceholder() in the same click turn. */
+  waWindow?: Window | null
+}
+
+/**
  * After an async Firestore publish, the browser user-gesture is usually gone and
  * `navigator.share` can hang or no-op on mobile. Prefer clipboard + WhatsApp popup
  * without navigating this tab away.
@@ -111,6 +156,7 @@ export function buildWhatsAppShareUrl(text: string): string {
 export async function shareRouteCard(
   draft: RouteDraft,
   url: string,
+  options?: ShareCardOptions,
 ): Promise<'whatsapp' | 'shared' | 'copied' | 'downloaded'> {
   if (!url.includes('/route/')) {
     throw new Error('Se necesita un enlace público /route/… para compartir la ruta')
@@ -130,14 +176,8 @@ export async function shareRouteCard(
     // ignore
   }
 
-  // 2) Open WhatsApp in a new tab/window — never location.assign (navigates away).
-  let openedWhatsApp = false
-  try {
-    const popup = window.open(waUrl, '_blank', 'noopener,noreferrer')
-    openedWhatsApp = Boolean(popup)
-  } catch {
-    openedWhatsApp = false
-  }
+  // 2) Open WhatsApp — prefer the pre-opened placeholder from the click gesture.
+  const openedWhatsApp = navigateWhatsAppWindow(options?.waWindow, waUrl)
 
   // 3) Optional card download in the background (don't block WhatsApp).
   void renderRouteShareCard(draft, url)
@@ -265,6 +305,7 @@ export function buildActivityShareText(activity: ActivityShareInput, url?: strin
 export async function shareActivityCard(
   activity: ActivityShareInput,
   url?: string,
+  options?: ShareCardOptions,
 ): Promise<'whatsapp' | 'shared' | 'copied' | 'downloaded'> {
   const text = buildActivityShareText(activity, url)
   const waUrl = buildWhatsAppShareUrl(text)
@@ -279,13 +320,7 @@ export async function shareActivityCard(
     /* ignore */
   }
 
-  let openedWhatsApp = false
-  try {
-    const popup = window.open(waUrl, '_blank', 'noopener,noreferrer')
-    openedWhatsApp = Boolean(popup)
-  } catch {
-    openedWhatsApp = false
-  }
+  const openedWhatsApp = navigateWhatsAppWindow(options?.waWindow, waUrl)
 
   void renderActivityShareCard(activity, url)
     .then((blob) => {

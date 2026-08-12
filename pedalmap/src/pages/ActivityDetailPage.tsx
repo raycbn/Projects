@@ -12,7 +12,11 @@ import {
   formatElevation,
   formatSpeedKmh,
 } from '@/lib/stats'
-import { shareActivityCard } from '@/lib/shareCard'
+import {
+  closeWhatsAppPlaceholder,
+  openWhatsAppPlaceholder,
+  shareActivityCard,
+} from '@/lib/shareCard'
 import { track } from '@/lib/analytics'
 import { canSaveRoute } from '@/services/EntitlementService'
 
@@ -105,6 +109,7 @@ export function ActivityDetailPage() {
 
   async function handleWhatsAppShare() {
     if (!activity) return
+    const waWindow = openWhatsAppPlaceholder()
     setShareBusy(true)
     setHint(null)
     try {
@@ -118,6 +123,7 @@ export function ActivityDetailPage() {
           bikeType: activity.bikeType,
         },
         url,
+        { waWindow },
       )
       setHint(
         result === 'whatsapp'
@@ -128,6 +134,7 @@ export function ActivityDetailPage() {
       )
       track('activity_shared', { via: 'whatsapp' })
     } catch (err) {
+      closeWhatsAppPlaceholder(waWindow)
       console.error('[activity share]', err)
       setHint('No se pudo compartir.')
     } finally {

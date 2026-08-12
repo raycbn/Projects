@@ -18,7 +18,11 @@ import {
   type ReadyRoutePacket,
 } from '@/lib/readyRouteHandoff'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
-import { shareRouteCard } from '@/lib/shareCard'
+import {
+  closeWhatsAppPlaceholder,
+  openWhatsAppPlaceholder,
+  shareRouteCard,
+} from '@/lib/shareCard'
 import { routeCameraKey } from '@/lib/mapCamera'
 import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
 import {
@@ -329,7 +333,10 @@ export function ReadyRoutePage() {
     }
   }
 
-  async function publishPublic(shareAfter = false): Promise<string | null> {
+  async function publishPublic(
+    shareAfter = false,
+    waWindow?: Window | null,
+  ): Promise<string | null> {
     if (!draft) return null
     if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
       flashMessage('Inicia sesión con una cuenta real para publicar.')
@@ -349,12 +356,12 @@ export function ReadyRoutePage() {
     setPacket(next)
     const url = `${window.location.origin}/route/${published.shareSlug}`
     if (shareAfter) {
-      const result = await shareRouteCard(draft, url)
+      const result = await shareRouteCard(draft, url, { waWindow })
       flashMessage(
         result === 'whatsapp' || result === 'shared'
           ? `WhatsApp listo · ${url}`
           : result === 'copied'
-            ? `Mensaje copiado · ${url}`
+            ? `Mensaje copiado · enlace abierto si el navegador lo permite · ${url}`
             : `Enlace: ${url}`,
       )
     } else {
@@ -366,11 +373,15 @@ export function ReadyRoutePage() {
   }
 
   async function handleShare() {
+    // Open WhatsApp tab in the same user-gesture turn (before await publish).
+    const waWindow = openWhatsAppPlaceholder()
     setShareBusy(true)
     flashMessage('Publicando ruta…')
     try {
-      await publishPublic(true)
+      const url = await publishPublic(true, waWindow)
+      if (!url) closeWhatsAppPlaceholder(waWindow)
     } catch (error) {
+      closeWhatsAppPlaceholder(waWindow)
       console.error('[ready-route] share', error)
       const msg = error instanceof Error ? error.message : ''
       if (msg.includes('save_limit')) {

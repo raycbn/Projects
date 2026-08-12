@@ -7,6 +7,7 @@ import { BikeSelector } from '@/components/route/BikeSelector'
 import { BikeComparePanel } from '@/components/route/BikeComparePanel'
 import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { RouteSummary } from '@/components/route/RouteSummary'
+import { TraceReadyPanel } from '@/components/route/TraceReadyPanel'
 import { PremiumCard } from '@/components/premium/PremiumCard'
 import { Button } from '@/components/ui/Button'
 import { GPXImporter } from '@/components/gpx/GPXImporter'
@@ -19,6 +20,7 @@ import { routeCameraKey } from '@/lib/mapCamera'
 import { getBikeModality } from '@/lib/bikeSurfaceProfile'
 import { canCreateRoute, canUseAdvancedCircular } from '@/services/EntitlementService'
 import type { RouteType } from '@/domain/types'
+import type { FeatureCollection } from 'geojson'
 import clsx from 'clsx'
 
 const MapView = lazy(() =>
@@ -85,6 +87,12 @@ export function RoutePlanner() {
   const [goingToReady, setGoingToReady] = useState(false)
   const [viaQueryOpen, setViaQueryOpen] = useState(false)
   const [traceSheetOpen, setTraceSheetOpen] = useState(true)
+  const [traceWind, setTraceWind] = useState<{
+    overlay: FeatureCollection | null
+    caption: string | null
+    showArrows: boolean
+    loading: boolean
+  }>({ overlay: null, caption: null, showArrows: true, loading: false })
 
   const isTrace = routeType === 'map_trace'
   const activeDraft = editDraft ?? draft
@@ -97,6 +105,7 @@ export function RoutePlanner() {
       setTraceSheetOpen(true)
     } else {
       setMapExpanded(false)
+      setTraceWind({ overlay: null, caption: null, showArrows: true, loading: false })
     }
   }, [isTrace])
 
@@ -178,7 +187,15 @@ export function RoutePlanner() {
     setGoingToReady(true)
     try {
       const result = await calculate()
-      if (result) goToReady(result)
+      if (!result) return
+      // Trazar stays on the map so wind / salir / share / save are usable in-place.
+      // Other modes keep the existing jump to /ruta.
+      if (isTrace) {
+        stashReadyRoute({ draft: result, source: 'calculate' })
+        setTraceSheetOpen(true)
+      } else {
+        goToReady(result)
+      }
     } finally {
       setGoingToReady(false)
     }
@@ -310,6 +327,9 @@ export function RoutePlanner() {
               geometry={activeDraft?.geometry}
               hoverPoint={hoverPoint}
               surfaceOverlay={surfaceOverlay}
+              windOverlay={traceWind.overlay}
+              windCaption={traceWind.caption}
+              showWindArrows={traceWind.showArrows}
               fitKey={fitKey}
               onMapClick={handleMapTap}
               onWaypointDrag={(id, position) => updateWaypointPosition(id, position)}
@@ -319,6 +339,12 @@ export function RoutePlanner() {
           <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap gap-2">
             {modeChips}
           </div>
+
+          {traceWind.loading && activeDraft && !traceWind.overlay?.features?.length ? (
+            <p className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-[var(--color-forest)] shadow-sm ring-1 ring-[var(--color-fog)]">
+              Cargando viento…
+            </p>
+          ) : null}
 
           {status === 'calculating' && (
             <p className="pointer-events-none absolute left-3 top-24 z-10 max-w-[min(92%,20rem)] rounded-xl bg-white/95 px-3 py-2 text-sm font-medium text-[var(--color-forest)] shadow-sm animate-pulse-soft">
@@ -330,7 +356,11 @@ export function RoutePlanner() {
         <div
           className={clsx(
             'z-20 border-t border-[var(--color-fog)] bg-white/95 backdrop-blur safe-pb',
-            traceSheetOpen ? 'max-h-[48vh] overflow-y-auto' : 'overflow-hidden',
+            traceSheetOpen
+              ? activeDraft
+                ? 'max-h-[62vh] overflow-y-auto'
+                : 'max-h-[48vh] overflow-y-auto'
+              : 'overflow-hidden',
           )}
         >
           <div className="flex items-center justify-between gap-2 border-b border-[var(--color-fog)] px-4 py-2">
@@ -487,6 +517,14 @@ export function RoutePlanner() {
                     })}
                   </div>
                 )}
+
+                {status !== 'editing' ? (
+                  <TraceReadyPanel
+                    draft={activeDraft}
+                    showPaywall={showPaywall}
+                    onWindOverlayChange={setTraceWind}
+                  />
+                ) : null}
 
                 {status === 'editing' ? (
                   <div className="flex flex-wrap gap-2">
