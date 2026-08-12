@@ -261,6 +261,7 @@ function canPaintOverlays(map: Map): boolean {
 /** Keep route + wind above basemap / hillshade after terrain swaps. */
 function raiseRouteOverlayLayers(map: Map) {
   for (const id of [
+    'route-alts-line',
     'route-line-casing',
     'route-line',
     'route-surface-line',
