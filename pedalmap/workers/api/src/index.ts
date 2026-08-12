@@ -8,7 +8,7 @@ import { handleWindAlertEmail } from './alerts'
 import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 import { handleMintCustomToken } from './customToken'
-import { handleEntitlements, handleSyncPlan } from './entitlements'
+import { handleEntitlements, handleClaimGpx, handleSyncPlan } from './entitlements'
 import {
   handleStravaDisconnect,
   handleStravaImportActivity,
@@ -33,6 +33,7 @@ import {
   handleInstagramScheduleStatus,
   runScheduledSocialPost,
 } from './socialSchedule'
+import { runRetentionNudges } from './retentionCron'
 import {
   assertRoutingCreateAllowed,
   bumpRoutesCreatedThisMonth,
@@ -108,6 +109,12 @@ export default {
       console.log('[cron social]', JSON.stringify(result))
     } catch (err) {
       console.error('[cron social]', err instanceof Error ? err.message : err)
+    }
+    try {
+      const nudges = await runRetentionNudges(env)
+      console.log('[cron retention]', JSON.stringify(nudges))
+    } catch (err) {
+      console.error('[cron retention]', err instanceof Error ? err.message : err)
     }
   },
 
@@ -261,6 +268,19 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleEntitlements(env, identity))
+      }
+
+      if (path === '/me/claim-gpx' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'claim-gpx',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleClaimGpx(env, identity))
       }
 
       if (path === '/routes/publish' && request.method === 'POST') {

@@ -18,10 +18,12 @@ import type {
   FollowEdge,
   PublicProfile,
   RankingEntry,
+  SavedRoute,
   Segment,
   SegmentEffort,
 } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
+import { routeRepository } from '@/services/RouteRepository'
 
 function mapPublicProfile(id: string, data: DocumentData): PublicProfile {
   return {
@@ -157,6 +159,14 @@ export class CommunityService {
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? new Date().toISOString(),
       }
     })
+  }
+
+  /** Public routes from people you follow (feed). */
+  async listFollowingFeed(followerId: string, max = 30): Promise<SavedRoute[]> {
+    const edges = await this.listFollowing(followerId)
+    const ids = edges.map((e) => e.followeeId)
+    if (!ids.length) return []
+    return routeRepository.listPublicByUserIds(ids, max)
   }
 
   async listSegments(max = 30): Promise<Segment[]> {

@@ -14,6 +14,7 @@ export type AnalyticsEvent =
   | 'signup_completed'
   | 'activity_started'
   | 'activity_finished'
+  | 'activity_shared'
   | 'gps_connect_started'
   | 'gps_disconnected'
   | 'gps_synced'

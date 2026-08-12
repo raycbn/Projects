@@ -10,13 +10,15 @@ import {
   type GpsProviderStatus,
 } from '@/services/GpsSyncService'
 import { stravaService } from '@/services/StravaService'
-import type { Activity } from '@/domain/types'
+import type { Activity, ActivityTrackPoint } from '@/domain/types'
 import {
   formatDistance,
   formatDuration,
   formatElevation,
   formatSpeedKmh,
 } from '@/lib/stats'
+import { parseGpx } from '@/lib/gpx'
+import { track } from '@/lib/analytics'
 
 export function MyActivitiesPage() {
   usePageMeta({
@@ -38,6 +40,7 @@ export function MyActivitiesPage() {
   const [cloudConfigured, setCloudConfigured] = useState(false)
   const [cloudConnected, setCloudConnected] = useState(false)
   const [cloudBusy, setCloudBusy] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
 
   async function reload() {
     if (!user || user.isAnonymous || !activityRepository.isConfigured()) return
@@ -233,6 +236,64 @@ export function MyActivitiesPage() {
     }
   }
 
+  async function importGpxFile(file: File) {
+    if (!user || user.isAnonymous) {
+      setMessage('Inicia sesión para importar actividades.')
+      return
+    }
+    const lower = file.name.toLowerCase()
+    if (lower.endsWith('.fit')) {
+      setMessage(
+        'FIT: exporta a GPX desde Garmin Connect / Wahoo y súbelo aquí. PedalMap importa GPX nativo.',
+      )
+      return
+    }
+    setImportBusy(true)
+    setMessage(null)
+    try {
+      const text = await file.text()
+      const imported = parseGpx(text)
+      const trackPoints: ActivityTrackPoint[] = imported.points.map((p) => ({
+        position: { lat: p.lat, lng: p.lng },
+        elevationMeters: p.elevationMeters,
+        recordedAt: p.time || new Date().toISOString(),
+      }))
+      const startedAt = trackPoints[0]?.recordedAt || new Date().toISOString()
+      const finishedAt =
+        trackPoints[trackPoints.length - 1]?.recordedAt || new Date().toISOString()
+      const { activity, created } = await activityRepository.importFinished(user.uid, {
+        title: imported.name || file.name.replace(/\.[^.]+$/, ''),
+        status: 'finished',
+        bikeType: 'road',
+        source: 'gpx',
+        externalId: `gpx:${file.name}:${Math.round(imported.distanceMeters)}`,
+        startedAt,
+        finishedAt,
+        track: trackPoints,
+        stats: {
+          distanceMeters: Math.round(imported.distanceMeters),
+          durationSeconds: Math.max(
+            0,
+            Math.round((Date.parse(finishedAt) - Date.parse(startedAt)) / 1000),
+          ),
+          elevationGainMeters: 0,
+        },
+      })
+      await reload()
+      setMessage(
+        created
+          ? `Importada «${activity.title}» · ábrela abajo`
+          : `«${activity.title}» ya estaba importada`,
+      )
+      track('gpx_imported', { distance_m: activity.stats.distanceMeters })
+    } catch (err) {
+      console.error('[activities] import', err)
+      setMessage(err instanceof Error ? err.message : 'No se pudo importar el GPX')
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   const list: GpsProviderStatus[] =
     providers.length > 0
       ? providers
@@ -287,6 +348,44 @@ export function MyActivitiesPage() {
           <Button>Nueva actividad</Button>
         </Link>
       </div>
+
+      <section
+        id="importar"
+        className="mt-6 scroll-mt-24 rounded-2xl bg-white/90 p-4 ring-1 ring-[var(--color-fog)]"
+      >
+        <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
+          Importar GPX / FIT
+        </h2>
+        <p className="mt-1 text-sm text-[var(--color-stone)]">
+          Sube un track terminado. GPX se importa directo; FIT conviene convertirlo a GPX en Garmin
+          Connect o Wahoo.
+        </p>
+        {user && !user.isAnonymous ? (
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2">
+            <span className="rounded-xl bg-[var(--color-signal)] px-3 py-2 text-sm font-semibold text-[var(--color-ink)]">
+              {importBusy ? 'Importando…' : 'Elegir archivo'}
+            </span>
+            <input
+              type="file"
+              accept=".gpx,.fit,application/gpx+xml"
+              className="sr-only"
+              disabled={importBusy}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) void importGpxFile(file)
+              }}
+            />
+          </label>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--color-stone)]">
+            <Link to="/login" className="font-semibold text-[var(--color-trail)]">
+              Inicia sesión
+            </Link>{' '}
+            para importar.
+          </p>
+        )}
+      </section>
 
       <section
         id="wahoo"

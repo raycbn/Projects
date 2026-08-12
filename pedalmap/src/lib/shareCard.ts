@@ -1,5 +1,5 @@
 import type { BikeType, RouteDraft, RouteStats } from '@/domain/types'
-import { formatDistance, formatElevation } from '@/lib/stats'
+import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
 
 /**
  * Render a square share card (PNG) for WhatsApp / native share.
@@ -214,4 +214,92 @@ export function suitabilityLine(stats: RouteStats): string | null {
   const s = stats.surfaceStats?.suitability
   if (!s) return null
   return `${s.score}% ${s.label}`
+}
+
+export type ActivityShareInput = {
+  title: string
+  distanceMeters: number
+  elevationGainMeters: number
+  durationSeconds: number
+  bikeType?: BikeType
+}
+
+/** Square PNG card for post-ride WhatsApp share. */
+export async function renderActivityShareCard(
+  activity: ActivityShareInput,
+  shareUrl?: string,
+): Promise<Blob> {
+  const draftLike: RouteDraft = {
+    title: activity.title,
+    type: 'a_to_b',
+    bikeType: activity.bikeType ?? 'road',
+    preferences: [],
+    waypoints: [],
+    geometry: { type: 'LineString', coordinates: [] },
+    elevationProfile: [],
+    stats: {
+      distanceMeters: activity.distanceMeters,
+      elevationGainMeters: activity.elevationGainMeters,
+      elevationLossMeters: 0,
+      estimatedDurationSeconds: activity.durationSeconds,
+      difficulty: 'moderate',
+    },
+  }
+  return renderRouteShareCard(draftLike, shareUrl)
+}
+
+export function buildActivityShareText(activity: ActivityShareInput, url?: string): string {
+  const lines = [
+    activity.title || 'Salida PedalMap',
+    `${formatDistance(activity.distanceMeters)} · ${formatElevation(activity.elevationGainMeters)} · ${formatDuration(activity.durationSeconds)}`,
+    '',
+    'Análisis Free en PedalMap (movimiento, VAM, potencia estimada…).',
+  ]
+  if (url) {
+    lines.push(withShareUtm(url))
+  }
+  lines.push('', 'Crea tu próxima ruta en pedalmap.es')
+  return lines.join('\n')
+}
+
+export async function shareActivityCard(
+  activity: ActivityShareInput,
+  url?: string,
+): Promise<'whatsapp' | 'shared' | 'copied' | 'downloaded'> {
+  const text = buildActivityShareText(activity, url)
+  const waUrl = buildWhatsAppShareUrl(text)
+
+  let copied = false
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      copied = true
+    }
+  } catch {
+    /* ignore */
+  }
+
+  let openedWhatsApp = false
+  try {
+    const popup = window.open(waUrl, '_blank', 'noopener,noreferrer')
+    openedWhatsApp = Boolean(popup)
+  } catch {
+    openedWhatsApp = false
+  }
+
+  void renderActivityShareCard(activity, url)
+    .then((blob) => {
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = 'pedalmap-salida.png'
+      a.rel = 'noopener'
+      a.click()
+      URL.revokeObjectURL(objectUrl)
+    })
+    .catch(() => undefined)
+
+  if (openedWhatsApp) return 'whatsapp'
+  if (copied) return 'copied'
+  return 'downloaded'
 }

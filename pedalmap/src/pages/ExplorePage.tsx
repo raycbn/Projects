@@ -5,30 +5,29 @@ import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { communityService } from '@/services/CommunityService'
 import { routeRepository } from '@/services/RouteRepository'
-import type { Challenge, PublicProfile, SavedRoute, Segment } from '@/domain/types'
+import type { PublicProfile, SavedRoute } from '@/domain/types'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import { seoPages } from '@/content/seoPages'
 import { DEMO_PUBLIC_ROUTES } from '@/content/demoPublicRoutes'
 import { track } from '@/lib/analytics'
 
-type Tab = 'rutas' | 'ciclistas' | 'mas'
+type Tab = 'rutas' | 'siguiendo' | 'ciclistas' | 'mas'
 
 export function ExplorePage() {
   usePageMeta({
     title: 'Explorar comunidad | PedalMap',
-    description: 'Rutas públicas, ciclistas, segmentos, retos y rankings en PedalMap.',
+    description: 'Rutas públicas, feed de seguidos y ciclistas en PedalMap.',
     path: '/explorar',
   })
 
   const { user, profile, firebaseReady } = useAuth()
   const [tab, setTab] = useState<Tab>('rutas')
   const [routes, setRoutes] = useState<SavedRoute[]>([])
+  const [feed, setFeed] = useState<SavedRoute[]>([])
   const [people, setPeople] = useState<PublicProfile[]>([])
-  const [segments, setSegments] = useState<Segment[]>([])
-  const [challenges, setChallenges] = useState<Challenge[]>([])
-  const [, setRankings] = useState<Array<{ userId: string; displayName?: string; score: number; rank: number }>>([])
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [feedLoading, setFeedLoading] = useState(false)
   const ready = firebaseReady && communityService.isConfigured()
 
   useEffect(() => {
@@ -39,19 +38,13 @@ export function ExplorePage() {
         return
       }
       try {
-        const [publicRoutes, profiles, segs, chals, board] = await Promise.all([
+        const [publicRoutes, profiles] = await Promise.all([
           routeRepository.listPublic(30),
           communityService.listPublicProfiles(24),
-          communityService.listSegments(20),
-          communityService.listChallenges(20),
-          communityService.listRankingBoard('weekly_distance', 20),
         ])
         if (cancelled) return
         setRoutes(publicRoutes)
         setPeople(profiles)
-        setSegments(segs)
-        setChallenges(chals)
-        setRankings(board)
       } catch (error) {
         console.error('[explore]', error)
         if (!cancelled) setMessage('No se pudo cargar la comunidad. Despliega reglas/índices Firestore.')
@@ -65,10 +58,35 @@ export function ExplorePage() {
     }
   }, [ready])
 
+  useEffect(() => {
+    let cancelled = false
+    async function loadFeed() {
+      if (!ready || !user || user.isAnonymous) {
+        setFeed([])
+        return
+      }
+      setFeedLoading(true)
+      try {
+        const rows = await communityService.listFollowingFeed(user.uid, 30)
+        if (!cancelled) setFeed(rows)
+      } catch (error) {
+        console.warn('[explore] feed', error)
+        if (!cancelled) setFeed([])
+      } finally {
+        if (!cancelled) setFeedLoading(false)
+      }
+    }
+    void loadFeed()
+    return () => {
+      cancelled = true
+    }
+  }, [ready, user])
+
   const tabs = useMemo(
     () =>
       [
         ['rutas', 'Rutas'],
+        ['siguiendo', 'Siguiendo'],
         ['ciclistas', 'Ciclistas'],
         ['mas', 'Más'],
       ] as const,
@@ -91,72 +109,12 @@ export function ExplorePage() {
       setMessage('Ahora sigues a este ciclista.')
       const profiles = await communityService.listPublicProfiles(24)
       setPeople(profiles)
+      const rows = await communityService.listFollowingFeed(user.uid, 30)
+      setFeed(rows)
+      setTab('siguiendo')
     } catch (error) {
       console.error('[follow]', error)
       setMessage('No se pudo seguir. Revisa login y reglas Firestore.')
-    }
-  }
-
-  async function seedDemoChallenge() {
-    if (!user || user.isAnonymous) {
-      setMessage('Inicia sesión para crear un reto.')
-      return
-    }
-    try {
-      const id = await communityService.createChallenge({
-        title: 'Reto semanal PedalMap',
-        description: 'Suma desnivel positivo esta semana.',
-        createdBy: user.uid,
-        isPublic: true,
-        metric: 'elevation',
-        startAt: new Date().toISOString(),
-        endAt: new Date(Date.now() + 7 * 86400000).toISOString(),
-      })
-      await communityService.upsertChallengeEntry({
-        challengeId: id,
-        userId: user.uid,
-        displayName: profile?.displayName ?? 'Ciclista',
-        value: 0,
-        updatedAt: new Date().toISOString(),
-      })
-      await communityService.upsertRankingEntry('weekly_distance', {
-        userId: user.uid,
-        displayName: profile?.displayName ?? 'Ciclista',
-        score: 0,
-        updatedAt: new Date().toISOString(),
-      })
-      setChallenges(await communityService.listChallenges(20))
-      setRankings(await communityService.listRankingBoard('weekly_distance', 20))
-      setMessage('Reto creado.')
-      setTab('mas')
-    } catch (error) {
-      console.error('[challenge]', error)
-      setMessage('No se pudo crear el reto.')
-    }
-  }
-
-  async function seedSegment() {
-    if (!user || user.isAnonymous) {
-      setMessage('Inicia sesión para publicar un segmento.')
-      return
-    }
-    try {
-      await communityService.createSegment({
-        name: 'Puerto de prueba Madrid',
-        description: 'Segmento comunitario de ejemplo (Vallecas → sur).',
-        createdBy: user.uid,
-        isPublic: true,
-        start: { lat: 40.38, lng: -3.62 },
-        end: { lat: 40.21, lng: -3.57 },
-        distanceMeters: 12000,
-        elevationGainMeters: 280,
-      })
-      setSegments(await communityService.listSegments(20))
-      setMessage('Segmento publicado.')
-      setTab('mas')
-    } catch (error) {
-      console.error('[segment]', error)
-      setMessage('No se pudo crear el segmento.')
     }
   }
 
@@ -167,7 +125,7 @@ export function ExplorePage() {
         Explorar
       </h1>
       <p className="mt-2 text-[var(--color-stone)]">
-        Rutas públicas y ciclistas. Sin ruido: solo lo que hay contenido real.
+        Rutas públicas y ciclistas. Sin rankings fabricables ni seed demos.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -229,29 +187,21 @@ export function ExplorePage() {
                   ))}
                 </div>
               ) : (
-                routes.map((route) => (
-                  <article
-                    key={route.id}
-                    className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
-                          {route.title}
-                        </h2>
-                        <p className="text-xs text-[var(--color-stone)]">
-                          {route.bikeType} · {formatDistance(route.stats.distanceMeters)} ·{' '}
-                          {formatElevation(route.stats.elevationGainMeters)}
-                        </p>
-                      </div>
-                      {route.shareSlug && (
-                        <Link to={`/route/${route.shareSlug}`}>
-                          <Button variant="ghost">Ver</Button>
-                        </Link>
-                      )}
-                    </div>
-                  </article>
-                ))
+                routes.map((route) => <RouteRow key={route.id} route={route} />)
+              )}
+            </>
+          )}
+
+          {tab === 'siguiendo' && (
+            <>
+              {!user || user.isAnonymous ? (
+                <Empty hint="Inicia sesión y sigue ciclistas para ver su feed aquí." />
+              ) : feedLoading ? (
+                <p className="text-sm text-[var(--color-stone)]">Cargando feed…</p>
+              ) : feed.length === 0 ? (
+                <Empty hint="Aún no hay rutas públicas de gente que sigues. Ve a Ciclistas y pulsa Seguir." />
+              ) : (
+                feed.map((route) => <RouteRow key={route.id} route={route} />)
               )}
             </>
           )}
@@ -328,48 +278,6 @@ export function ExplorePage() {
                     ))}
                 </div>
               </section>
-
-              <section className="space-y-3">
-                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
-                  Segmentos y retos
-                </h2>
-                <p className="text-sm text-[var(--color-stone)]">
-                  Todavía hay poco contenido comunitario. Cuando haya masa crítica, volverán como
-                  secciones propias.
-                </p>
-                {user && !user.isAnonymous && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="ghost" onClick={() => void seedSegment()}>
-                      Publicar segmento
-                    </Button>
-                    <Button variant="ghost" onClick={() => void seedDemoChallenge()}>
-                      Crear reto
-                    </Button>
-                  </div>
-                )}
-                {segments.slice(0, 3).map((seg) => (
-                  <article
-                    key={seg.id}
-                    className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
-                  >
-                    <h3 className="font-semibold text-[var(--color-forest)]">{seg.name}</h3>
-                    <p className="text-sm text-[var(--color-stone)]">
-                      {formatDistance(seg.distanceMeters)} · {formatElevation(seg.elevationGainMeters)}
-                    </p>
-                  </article>
-                ))}
-                {challenges.slice(0, 3).map((ch) => (
-                  <article
-                    key={ch.id}
-                    className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
-                  >
-                    <h3 className="font-semibold text-[var(--color-forest)]">{ch.title}</h3>
-                    <p className="text-sm text-[var(--color-stone)]">
-                      {ch.metric} · hasta {new Date(ch.endAt).toLocaleDateString('es-ES')}
-                    </p>
-                  </article>
-                ))}
-              </section>
             </div>
           )}
         </div>
@@ -382,13 +290,27 @@ export function ExplorePage() {
   )
 }
 
-function Empty({ hint }: { hint: string }) {
+function RouteRow({ route }: { route: SavedRoute }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[var(--color-fog)] bg-white/60 px-4 py-6 text-sm text-[var(--color-stone)]">
-      <p>{hint}</p>
-      <Link to="/route-planner" className="mt-4 inline-block">
-        <Button size="sm">Crear mi ruta</Button>
-      </Link>
-    </div>
+    <article className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">{route.title}</h2>
+          <p className="text-xs text-[var(--color-stone)]">
+            {route.bikeType} · {formatDistance(route.stats.distanceMeters)} ·{' '}
+            {formatElevation(route.stats.elevationGainMeters)}
+          </p>
+        </div>
+        {route.shareSlug && (
+          <Link to={`/route/${route.shareSlug}`}>
+            <Button variant="ghost">Ver</Button>
+          </Link>
+        )}
+      </div>
+    </article>
   )
+}
+
+function Empty({ hint }: { hint: string }) {
+  return <p className="text-sm text-[var(--color-stone)]">{hint}</p>
 }

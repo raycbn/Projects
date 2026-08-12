@@ -479,14 +479,22 @@ type EnrichedRoute = Awaited<ReturnType<typeof enrichTrip>>
 
 function routeFingerprint(route: EnrichedRoute): string {
   const coords = route.coordinates
-  const mid = coords[Math.floor(coords.length / 2)] ?? coords[0]
+  const at = (t: number) => coords[Math.min(coords.length - 1, Math.floor(coords.length * t))] ?? coords[0]
+  const q1 = at(0.25)
+  const mid = at(0.5)
+  const q3 = at(0.75)
   const end = coords[coords.length - 1] ?? coords[0]
+  // Finer buckets so costing variants (roads vs mixed) don't collapse into one option.
   return [
-    Math.round(route.distanceMeters / 80),
-    mid[0].toFixed(3),
-    mid[1].toFixed(3),
-    end[0].toFixed(3),
-    end[1].toFixed(3),
+    Math.round(route.distanceMeters / 40),
+    q1[0].toFixed(4),
+    q1[1].toFixed(4),
+    mid[0].toFixed(4),
+    mid[1].toFixed(4),
+    q3[0].toFixed(4),
+    q3[1].toFixed(4),
+    end[0].toFixed(4),
+    end[1].toFixed(4),
   ].join('|')
 }
 
@@ -526,10 +534,45 @@ function mergeUniqueRoutes(routes: EnrichedRoute[], max = 3): EnrichedRoute[] {
   return out
 }
 
+async function topUpWithCostingVariants(
+  env: Env,
+  locations: Array<{ lat: number; lon: number; type: string }>,
+  costing: Record<string, number | string>,
+  language: string,
+  seed: EnrichedRoute[],
+  parallel: boolean,
+): Promise<EnrichedRoute[]> {
+  let unique = mergeUniqueRoutes(seed, 3)
+  if (unique.length >= 3) return unique
+
+  const variants: Array<'roads' | 'mixed' | 'hills'> = ['roads', 'mixed', 'hills']
+  if (parallel) {
+    const settled = await Promise.allSettled(
+      variants.map((v) => routeLocations(env, locations, costingVariant(costing, v), language)),
+    )
+    const extras: EnrichedRoute[] = []
+    for (const r of settled) {
+      if (r.status === 'fulfilled') extras.push(r.value)
+    }
+    return mergeUniqueRoutes([...unique, ...extras], 3)
+  }
+
+  // FOSSGIS: sequential top-ups to stay quota-friendly, stop at 3 unique.
+  for (const variant of variants) {
+    if (unique.length >= 3) break
+    try {
+      const extra = await routeLocations(env, locations, costingVariant(costing, variant), language)
+      unique = mergeUniqueRoutes([...unique, extra], 3)
+    } catch (err) {
+      console.warn('[bike-route] costing top-up failed', variant, err)
+    }
+  }
+  return unique
+}
+
 /**
- * Primary Valhalla route + native alternates, topped up with costing variants in parallel
- * so A→B usually returns 2–3 distinct options even when `alternates` is empty.
- * Out-and-back stays on a single Valhalla call (alternates only) to keep create latency low.
+ * Primary Valhalla route + native alternates, topped up with costing variants
+ * so A→B / ida-vuelta usually returns 2–3 distinct options.
  */
 async function routeLocationsWithOptions(
   env: Env,
@@ -538,44 +581,53 @@ async function routeLocationsWithOptions(
   language: string,
   mode: 'a_to_b' | 'out_and_back' = 'a_to_b',
 ): Promise<EnrichedRoute & { alternatives: EnrichedRoute[] }> {
-  // Ida-vuelta geometries are ~2× longer — avoid 3 full round-trips; one call with alternates.
-  if (mode === 'out_and_back') {
-    const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
-    const unique = mergeUniqueRoutes([main, ...(main.alternatives ?? [])], 3)
+  const parallel = Boolean(env.STADIA_API_KEY) && mode === 'a_to_b'
+
+  if (parallel) {
+    const [mainSettled, roadsSettled, mixedSettled] = await Promise.allSettled([
+      routeLocations(env, locations, costing, language, { alternates: 2 }),
+      routeLocations(env, locations, costingVariant(costing, 'roads'), language),
+      routeLocations(env, locations, costingVariant(costing, 'mixed'), language),
+    ])
+
+    if (mainSettled.status !== 'fulfilled') {
+      const fallback = [roadsSettled, mixedSettled].find((r) => r.status === 'fulfilled')
+      if (!fallback || fallback.status !== 'fulfilled') throw mainSettled.reason
+      return { ...fallback.value, alternatives: [] }
+    }
+
+    const main = mainSettled.value
+    const extras: EnrichedRoute[] = [...(main.alternatives ?? [])]
+    if (roadsSettled.status === 'fulfilled') extras.push(roadsSettled.value)
+    if (mixedSettled.status === 'fulfilled') extras.push(mixedSettled.value)
+
+    let unique = mergeUniqueRoutes([main, ...extras], 3)
+    if (unique.length < 3) {
+      unique = await topUpWithCostingVariants(
+        env,
+        locations,
+        costing,
+        language,
+        unique,
+        true,
+      )
+    }
     const primary = unique[0] ?? main
     return { ...primary, alternatives: unique.slice(1) }
   }
 
-  // FOSSGIS public Valhalla: skip costing fan-out to protect shared quota.
-  if (!env.STADIA_API_KEY) {
-    const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
-    const unique = mergeUniqueRoutes([main, ...(main.alternatives ?? [])], 3)
-    const primary = unique[0] ?? main
-    return { ...primary, alternatives: unique.slice(1) }
-  }
-
-  const [mainSettled, roadsSettled, hillsSettled] = await Promise.allSettled([
-    routeLocations(env, locations, costing, language, { alternates: 2 }),
-    routeLocations(env, locations, costingVariant(costing, 'roads'), language),
-    routeLocations(env, locations, costingVariant(costing, 'mixed'), language),
-  ])
-
-  if (mainSettled.status !== 'fulfilled') {
-    // Fall back to any successful costing variant
-    const fallback = [roadsSettled, hillsSettled].find((r) => r.status === 'fulfilled')
-    if (!fallback || fallback.status !== 'fulfilled') throw mainSettled.reason
-    return { ...fallback.value, alternatives: [] }
-  }
-
-  const main = mainSettled.value
-  const extras: EnrichedRoute[] = [...(main.alternatives ?? [])]
-  if (roadsSettled.status === 'fulfilled') extras.push(roadsSettled.value)
-  if (hillsSettled.status === 'fulfilled') extras.push(hillsSettled.value)
-
-  const unique = mergeUniqueRoutes([main, ...extras], 3)
+  // FOSSGIS / out-and-back: native alternates first, then sequential costing top-up.
+  const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
+  const unique = await topUpWithCostingVariants(
+    env,
+    locations,
+    costing,
+    language,
+    [main, ...(main.alternatives ?? [])],
+    false,
+  )
   const primary = unique[0] ?? main
-  const alternatives = unique.slice(1)
-  return { ...primary, alternatives }
+  return { ...primary, alternatives: unique.slice(1) }
 }
 
 /**

@@ -4,7 +4,9 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { Button } from '@/components/ui/Button'
 import {
+  buildInstructionAtMeters,
   instructionStepFromDistance,
+  stashGpsRoute,
   takeGpsRoute,
   type GpsRoutePacket,
 } from '@/lib/gpsRouteHandoff'
@@ -15,6 +17,7 @@ import {
 } from '@/lib/bikeCompare'
 import { formatDistance, pathDistanceMeters } from '@/lib/stats'
 import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
+import { routeService } from '@/services/RouteService'
 import type { Waypoint } from '@/domain/types'
 
 const MapView = lazy(() =>
@@ -41,6 +44,8 @@ export function NavigationPage() {
   const [voice, setVoice] = useState(false)
   const [followReady, setFollowReady] = useState(false)
   const [offRouteAlert, setOffRouteAlert] = useState(false)
+  const [rerouteBusy, setRerouteBusy] = useState(false)
+  const [rerouteMsg, setRerouteMsg] = useState<string | null>(null)
   const offRouteSince = useRef<number | null>(null)
   const userPinnedStep = useRef(false)
   const { sample, error, supported } = useGeolocation(true)
@@ -165,6 +170,61 @@ export function NavigationPage() {
     return buildSurfaceRouteOverlay(packet.geometry, packet.surfaceEdges ?? null)
   }, [packet])
 
+  async function handleReroute() {
+    if (!packet || !position || coords.length < 2) return
+    const end = coords[coords.length - 1]
+    setRerouteBusy(true)
+    setRerouteMsg(null)
+    try {
+      const draft = await routeService.calculate({
+        waypoints: [
+          {
+            id: 'here',
+            name: 'Aquí',
+            kind: 'start',
+            order: 0,
+            position: { lat: position.lat, lng: position.lng },
+          },
+          {
+            id: 'end',
+            name: 'Destino',
+            kind: 'end',
+            order: 1,
+            position: { lat: end[1], lng: end[0] },
+          },
+        ],
+        bikeType: (packet.bikeType as 'road' | 'gravel' | 'mtb' | 'urban' | 'ebike') || 'road',
+        preferences: [],
+        routeType: 'a_to_b',
+        wantAlternatives: false,
+        title: packet.title,
+      })
+      const next: GpsRoutePacket = {
+        title: draft.title || packet.title,
+        bikeType: packet.bikeType,
+        geometry: draft.geometry,
+        instructions: draft.instructions,
+        instructionAtMeters: buildInstructionAtMeters(
+          draft.instructions,
+          draft.stats.distanceMeters,
+        ),
+        surfaceEdges: draft.surfaceEdges,
+      }
+      stashGpsRoute(next)
+      setPacket(next)
+      setInstructions(draft.instructions ?? [])
+      setStep(0)
+      setOffRouteAlert(false)
+      offRouteSince.current = null
+      setRerouteMsg('Ruta recalculada desde tu posición.')
+    } catch (err) {
+      console.error('[nav] reroute', err)
+      setRerouteMsg('No se pudo recalcular. Sigue hacia el trazado o vuelve al planificador.')
+    } finally {
+      setRerouteBusy(false)
+    }
+  }
+
   if (!packet?.geometry?.coordinates?.length) {
     return (
       <main className="mx-auto max-w-lg px-4 py-10 pb-28">
@@ -217,10 +277,19 @@ export function NavigationPage() {
           </p>
         )}
         {offRouteAlert && (
-          <p className="absolute left-3 right-3 top-3 z-10 rounded-xl bg-[#fff4f4] px-3 py-2 text-sm font-semibold text-[var(--color-danger)] shadow">
-            Te has alejado del trazado (~{Math.round(nearest?.distanceMeters ?? 0)} m). Vuelve a la
-            ruta cuando puedas.
-          </p>
+          <div className="absolute left-3 right-3 top-3 z-10 space-y-2 rounded-xl bg-[#fff4f4] px-3 py-2 text-sm font-semibold text-[var(--color-danger)] shadow">
+            <p>
+              Te has alejado del trazado (~{Math.round(nearest?.distanceMeters ?? 0)} m). Vuelve a la
+              ruta o recalcula desde aquí.
+            </p>
+            <Button
+              size="sm"
+              disabled={rerouteBusy || !position}
+              onClick={() => void handleReroute()}
+            >
+              {rerouteBusy ? 'Recalculando…' : 'Recalcular desde aquí'}
+            </Button>
+          </div>
         )}
       </section>
 
@@ -251,6 +320,7 @@ export function NavigationPage() {
             {error || 'Este dispositivo no soporta geolocalización.'}
           </p>
         )}
+        {rerouteMsg ? <p className="text-xs text-[var(--color-stone)]">{rerouteMsg}</p> : null}
 
         <div className="flex flex-wrap gap-2">
           <Button

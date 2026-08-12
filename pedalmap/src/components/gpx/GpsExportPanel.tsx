@@ -4,7 +4,7 @@ import type { RouteDraft } from '@/domain/types'
 import { exportRouteToGpx } from '@/lib/gpx'
 import { track } from '@/lib/analytics'
 import { canExportGpx, freeGpxRemaining } from '@/services/EntitlementService'
-import { fetchServerEntitlements } from '@/lib/planSync'
+import { claimServerGpxExport, fetchServerEntitlements } from '@/lib/planSync'
 import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
 import { consumeGuestGpx } from '@/lib/freemium'
@@ -78,18 +78,34 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
   }, [])
 
   async function ensureExportAllowed(): Promise<boolean> {
-    // Soft Free trial is client-side; Premium is unlimited.
-    if (!canExportGpx(profile)) {
-      onPremiumRequired?.()
-      return false
+    // Guests: local soft trial only.
+    if (!profile) {
+      if (!canExportGpx(null)) {
+        onPremiumRequired?.()
+        return false
+      }
+      return true
     }
-    // Server is source of truth for Premium; Free trial stays local even if server says no GPX.
-    if (profile?.plan === 'premium') {
+    if (profile.plan === 'premium') {
       const server = await fetchServerEntitlements()
       if (server && !server.gpxExport) {
         onPremiumRequired?.()
         return false
       }
+      return true
+    }
+    // Free: prefer server remaining, fall back to client.
+    const server = await fetchServerEntitlements()
+    if (server) {
+      if (!server.gpxExport || (server.freeGpxRemaining ?? 0) <= 0) {
+        onPremiumRequired?.()
+        return false
+      }
+      return true
+    }
+    if (!canExportGpx(profile)) {
+      onPremiumRequired?.()
+      return false
     }
     return true
   }
@@ -97,6 +113,11 @@ export function GpsExportPanel({ route, onPremiumRequired }: GpsExportPanelProps
   async function noteFreeTrialUsed() {
     if (profile?.plan === 'premium') return
     if (profile) {
+      const claim = await claimServerGpxExport()
+      if (claim && !claim.allowed) {
+        // Race: another tab used the weekly GPX — still try local sync.
+        console.warn('[gpx] server claim denied after export')
+      }
       try {
         await authService.recordFreeGpxExport(profile.uid)
         track('free_trial_used', { kind: 'gpx' })

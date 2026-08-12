@@ -171,12 +171,24 @@ export type UserEntitlements = {
   routesSaved: number
   routesCreatedThisMonth: number
   monthKey: string
+  freeGpxWeekKey?: string
+  freeGpxUsedThisWeek?: number
 }
 
 export const FREE_MAX_ROUTES_CREATED_PER_MONTH = 15
+export const FREE_GPX_PER_WEEK = 1
 
 export function utcMonthKey(d = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** ISO week key like 2026-W33 (UTC) — mirrors client freemium.isoWeekKey. */
+export function isoWeekKey(d = new Date()): string {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
 /** Read users/{uid}.plan + usage via Admin REST. */
@@ -192,7 +204,14 @@ export async function readUserEntitlements(
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   const nowKey = utcMonthKey()
   if (res.status === 404) {
-    return { plan: 'free', routesSaved: 0, routesCreatedThisMonth: 0, monthKey: nowKey }
+    return {
+      plan: 'free',
+      routesSaved: 0,
+      routesCreatedThisMonth: 0,
+      monthKey: nowKey,
+      freeGpxWeekKey: isoWeekKey(),
+      freeGpxUsedThisWeek: 0,
+    }
   }
   if (!res.ok) return null
   const json = (await res.json()) as {
@@ -204,6 +223,8 @@ export async function readUserEntitlements(
             routesSaved?: { integerValue?: string; doubleValue?: number }
             routesCreatedThisMonth?: { integerValue?: string; doubleValue?: number }
             monthKey?: { stringValue?: string }
+            freeGpxWeekKey?: { stringValue?: string }
+            freeGpxUsedThisWeek?: { integerValue?: string; doubleValue?: number }
           }
         }
       }
@@ -223,7 +244,21 @@ export async function readUserEntitlements(
     ) || 0
   // Stale monthKey → effective creates for the current UTC month are 0.
   const routesCreatedThisMonth = storedMonth === nowKey ? rawCreated : 0
-  return { plan, routesSaved, routesCreatedThisMonth, monthKey: storedMonth }
+  const freeGpxWeekKey = usageFields?.freeGpxWeekKey?.stringValue
+  const freeGpxUsedThisWeek =
+    Number(
+      usageFields?.freeGpxUsedThisWeek?.integerValue ??
+        usageFields?.freeGpxUsedThisWeek?.doubleValue ??
+        0,
+    ) || 0
+  return {
+    plan,
+    routesSaved,
+    routesCreatedThisMonth,
+    monthKey: storedMonth,
+    freeGpxWeekKey,
+    freeGpxUsedThisWeek,
+  }
 }
 
 /** 403 when Free monthly create cap is exhausted. null = allowed (or cannot read). */
@@ -291,6 +326,69 @@ export async function bumpRoutesCreatedThisMonth(env: Env, uid: string): Promise
     const t = await res.text()
     throw new Error(`create usage bump failed: ${res.status} ${t.slice(0, 300)}`)
   }
+}
+
+/**
+ * Server-side Free weekly GPX claim. Premium always allowed.
+ * Returns allowed=false when Free weekly taste is spent.
+ */
+export async function claimFreeGpxExport(
+  env: Env,
+  uid: string,
+): Promise<{ allowed: boolean; plan: 'free' | 'premium'; remaining: number; reason?: string }> {
+  const ent = await readUserEntitlements(env, uid)
+  if (!ent) {
+    return { allowed: false, plan: 'free', remaining: 0, reason: 'entitlements_unavailable' }
+  }
+  if (ent.plan === 'premium') {
+    return { allowed: true, plan: 'premium', remaining: Number.POSITIVE_INFINITY }
+  }
+  const week = isoWeekKey()
+  const used = ent.freeGpxWeekKey === week ? (ent.freeGpxUsedThisWeek ?? 0) : 0
+  if (used >= FREE_GPX_PER_WEEK) {
+    return { allowed: false, plan: 'free', remaining: 0, reason: 'gpx_week_limit' }
+  }
+
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    // Soft allow when Admin SA missing — client still records locally.
+    return { allowed: true, plan: 'free', remaining: FREE_GPX_PER_WEEK - used - 1, reason: 'sa_missing' }
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+  const usageFields =
+    (
+      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
+        | { mapValue?: { fields?: Record<string, unknown> } }
+        | undefined
+    )?.mapValue?.fields ?? {}
+  const nextUsed = used + 1
+  const merged = {
+    ...usageFields,
+    freeGpxWeekKey: { stringValue: week },
+    freeGpxUsedThisWeek: { integerValue: String(nextUsed) },
+  }
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        usage: { mapValue: { fields: merged } },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`gpx claim failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+  return { allowed: true, plan: 'free', remaining: Math.max(0, FREE_GPX_PER_WEEK - nextUsed) }
 }
 
 /** Admin-only: set users.plan (allowlist / Stripe). Client rules freeze plan. */

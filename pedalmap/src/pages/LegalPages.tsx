@@ -45,7 +45,7 @@ export function PrivacyPage() {
           <li>Cloudflare Workers — proxy de routing y webhooks Stripe.</li>
           <li>OpenRouteService / HeiGIT — cálculo de rutas (coordenadas del trayecto).</li>
           <li>Open-Meteo — viento/meteo por punto de la ruta.</li>
-          <li>Stripe — pagos Premium (modo test hasta activar cobro real).</li>
+          <li>Stripe — pagos Premium (suscripción mensual/anual).</li>
         </ul>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Conservación y derechos</h2>
         <p>
@@ -110,10 +110,10 @@ export function TermsPage() {
         <p>
           PedalMap es una herramienta de planificación ciclista. Al usarla aceptas estas condiciones.
         </p>
-        <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Servicio beta</h2>
+        <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Servicio</h2>
         <p>
-          El producto puede estar en beta pública. Las funciones Premium en modo test de Stripe no
-          implican cobro real hasta que se activen precios live.
+          PedalMap puede evolucionar con funciones nuevas. Premium se cobra vía Stripe según el plan
+          que elijas (mensual o anual). Puedes cancelar desde el portal de cliente.
         </p>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Uso responsable</h2>
         <p>

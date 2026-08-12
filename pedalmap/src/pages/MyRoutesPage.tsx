@@ -301,19 +301,29 @@ export function MyRoutesPage() {
               alert('Tu GPX Free de esta semana ya está usado. Premium = ilimitado.')
               return
             }
-            const xml = exportRouteToGpx(route)
-            const blob = new Blob([xml], { type: 'application/gpx+xml' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${route.shareSlug || route.id}.gpx`
-            a.click()
-            URL.revokeObjectURL(url)
-            if (profile && profile.plan !== 'premium') {
-              void authService.recordFreeGpxExport(profile.uid).catch(() => undefined)
-              track('free_trial_used', { kind: 'gpx' })
-            }
-            track('gpx_exported')
+            void (async () => {
+              if (profile && profile.plan !== 'premium') {
+                const { claimServerGpxExport } = await import('@/lib/planSync')
+                const claim = await claimServerGpxExport()
+                if (claim && !claim.allowed) {
+                  alert('Tu GPX Free de esta semana ya está usado. Premium = ilimitado.')
+                  return
+                }
+              }
+              const xml = exportRouteToGpx(route)
+              const blob = new Blob([xml], { type: 'application/gpx+xml' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${route.shareSlug || route.id}.gpx`
+              a.click()
+              URL.revokeObjectURL(url)
+              if (profile && profile.plan !== 'premium') {
+                void authService.recordFreeGpxExport(profile.uid).catch(() => undefined)
+                track('free_trial_used', { kind: 'gpx' })
+              }
+              track('gpx_exported')
+            })()
           }}
         />
       )}

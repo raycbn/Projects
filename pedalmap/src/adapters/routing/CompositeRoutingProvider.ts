@@ -35,7 +35,37 @@ export class CompositeRoutingProvider implements RoutingProvider {
 
     if (this.valhalla.isConfigured()) {
       try {
-        return await this.valhalla.calculateRoute(request)
+        const result = await this.valhalla.calculateRoute(request)
+        const altCount = result.alternatives?.length ?? 0
+        // Top up with ORS when Valhalla returned fewer than 2 alternatives.
+        if (
+          request.wantAlternatives &&
+          altCount < 2 &&
+          request.routeType !== 'circular' &&
+          this.ors.isConfigured()
+        ) {
+          try {
+            const ors = await this.ors.calculateRoute({
+              ...request,
+              wantAlternatives: true,
+            })
+            const merged = [
+              ...(result.alternatives ?? []),
+              {
+                geometry: ors.geometry,
+                elevationProfile: ors.elevationProfile,
+                stats: ors.stats,
+                rawInstructions: ors.rawInstructions,
+                surfaceEdges: ors.surfaceEdges,
+              },
+              ...(ors.alternatives ?? []),
+            ]
+            return { ...result, alternatives: merged.slice(0, 2) }
+          } catch (orsErr) {
+            console.warn('[routing] ORS alternatives top-up failed', orsErr)
+          }
+        }
+        return result
       } catch (error) {
         console.warn('[routing] Valhalla failed; falling back to ORS', error)
         if (!this.ors.isConfigured()) throw error
@@ -46,7 +76,6 @@ export class CompositeRoutingProvider implements RoutingProvider {
       throw new RoutingError('ORS fallback is not configured', 'not_configured')
     }
 
-    // Keep alternatives when the user asked for them; otherwise keep the slim failover.
     return this.ors.calculateRoute({
       ...request,
       wantAlternatives: Boolean(request.wantAlternatives),

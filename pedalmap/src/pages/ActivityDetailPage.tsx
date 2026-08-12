@@ -4,13 +4,17 @@ import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { activityRepository } from '@/services/ActivityRepository'
-import type { Activity, RouteGeometry, Waypoint } from '@/domain/types'
+import { routeRepository } from '@/services/RouteRepository'
+import type { Activity, RouteDraft, RouteGeometry, Waypoint } from '@/domain/types'
 import {
   formatDistance,
   formatDuration,
   formatElevation,
   formatSpeedKmh,
 } from '@/lib/stats'
+import { shareActivityCard } from '@/lib/shareCard'
+import { track } from '@/lib/analytics'
+import { canSaveRoute } from '@/services/EntitlementService'
 
 const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
@@ -22,10 +26,13 @@ const MapView = lazy(() =>
  */
 export function ActivityDetailPage() {
   const { activityId = '' } = useParams()
-  const { user, firebaseReady } = useAuth()
+  const { user, profile, firebaseReady } = useAuth()
   const [activity, setActivity] = useState<Activity | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [publishBusy, setPublishBusy] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
 
   usePageMeta({
     title: activity ? `${activity.title} | PedalMap` : 'Actividad | PedalMap',
@@ -96,6 +103,82 @@ export function ActivityDetailPage() {
     ]
   }, [geometry])
 
+  async function handleWhatsAppShare() {
+    if (!activity) return
+    setShareBusy(true)
+    setHint(null)
+    try {
+      const url = `${window.location.origin}/actividades/${activity.id}`
+      const result = await shareActivityCard(
+        {
+          title: activity.title,
+          distanceMeters: activity.stats.distanceMeters,
+          elevationGainMeters: activity.stats.elevationGainMeters,
+          durationSeconds: activity.stats.movingTimeSeconds ?? activity.stats.durationSeconds,
+          bikeType: activity.bikeType,
+        },
+        url,
+      )
+      setHint(
+        result === 'whatsapp'
+          ? 'WhatsApp abierto · tarjeta descargada'
+          : result === 'copied'
+            ? 'Mensaje copiado'
+            : 'Tarjeta lista',
+      )
+      track('activity_shared', { via: 'whatsapp' })
+    } catch (err) {
+      console.error('[activity share]', err)
+      setHint('No se pudo compartir.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  async function handlePublishExplore() {
+    if (!activity || !geometry || !user || user.isAnonymous) {
+      setHint('Inicia sesión para publicar en Explorar.')
+      return
+    }
+    const entitlement = canSaveRoute(profile)
+    if (!entitlement.ok) {
+      setHint('Has alcanzado el límite de rutas guardadas en Free.')
+      return
+    }
+    setPublishBusy(true)
+    setHint(null)
+    try {
+      const draft: RouteDraft = {
+        title: activity.title || 'Salida publicada',
+        type: 'a_to_b',
+        bikeType: activity.bikeType,
+        preferences: [],
+        waypoints,
+        geometry,
+        elevationProfile: activity.track.map((p) => ({
+          distanceMeters: 0,
+          elevationMeters: p.elevationMeters ?? 0,
+          position: p.position,
+        })),
+        stats: {
+          distanceMeters: activity.stats.distanceMeters,
+          elevationGainMeters: activity.stats.elevationGainMeters,
+          elevationLossMeters: activity.stats.elevationLossMeters ?? 0,
+          estimatedDurationSeconds: activity.stats.durationSeconds,
+          difficulty: 'moderate',
+        },
+      }
+      const published = await routeRepository.publishForShare(user.uid, draft)
+      setHint(`Publicada en Explorar · /route/${published.shareSlug}`)
+      track('route_shared', { via: 'activity_publish', public: true })
+    } catch (err) {
+      console.error('[activity publish]', err)
+      setHint('No se pudo publicar. Revisa el límite Free de rutas guardadas.')
+    } finally {
+      setPublishBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
@@ -136,6 +219,26 @@ export function ActivityDetailPage() {
           <Button variant="ghost">Historial</Button>
         </Link>
       </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
+          disabled={shareBusy}
+          onClick={() => void handleWhatsAppShare()}
+        >
+          {shareBusy ? 'Preparando…' : 'WhatsApp'}
+        </Button>
+        {user && !user.isAnonymous && geometry ? (
+          <Button
+            variant="ghost"
+            disabled={publishBusy}
+            onClick={() => void handlePublishExplore()}
+          >
+            {publishBusy ? 'Publicando…' : 'Publicar en Explorar'}
+          </Button>
+        ) : null}
+      </div>
+      {hint ? <p className="mt-2 text-sm text-[var(--color-stone)]">{hint}</p> : null}
 
       <section className="mt-6 h-56 overflow-hidden rounded-2xl bg-[var(--color-fog)] ring-1 ring-[var(--color-fog)]">
         <Suspense

@@ -12,6 +12,7 @@ export type ServerEntitlements = {
   plan: 'free' | 'premium'
   allowlisted: boolean
   gpxExport: boolean
+  freeGpxRemaining?: number | null
   maxRoutesSaved: number | null
   routesSaved: number
   canSaveRoute?: boolean
@@ -56,6 +57,45 @@ export async function fetchServerEntitlements(): Promise<ServerEntitlements | nu
     return (await res.json()) as ServerEntitlements
   } catch (error) {
     console.warn('[planSync] entitlements failed', error)
+    return null
+  }
+}
+
+/**
+ * Server-enforced Free weekly GPX claim. Premium always ok.
+ * Returns null if API unavailable (caller may fall back to client counter).
+ */
+export async function claimServerGpxExport(): Promise<{
+  allowed: boolean
+  remaining: number | null
+  error?: string
+} | null> {
+  const base = apiBase()
+  if (!base) return null
+  try {
+    const res = await fetch(`${base}/me/claim-gpx`, {
+      method: 'POST',
+      headers: await routingAuthHeaders({ Accept: 'application/json' }),
+      body: '{}',
+    })
+    const data = (await res.json().catch(() => ({}))) as {
+      allowed?: boolean
+      remaining?: number | null
+      error?: string
+    }
+    if (res.status === 403) {
+      return { allowed: false, remaining: 0, error: data.error }
+    }
+    if (!res.ok) {
+      console.warn('[planSync] claim-gpx', res.status)
+      return null
+    }
+    return {
+      allowed: data.allowed !== false,
+      remaining: data.remaining ?? null,
+    }
+  } catch (error) {
+    console.warn('[planSync] claim-gpx failed', error)
     return null
   }
 }

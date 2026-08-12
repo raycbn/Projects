@@ -215,6 +215,30 @@ export class RouteRepository {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
+async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
+    const ids = [...new Set(userIds.filter(Boolean))].slice(0, 20)
+    if (!ids.length) return []
+    const chunks: string[][] = []
+    for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10))
+    const rows: SavedRoute[] = []
+    for (const chunk of chunks) {
+      try {
+        const q = query(
+          collection(getDb(), 'routes'),
+          where('isPublic', '==', true),
+          where('userId', 'in', chunk),
+        )
+        const snap = await getDocs(q)
+        for (const d of snap.docs) rows.push(this.mapDoc(d.id, d.data()))
+      } catch (err) {
+        console.warn('[routes] listPublicByUserIds', err)
+      }
+    }
+    return rows
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, max)
+  }
+
   async listPublic(max = 40): Promise<SavedRoute[]> {
     const q = query(
       collection(getDb(), 'routes'),

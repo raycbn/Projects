@@ -15,7 +15,10 @@ import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { shareRouteCard } from '@/lib/shareCard'
 import { routeCameraKey } from '@/lib/mapCamera'
 import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
-import { canSaveRoute } from '@/services/EntitlementService'
+import {
+  canSaveRoute,
+} from '@/services/EntitlementService'
+import { authService } from '@/services/AuthService'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import {
   formatWeatherHourCaption,
@@ -71,6 +74,9 @@ export function ReadyRoutePage() {
   const [windOpen, setWindOpen] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
+  const [publishBusy, setPublishBusy] = useState(false)
+  const [windWatchBusy, setWindWatchBusy] = useState(false)
+  const [postSaveHint, setPostSaveHint] = useState<'wind' | 'explore' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
@@ -241,6 +247,7 @@ export function ReadyRoutePage() {
       if (packet?.savedRouteId) {
         await routeRepository.update(packet.savedRouteId, user.uid, draftToSave)
         setMessage('Ruta actualizada en Mis rutas.')
+        setPostSaveHint('explore')
       } else {
         const saved = await routeRepository.save(user.uid, draftToSave, { isPublic: false })
         const next = {
@@ -256,6 +263,7 @@ export function ReadyRoutePage() {
             ? `Guardada · mejor ventana ${draftToSave.bestWindWindow.caption}`
             : 'Ruta guardada en Mis rutas.',
         )
+        setPostSaveHint('wind')
       }
       track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'ready_route' })
     } catch (error) {
@@ -271,27 +279,25 @@ export function ReadyRoutePage() {
     }
   }
 
-  async function handleShare() {
-    if (!draft) return
+  async function publishPublic(shareAfter = false): Promise<string | null> {
+    if (!draft) return null
     if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
-      setMessage('Inicia sesión con una cuenta real para compartir el enlace completo.')
-      return
+      setMessage('Inicia sesión con una cuenta real para publicar.')
+      return null
     }
-    setShareBusy(true)
-    setMessage('Publicando ruta…')
-    try {
-      const published = await routeRepository.publishForShare(user.uid, draft, {
-        routeId: packet?.savedRouteId,
-      })
-      const next = {
-        draft,
-        savedRouteId: published.routeId,
-        shareSlug: published.shareSlug,
-        source: packet?.source ?? ('calculate' as const),
-      }
-      stashReadyRoute(next)
-      setPacket(next)
-      const url = `${window.location.origin}/route/${published.shareSlug}`
+    const published = await routeRepository.publishForShare(user.uid, draft, {
+      routeId: packet?.savedRouteId,
+    })
+    const next = {
+      draft,
+      savedRouteId: published.routeId,
+      shareSlug: published.shareSlug,
+      source: packet?.source ?? ('calculate' as const),
+    }
+    stashReadyRoute(next)
+    setPacket(next)
+    const url = `${window.location.origin}/route/${published.shareSlug}`
+    if (shareAfter) {
       const result = await shareRouteCard(draft, url)
       setMessage(
         result === 'whatsapp' || result === 'shared'
@@ -300,7 +306,19 @@ export function ReadyRoutePage() {
             ? `Mensaje copiado · ${url}`
             : `Enlace: ${url}`,
       )
-      track('route_shared', { via: 'ready_route', public: true })
+    } else {
+      setMessage(`Publicada en Explorar · ${url}`)
+      setPostSaveHint(null)
+    }
+    track('route_shared', { via: 'ready_route', public: true, share_after: shareAfter })
+    return url
+  }
+
+  async function handleShare() {
+    setShareBusy(true)
+    setMessage('Publicando ruta…')
+    try {
+      await publishPublic(true)
     } catch (error) {
       console.error('[ready-route] share', error)
       const msg = error instanceof Error ? error.message : ''
@@ -316,6 +334,44 @@ export function ReadyRoutePage() {
       )
     } finally {
       setShareBusy(false)
+    }
+  }
+
+  async function handlePublishExplore() {
+    setPublishBusy(true)
+    try {
+      await publishPublic(false)
+    } catch (error) {
+      console.error('[ready-route] publish', error)
+      setMessage('No se pudo publicar en Explorar.')
+    } finally {
+      setPublishBusy(false)
+    }
+  }
+
+  async function handleEnableWindWatch() {
+    if (!user || user.isAnonymous || !packet?.savedRouteId) {
+      setMessage('Guarda la ruta primero para activar el aviso de viento.')
+      return
+    }
+    setWindWatchBusy(true)
+    setMessage(null)
+    try {
+      if (!profile?.notifications?.windAlertsEnabled) {
+        await authService.updateNotifications(user.uid, {
+          windAlertsEnabled: true,
+          windAlertsEmail: true,
+        })
+      }
+      await routeRepository.setWindAlertEnabled(packet.savedRouteId, user.uid, true)
+      setPostSaveHint(null)
+      setMessage('Vigilancia de viento activa · te avisamos si hay buena ventana.')
+      track('wind_alert_opt_in', { via: 'ready_route_save', email: true })
+    } catch (error) {
+      console.error('[ready-route] wind watch', error)
+      setMessage('No se pudo activar el aviso. Prueba en Perfil → avisos de viento.')
+    } finally {
+      setWindWatchBusy(false)
     }
   }
 
@@ -437,15 +493,66 @@ export function ReadyRoutePage() {
               {saveBusy ? 'Guardando…' : packet?.savedRouteId ? 'Actualizar' : 'Guardar'}
             </Button>
           </div>
+          {packet?.savedRouteId && !packet.shareSlug ? (
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={publishBusy}
+              onClick={() => void handlePublishExplore()}
+            >
+              {publishBusy ? 'Publicando…' : 'Publicar en Explorar'}
+            </Button>
+          ) : null}
+          {postSaveHint === 'wind' && packet?.savedRouteId ? (
+            <div className="rounded-2xl bg-[color-mix(in_oklab,var(--color-signal)_18%,white)] px-3 py-3 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-trail)]/25">
+              <p className="font-semibold">¿Vigilar el viento de esta ruta?</p>
+              <p className="mt-1 text-[var(--color-stone)]">
+                Te avisamos en la app (y por email) cuando haya una ventana buena.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={windWatchBusy}
+                  onClick={() => void handleEnableWindWatch()}
+                >
+                  {windWatchBusy ? 'Activando…' : 'Activar vigilancia'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPostSaveHint('explore')}>
+                  Ahora no
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {postSaveHint === 'explore' && packet?.savedRouteId && !packet.shareSlug ? (
+            <div className="rounded-2xl bg-[var(--color-mist)] px-3 py-3 text-sm text-[var(--color-forest)]">
+              <p className="font-semibold">¿Publicar en Explorar?</p>
+              <p className="mt-1 text-[var(--color-stone)]">
+                Aparece en la comunidad para que otros ciclistas la descubran.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={publishBusy}
+                  onClick={() => void handlePublishExplore()}
+                >
+                  {publishBusy ? 'Publicando…' : 'Publicar'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPostSaveHint(null)}>
+                  Mantener privada
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {(draft.routeOptions?.length ?? 0) > 1 && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-              Opciones
+              Opciones ({draft.routeOptions!.length})
             </p>
             {draft.routeOptions!.map((opt) => {
               const active = (draft.selectedOptionId ?? draft.routeOptions![0]?.id) === opt.id
+              const suit = opt.stats.surfaceStats?.suitability?.score
               return (
                 <button
                   key={opt.id}
@@ -463,9 +570,15 @@ export function ReadyRoutePage() {
                     setPacket(next)
                   }}
                 >
-                  {opt.label}
-                  {active ? ' · activa' : ''} · {formatDistance(opt.stats.distanceMeters)} ·{' '}
-                  {formatElevation(opt.stats.elevationGainMeters)}
+                  <span className="block">
+                    {opt.label}
+                    {active ? ' · activa' : ''}
+                  </span>
+                  <span className="mt-0.5 block font-medium opacity-80">
+                    {formatDistance(opt.stats.distanceMeters)} ·{' '}
+                    {formatElevation(opt.stats.elevationGainMeters)}
+                    {typeof suit === 'number' ? ` · aptitud ${suit}%` : ''}
+                  </span>
                 </button>
               )
             })}
