@@ -33,6 +33,14 @@
       ]
     },
     {
+      "collectionGroup": "routes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPublic", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "publicProfiles",
       "queryScope": "COLLECTION",
       "fields": [

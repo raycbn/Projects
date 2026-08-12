@@ -87,7 +87,20 @@ service cloud.firestore {
 
     match /publicProfiles/{userId} {
       allow read: if resource.data.isPublic == true || isOwner(userId);
-      allow create, update: if isOwner(userId);
+      allow create: if isOwner(userId)
+        // Allow lean create when A follows B and B has no publicProfiles doc yet.
+        || (isSignedIn()
+          && request.resource.data.keys().hasAll(['followersCount', 'isPublic', 'updatedAt'])
+          && request.resource.data.followersCount is int
+          && request.resource.data.followersCount >= 0
+          && request.resource.data.followersCount <= 1);
+      allow update: if isOwner(userId)
+        // Anyone signed-in may adjust follower counters when following/unfollowing.
+        || (isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['followersCount', 'updatedAt'])
+          && request.resource.data.followersCount is int
+          && request.resource.data.followersCount >= 0);
       allow delete: if isOwner(userId);
     }
 

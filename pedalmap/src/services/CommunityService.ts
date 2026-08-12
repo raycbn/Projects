@@ -87,6 +87,8 @@ export class CommunityService {
 
   async follow(followerId: string, followeeId: string): Promise<void> {
     if (followerId === followeeId) return
+    if (await this.isFollowing(followerId, followeeId)) return
+
     const edgeRef = doc(getDb(), 'follows', followerId, 'following', followeeId)
     const reverseRef = doc(getDb(), 'follows', followeeId, 'followers', followerId)
     const batch = writeBatch(getDb())
@@ -100,23 +102,47 @@ export class CommunityService {
       followeeId,
       createdAt: serverTimestamp(),
     })
+
     const followerProfile = doc(getDb(), 'publicProfiles', followerId)
     const followeeProfile = doc(getDb(), 'publicProfiles', followeeId)
     const [a, b] = await Promise.all([getDoc(followerProfile), getDoc(followeeProfile)])
     batch.set(
       followerProfile,
-      { followingCount: (a.data()?.followingCount ?? 0) + 1, updatedAt: serverTimestamp() },
+      {
+        followingCount: (a.data()?.followingCount ?? 0) + 1,
+        updatedAt: serverTimestamp(),
+      },
       { merge: true },
     )
-    batch.set(
-      followeeProfile,
-      { followersCount: (b.data()?.followersCount ?? 0) + 1, updatedAt: serverTimestamp() },
-      { merge: true },
-    )
+    if (b.exists()) {
+      // Non-owners may only touch followersCount + updatedAt (see firestore.rules).
+      batch.set(
+        followeeProfile,
+        {
+          followersCount: (b.data()?.followersCount ?? 0) + 1,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    } else {
+      // Lean create so follow works before the followee visits Explorar.
+      batch.set(followeeProfile, {
+        followersCount: 1,
+        followingCount: 0,
+        routesPublicCount: 0,
+        isPublic: true,
+        displayName: null,
+        photoURL: null,
+        bio: '',
+        updatedAt: serverTimestamp(),
+      })
+    }
     await batch.commit()
   }
 
   async unfollow(followerId: string, followeeId: string): Promise<void> {
+    if (!(await this.isFollowing(followerId, followeeId))) return
+
     const edgeRef = doc(getDb(), 'follows', followerId, 'following', followeeId)
     const reverseRef = doc(getDb(), 'follows', followeeId, 'followers', followerId)
     const batch = writeBatch(getDb())
@@ -133,20 +159,27 @@ export class CommunityService {
       },
       { merge: true },
     )
-    batch.set(
-      followeeProfile,
-      {
-        followersCount: Math.max(0, (b.data()?.followersCount ?? 1) - 1),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
+    if (b.exists()) {
+      batch.set(
+        followeeProfile,
+        {
+          followersCount: Math.max(0, (b.data()?.followersCount ?? 1) - 1),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    }
     await batch.commit()
   }
 
   async isFollowing(followerId: string, followeeId: string): Promise<boolean> {
     const snap = await getDoc(doc(getDb(), 'follows', followerId, 'following', followeeId))
     return snap.exists()
+  }
+
+  async listFollowingIds(followerId: string): Promise<string[]> {
+    const edges = await this.listFollowing(followerId)
+    return edges.map((e) => e.followeeId)
   }
 
   async listFollowing(followerId: string): Promise<FollowEdge[]> {
@@ -159,6 +192,20 @@ export class CommunityService {
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? new Date().toISOString(),
       }
     })
+  }
+
+  /** Profiles of people you follow (for Siguiendo header chips). */
+  async listFollowingProfiles(followerId: string, max = 40): Promise<PublicProfile[]> {
+    const ids = (await this.listFollowingIds(followerId)).slice(0, max)
+    if (!ids.length) return []
+    const rows: PublicProfile[] = []
+    await Promise.all(
+      ids.map(async (uid) => {
+        const profile = await this.getPublicProfile(uid)
+        if (profile) rows.push(profile)
+      }),
+    )
+    return rows.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
   }
 
   /** Public routes from people you follow (feed). */
