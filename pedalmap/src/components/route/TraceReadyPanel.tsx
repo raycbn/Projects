@@ -160,6 +160,7 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
           draft: draftToSave,
           savedRouteId: saved.id,
           shareSlug: saved.shareSlug ?? null,
+          isPublic: false,
           source: 'saved',
         })
         setMessage(
