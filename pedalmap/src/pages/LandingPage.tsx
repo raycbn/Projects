@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/app/AuthContext'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
 import { FREE_LIMITS, FREE_TRIALS, ANNUAL_TRIAL_DAYS } from '@/domain/types'
@@ -12,6 +13,9 @@ import {
 } from '@/lib/jsonLd'
 
 export function LandingPage() {
+  const { profile } = useAuth()
+  const isPremium = profile?.plan === 'premium'
+
   usePageMeta({
     title: 'PedalMap — planificador de rutas bici en España',
     description:
@@ -58,14 +62,25 @@ export function LandingPage() {
             <Link to="/route-planner">
               <Button className="!px-6 !py-3 text-base">Crear una ruta</Button>
             </Link>
-            <Link to="/premium">
-              <Button
-                variant="ghost"
-                className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
-              >
-                Ver Premium
-              </Button>
-            </Link>
+            {isPremium ? (
+              <Link to="/explorar">
+                <Button
+                  variant="ghost"
+                  className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
+                >
+                  Explorar
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/premium">
+                <Button
+                  variant="ghost"
+                  className="!border-white/55 !bg-white/10 !px-6 !py-3 !text-white backdrop-blur-sm"
+                >
+                  Ver Premium
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -122,11 +137,17 @@ export function LandingPage() {
                 <li>· {ANNUAL_TRIAL_DAYS} días de prueba con el anual · 39,99 €/año</li>
                 <li>· o 4,99 €/mes</li>
               </ul>
-              <Link to="/premium" className="mt-6 inline-block">
-                <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
-                  Ir a Premium
-                </Button>
-              </Link>
+              {isPremium ? (
+                <p className="mt-6 text-sm font-semibold text-[var(--color-signal)]">
+                  Ya eres Premium
+                </p>
+              ) : (
+                <Link to="/premium" className="mt-6 inline-block">
+                  <Button className="!bg-[var(--color-signal)] !text-[var(--color-ink)]">
+                    Ir a Premium
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>

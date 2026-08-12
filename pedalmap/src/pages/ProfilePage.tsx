@@ -204,11 +204,19 @@ export function ProfilePage() {
                 Conectar GPS
               </Link>
               <Link
-                to="/premium"
+                to="/explorar"
                 className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
               >
-                Premium
+                Explorar
               </Link>
+              {profile?.plan === 'premium' ? null : (
+                <Link
+                  to="/premium"
+                  className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"
+                >
+                  Premium
+                </Link>
+              )}
               <Link
                 to="/ruta"
                 className="font-semibold text-[var(--color-trail)] underline-offset-2 hover:underline"

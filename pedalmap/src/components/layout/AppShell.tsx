@@ -89,6 +89,9 @@ export function AppShell() {
               <Link className="hover:text-[var(--color-forest)]" to="/que-es-pedalmap">
                 Qué es
               </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/explorar">
+                Explorar
+              </Link>
               <Link className="hover:text-[var(--color-forest)]" to="/blog">
                 Blog
               </Link>
