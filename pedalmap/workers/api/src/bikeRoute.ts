@@ -506,7 +506,8 @@ type EnrichedRoute = Awaited<ReturnType<typeof enrichTrip>>
 
 function routeFingerprint(route: EnrichedRoute): string {
   const coords = route.coordinates
-  const at = (t: number) => coords[Math.min(coords.length - 1, Math.floor(coords.length * t))] ?? coords[0]
+  const at = (t: number) =>
+    coords[Math.min(coords.length - 1, Math.floor(coords.length * t))] ?? coords[0]
   const q1 = at(0.25)
   const mid = at(0.5)
   const q3 = at(0.75)
@@ -525,11 +526,36 @@ function routeFingerprint(route: EnrichedRoute): string {
   ].join('|')
 }
 
+function pointAt(route: EnrichedRoute, t: number): [number, number] {
+  const coords = route.coordinates
+  return coords[Math.min(coords.length - 1, Math.floor(coords.length * t))] ?? coords[0]!
+}
+
+function approxMetersBetween(a: [number, number], b: [number, number]): number {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const φ1 = toRad(a[1])
+  const φ2 = toRad(b[1])
+  const Δφ = toRad(b[1] - a[1])
+  const Δλ = toRad(b[0] - a[0])
+  const s =
+    Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2
+  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(s)))
+}
+
 function routesTooSimilar(a: EnrichedRoute, b: EnrichedRoute): boolean {
   const denom = Math.max(a.distanceMeters, b.distanceMeters, 1)
   const distRatio = Math.abs(a.distanceMeters - b.distanceMeters) / denom
-  if (distRatio > 0.035) return false
-  return routeFingerprint(a) === routeFingerprint(b)
+  // Clearly different length → keep both.
+  if (distRatio > 0.06) return false
+  if (routeFingerprint(a) === routeFingerprint(b)) return true
+  // Same-ish length: require corridors to stay close along most of the route.
+  // Parallel options ~600m+ apart must remain distinct (old fingerprint was too coarse).
+  const samples = [0.2, 0.35, 0.5, 0.65, 0.8]
+  let close = 0
+  for (const t of samples) {
+    if (approxMetersBetween(pointAt(a, t), pointAt(b, t)) < 450) close += 1
+  }
+  return close >= 4
 }
 
 function mergeUniqueRoutes(routes: EnrichedRoute[], max = 3): EnrichedRoute[] {
@@ -602,8 +628,8 @@ async function topUpWithCostingVariants(
 }
 
 /**
- * Force geometric diversity with a mid-corridor via (left/right) when costing
- * variants collapse to a single corridor — common on short urban A→B.
+ * Force geometric diversity with corridor vias when costing variants collapse.
+ * Cap attempts — long A→B + many vias was blowing Cloudflare CPU (1102).
  */
 async function topUpWithDetours(
   env: Env,
@@ -613,13 +639,10 @@ async function topUpWithDetours(
   seed: EnrichedRoute[],
 ): Promise<EnrichedRoute[]> {
   let unique = mergeUniqueRoutes(seed, 3)
-  if (unique.length >= 3 || locations.length < 2) return unique
+  if (unique.length >= 2 || locations.length < 2) return unique
 
   const start = locations[0]
   const end = locations[locations.length - 1]
-  const midLat = (start.lat + end.lat) / 2
-  const midLng = (start.lon + end.lon) / 2
-  // Rough corridor length → via offset (400–1800 m).
   const approxM =
     Math.acos(
       Math.min(
@@ -630,13 +653,17 @@ async function topUpWithDetours(
             Math.cos(((end.lon - start.lon) * Math.PI) / 180),
       ),
     ) * 6371000
-  const offsetM = Math.max(400, Math.min(1800, approxM * 0.18))
+  const offsetM = Math.max(700, Math.min(4500, approxM * 0.22))
   const bearing =
     (Math.atan2(end.lon - start.lon, end.lat - start.lat) * 180) / Math.PI
-  const left = offsetLatLng({ lat: midLat, lng: midLng }, bearing - 90, offsetM)
-  const right = offsetLatLng({ lat: midLat, lng: midLng }, bearing + 90, offsetM)
+  const midLat = (start.lat + end.lat) / 2
+  const midLng = (start.lon + end.lon) / 2
+  const vias = [
+    offsetLatLng({ lat: midLat, lng: midLng }, bearing - 90, offsetM),
+    offsetLatLng({ lat: midLat, lng: midLng }, bearing + 90, offsetM),
+  ]
 
-  for (const via of [left, right]) {
+  for (const via of vias) {
     if (unique.length >= 3) break
     try {
       const withVia = [
@@ -644,7 +671,9 @@ async function topUpWithDetours(
         { lat: via.lat, lon: via.lng, type: 'through' },
         locations[locations.length - 1],
       ]
-      const extra = await routeLocations(env, withVia, costing, language)
+      const extra = await routeLocations(env, withVia, costing, language, {
+        elevationIntervalM: 50,
+      })
       unique = mergeUniqueRoutes([...unique, extra], 3)
     } catch (err) {
       console.warn('[bike-route] detour top-up failed', err)
@@ -654,75 +683,34 @@ async function topUpWithDetours(
 }
 
 /**
- * Primary Valhalla route + native alternates, topped up with costing variants
- * so A→B / ida-vuelta usually returns 2–3 distinct options.
+ * Primary + native alternates first; only top up if we still have <2 options.
+ * Avoid parallel triple enrich (CF CPU 1102 on long Spanish A→B).
  */
 async function routeLocationsWithOptions(
   env: Env,
   locations: Array<{ lat: number; lon: number; type: string }>,
   costing: Record<string, number | string>,
   language: string,
-  mode: 'a_to_b' | 'out_and_back' = 'a_to_b',
+  _mode: 'a_to_b' | 'out_and_back' = 'a_to_b',
 ): Promise<EnrichedRoute & { alternatives: EnrichedRoute[] }> {
-  const parallel = Boolean(env.STADIA_API_KEY) && mode === 'a_to_b'
-
-  if (parallel) {
-    const [mainSettled, roadsSettled, mixedSettled] = await Promise.allSettled([
-      routeLocations(env, locations, costing, language, { alternates: 2 }),
-      routeLocations(env, locations, costingVariant(costing, 'roads'), language),
-      routeLocations(env, locations, costingVariant(costing, 'mixed'), language),
-    ])
-
-    if (mainSettled.status !== 'fulfilled') {
-      const extras: EnrichedRoute[] = []
-      if (roadsSettled.status === 'fulfilled') extras.push(roadsSettled.value)
-      if (mixedSettled.status === 'fulfilled') extras.push(mixedSettled.value)
-      if (!extras.length) throw mainSettled.reason
-      let unique = mergeUniqueRoutes(extras, 3)
-      if (unique.length < 3) {
-        unique = await topUpWithCostingVariants(env, locations, costing, language, unique, true)
-      }
-      if (unique.length < 3) {
-        unique = await topUpWithDetours(env, locations, costing, language, unique)
-      }
-      const primary = unique[0]!
-      return { ...primary, alternatives: unique.slice(1) }
-    }
-
-    const main = mainSettled.value
-    const extras: EnrichedRoute[] = [...(main.alternatives ?? [])]
-    if (roadsSettled.status === 'fulfilled') extras.push(roadsSettled.value)
-    if (mixedSettled.status === 'fulfilled') extras.push(mixedSettled.value)
-
-    let unique = mergeUniqueRoutes([main, ...extras], 3)
-    if (unique.length < 3) {
-      unique = await topUpWithCostingVariants(
-        env,
-        locations,
-        costing,
-        language,
-        unique,
-        true,
-      )
-    }
-    if (unique.length < 3) {
-      unique = await topUpWithDetours(env, locations, costing, language, unique)
-    }
-    const primary = unique[0] ?? main
-    return { ...primary, alternatives: unique.slice(1) }
-  }
-
-  // FOSSGIS / out-and-back: native alternates first, then sequential costing top-up.
   const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
-  let unique = await topUpWithCostingVariants(
-    env,
-    locations,
-    costing,
-    language,
-    [main, ...(main.alternatives ?? [])],
-    false,
-  )
-  if (unique.length < 3) {
+  let unique = mergeUniqueRoutes([main, ...(main.alternatives ?? [])], 3)
+
+  // Native alternates often enough — stop early to save CPU.
+  if (unique.length < 2) {
+    unique = await topUpWithCostingVariants(
+      env,
+      locations,
+      costing,
+      language,
+      unique,
+      false,
+    )
+  }
+  if (unique.length < 2) {
+    unique = await topUpWithDetours(env, locations, costing, language, unique)
+  } else if (unique.length < 3 && main.distanceMeters < 35000) {
+    // Only chase a 3rd option on shorter rides.
     unique = await topUpWithDetours(env, locations, costing, language, unique)
   }
   const primary = unique[0] ?? main
@@ -862,17 +850,26 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
     const wantsOptions =
       wantAlternatives &&
       (routeType === 'a_to_b' || routeType === 'out_and_back' || routeType === 'map_trace')
-    const result = wantsOptions
-      ? await routeLocationsWithOptions(
-          env,
-          locations,
-          costing,
-          language,
-          routeType === 'out_and_back' ? 'out_and_back' : 'a_to_b',
-        )
-      : await routeLocations(env, locations, costing, language, {
-          elevationIntervalM: routeType === 'out_and_back' ? 40 : ROUTE_ELEVATION_INTERVAL_M,
-        })
+    const spanM = haversine(
+      [waypoints[0].lng, waypoints[0].lat],
+      [waypoints[waypoints.length - 1].lng, waypoints[waypoints.length - 1].lat],
+    )
+    // Long corridors + native alternates/enrich hit Cloudflare CPU (1102).
+    // Return a solid primary; the browser tops up with cheap via-detours.
+    const longSpan = spanM >= 32000
+    const result =
+      wantsOptions && !longSpan
+        ? await routeLocationsWithOptions(
+            env,
+            locations,
+            costing,
+            language,
+            routeType === 'out_and_back' ? 'out_and_back' : 'a_to_b',
+          )
+        : await routeLocations(env, locations, costing, language, {
+            elevationIntervalM: routeType === 'out_and_back' || longSpan ? 45 : ROUTE_ELEVATION_INTERVAL_M,
+            ...(wantsOptions && !longSpan ? { alternates: 2 } : {}),
+          })
     return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Valhalla bike-route failed'
