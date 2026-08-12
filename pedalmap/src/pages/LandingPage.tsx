@@ -6,7 +6,8 @@ import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
 import { FREE_LIMITS, FREE_TRIALS, ANNUAL_TRIAL_DAYS } from '@/domain/types'
 import { landingFaqs } from '@/content/faqs'
-import { BRAND_CLAIMS, TESTIMONIALS } from '@/content/growthContent'
+import { BRAND_CLAIMS } from '@/content/growthContent'
+// TESTIMONIALS: sección oculta a petición (2026-08-12). Re-mostrar cuando el usuario lo pida.
 import {
   faqPageJsonLd,
   organizationJsonLd,
@@ -142,24 +143,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14 md:px-6">
-        <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
-          Quién ya rueda con PedalMap
-        </h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {TESTIMONIALS.map((t) => (
-            <blockquote
-              key={t.name}
-              className="rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]"
-            >
-              <p className="text-sm leading-relaxed text-[var(--color-forest)]">“{t.quote}”</p>
-              <footer className="mt-3 text-xs font-semibold text-[var(--color-stone)]">
-                {t.name} · {t.role}
-              </footer>
-            </blockquote>
-          ))}
-        </div>
-      </section>
+      {/* Testimonios ocultos de momento — contenido en growthContent.TESTIMONIALS; reactivar cuando se pida. */}
 
       <section className="bg-[var(--color-mist)] px-4 py-16 md:px-6">
         <div className="mx-auto max-w-6xl">
