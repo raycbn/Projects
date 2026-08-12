@@ -52,6 +52,43 @@
     font-family: var(--font-display);
   }
 
+  /**
+   * Route / activity entity names (often long geocoded addresses).
+   * Keep mobile compact so titles don't eat the first viewport.
+   */
+  .route-title {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.25rem; /* ~text-xl */
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--color-forest);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
+
+  @media (min-width: 640px) {
+    .route-title {
+      font-size: 1.5rem; /* ~text-2xl */
+    }
+  }
+
+  .route-title-card {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1rem; /* text-base */
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    color: var(--color-forest);
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 640px) {
+    .route-title-card {
+      font-size: 1.125rem; /* text-lg */
+    }
+  }
+
   .label-caps {
     font-size: 0.6875rem;
     font-weight: 600;

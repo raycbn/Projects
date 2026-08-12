@@ -54,7 +54,7 @@ export function RouteCard({
     <article className="flex flex-col gap-3 rounded-[1.5rem] bg-white/70 p-4 ring-1 ring-[var(--color-fog)]/70 transition hover:bg-white/90">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-display text-lg font-bold text-[var(--color-forest)]">{route.title}</h3>
+          <h3 className="route-title-card">{route.title}</h3>
           <p className="mt-1 text-sm text-[var(--color-stone)]">
             {formatDistance(route.stats.distanceMeters)} ·{' '}
             {formatElevation(route.stats.elevationGainMeters)} ·{' '}

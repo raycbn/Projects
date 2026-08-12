@@ -89,9 +89,7 @@ export function SharedRoutePage() {
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
         Ruta compartida · {bikeLabel(route.bikeType)}
       </p>
-      <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
-        {route.title}
-      </h1>
+      <h1 className="route-title mt-2">{route.title}</h1>
       {route.description && (
         <p className="mt-2 text-[var(--color-stone)]">{route.description}</p>
       )}

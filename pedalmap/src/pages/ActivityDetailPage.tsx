@@ -223,9 +223,7 @@ export function ActivityDetailPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
             Salida guardada
           </p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold text-[var(--color-forest)]">
-            {activity.title}
-          </h1>
+          <h1 className="route-title mt-2">{activity.title}</h1>
           <p className="mt-1 text-sm text-[var(--color-stone)]">
             {new Date(activity.startedAt).toLocaleString('es-ES')} · análisis Free incluido
           </p>

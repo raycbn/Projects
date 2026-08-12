@@ -489,9 +489,7 @@ export function ActivityPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
             Actividad GPS
           </p>
-          <h1 className="mt-1 font-display text-2xl font-extrabold text-[var(--color-forest)]">
-            {title}
-          </h1>
+          <h1 className="route-title mt-1">{title}</h1>
           {plannedRoute?.geometry?.coordinates?.length ? (
             <p className="mt-1 text-xs text-[var(--color-stone)]">
               Referencia: {plannedRoute.title} · {plannedRoute.geometry.coordinates.length} pts

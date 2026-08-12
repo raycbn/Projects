@@ -369,9 +369,7 @@ export function ExplorePage() {
                           <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-trail)]">
                             Demo · {route.area}
                           </p>
-                          <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">
-                            {route.title}
-                          </h2>
+                          <h2 className="route-title-card">{route.title}</h2>
                           <p className="text-xs text-[var(--color-stone)]">
                             {route.bikeType} · {formatDistance(route.distanceMeters)} ·{' '}
                             {formatElevation(route.elevationGainMeters)}
@@ -717,7 +715,7 @@ function RouteRow({
               {authorLabel}
             </p>
           ) : null}
-          <h2 className="font-display text-lg font-bold text-[var(--color-forest)]">{route.title}</h2>
+          <h2 className="route-title-card">{route.title}</h2>
           <p className="text-xs text-[var(--color-stone)]">
             {route.bikeType} · {formatDistance(route.stats.distanceMeters)} ·{' '}
             {formatElevation(route.stats.elevationGainMeters)}

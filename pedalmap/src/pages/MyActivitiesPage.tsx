@@ -623,9 +623,7 @@ export function MyActivitiesPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-display text-lg font-bold text-[var(--color-forest)]">
-                      {a.title}
-                    </p>
+                    <p className="route-title-card">{a.title}</p>
                     <p className="text-xs text-[var(--color-stone)]">
                       {new Date(a.startedAt).toLocaleString('es-ES')}
                       {a.source === 'strava' ? ' · importada' : a.source && a.source !== 'gps' ? ` · ${a.source}` : ''}

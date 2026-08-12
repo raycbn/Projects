@@ -584,9 +584,7 @@ export function ReadyRoutePage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
             PedalMap · Ruta lista
           </p>
-          <h1 className="mt-1 font-display text-3xl font-extrabold text-[var(--color-forest)]">
-            {draft.title || 'Tu ruta'}
-          </h1>
+          <h1 className="route-title mt-1">{draft.title || 'Tu ruta'}</h1>
           <p className="mt-2 text-[var(--color-stone)]">
             {formatDistance(draft.stats.distanceMeters)} ·{' '}
             {formatElevation(draft.stats.elevationGainMeters)} · {bikeLabel(draft.bikeType)}
