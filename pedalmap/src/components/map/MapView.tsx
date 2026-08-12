@@ -1,10 +1,19 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import { setWorkerUrl } from 'maplibre-gl'
 import type { Map, MapMouseEvent, Marker } from 'maplibre-gl'
 import type { Feature, FeatureCollection, LineString, Point } from 'geojson'
 import type { LatLng, RouteGeometry, Waypoint } from '@/domain/types'
 import { getMapStyleUrl, loadMapStyleSpec } from '@/lib/mapTiles'
+import {
+  MAP_HILLSHADE_LAYER_ID,
+  MAP_HILLSHADE_SOURCE_ID,
+  MAP_TERRAIN_SOURCE_ID,
+  MAP_TERRAIN_TILEJSON,
+  readMap3dPreference,
+  routeStartBearing,
+  writeMap3dPreference,
+} from '@/lib/map3d'
 
 /**
  * Vite bundles MapLibre into a chunk, so its relative worker URL breaks
@@ -45,6 +54,10 @@ interface MapViewProps {
   followUser?: boolean
   /** When false, hide wind barbs/chevrons/icons (colored segments stay). */
   showWindArrows?: boolean
+  /** Show Plano/3D toggle (default true). */
+  showTerrainToggle?: boolean
+  /** Force 3D on/off; omit to use saved preference (default on). */
+  terrain3d?: boolean
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
@@ -203,6 +216,61 @@ function ensureWindArrowImages(map: Map) {
 
 function removeLayerIfExists(map: Map, id: string) {
   if (map.getLayer(id)) map.removeLayer(id)
+}
+
+/** Attach free Mapterhorn DEM + hillshade. Safe to call after style load / style swap. */
+export function ensureTerrainLayers(map: Map) {
+  if (!map.getSource(MAP_TERRAIN_SOURCE_ID)) {
+    map.addSource(MAP_TERRAIN_SOURCE_ID, {
+      type: 'raster-dem',
+      url: MAP_TERRAIN_TILEJSON,
+      tileSize: 512,
+      encoding: 'terrarium',
+      attribution: '© Mapterhorn',
+    })
+  }
+  if (!map.getSource(MAP_HILLSHADE_SOURCE_ID)) {
+    map.addSource(MAP_HILLSHADE_SOURCE_ID, {
+      type: 'raster-dem',
+      url: MAP_TERRAIN_TILEJSON,
+      tileSize: 512,
+      encoding: 'terrarium',
+    })
+  }
+  if (!map.getLayer(MAP_HILLSHADE_LAYER_ID)) {
+    const before =
+      map.getLayer('route-line-casing') || map.getLayer('route-line') || undefined
+    map.addLayer(
+      {
+        id: MAP_HILLSHADE_LAYER_ID,
+        type: 'hillshade',
+        source: MAP_HILLSHADE_SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: {
+          'hillshade-shadow-color': '#2c2416',
+          'hillshade-highlight-color': '#f5f0e6',
+          'hillshade-accent-color': '#5c4a32',
+          'hillshade-exaggeration': 0.45,
+        },
+      },
+      before?.id,
+    )
+  }
+}
+
+export function setMapTerrainEnabled(map: Map, enabled: boolean) {
+  ensureTerrainLayers(map)
+  if (enabled) {
+    map.setTerrain({ source: MAP_TERRAIN_SOURCE_ID, exaggeration: 1.25 })
+    if (map.getLayer(MAP_HILLSHADE_LAYER_ID)) {
+      map.setLayoutProperty(MAP_HILLSHADE_LAYER_ID, 'visibility', 'visible')
+    }
+  } else {
+    map.setTerrain(null)
+    if (map.getLayer(MAP_HILLSHADE_LAYER_ID)) {
+      map.setLayoutProperty(MAP_HILLSHADE_LAYER_ID, 'visibility', 'none')
+    }
+  }
 }
 
 /**
@@ -398,7 +466,12 @@ function setBaseRoutePaint(map: Map, windActive: boolean) {
   }
 }
 
-function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boolean) {
+function applyGeometry(
+  map: Map,
+  geo: RouteGeometry | null | undefined,
+  fit: boolean,
+  terrain3d = false,
+) {
   if (!map.isStyleLoaded()) return false
 
   ensureRouteLayers(map)
@@ -419,7 +492,7 @@ function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boo
   })
 
   if (fit) {
-    fitMapToGeometry(map, geo)
+    fitMapToGeometry(map, geo, { terrain3d })
   }
 
   return true
@@ -429,7 +502,12 @@ function applyGeometry(map: Map, geo: RouteGeometry | null | undefined, fit: boo
 export function fitMapToGeometry(
   map: Map,
   geo: RouteGeometry,
-  opts?: { padding?: number; duration?: number },
+  opts?: {
+    padding?: number
+    duration?: number
+    /** Pitch + bearing along the route (Strava-like reveal). */
+    terrain3d?: boolean
+  },
 ) {
   if (geo.coordinates.length < 2) return
   const bounds = geo.coordinates.reduce(
@@ -440,7 +518,12 @@ export function fitMapToGeometry(
     ),
   )
   const padding = opts?.padding ?? 56
-  const duration = opts?.duration ?? 750
+  const terrain3d = Boolean(opts?.terrain3d)
+  const duration = opts?.duration ?? (terrain3d ? 1100 : 750)
+  const bearing = terrain3d
+    ? routeStartBearing(geo.coordinates as [number, number][])
+    : 0
+  const pitch = terrain3d ? 52 : 0
   const run = () => {
     try {
       map.resize()
@@ -450,7 +533,9 @@ export function fitMapToGeometry(
     map.fitBounds(bounds, {
       padding,
       duration,
-      maxZoom: 14,
+      maxZoom: terrain3d ? 13.5 : 14,
+      pitch,
+      bearing,
       essential: true,
     })
   }
@@ -573,6 +658,8 @@ export function MapView({
   showUserLocation,
   followUser = false,
   showWindArrows = true,
+  showTerrainToggle = true,
+  terrain3d: terrain3dProp,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -592,6 +679,10 @@ export function MapView({
   const showWindArrowsRef = useRef(showWindArrows)
   const fitKeyRef = useRef(fitKey)
   const lastFittedKeyRef = useRef<string | undefined>(undefined)
+  const terrain3dRef = useRef(false)
+  const [terrain3d, setTerrain3d] = useState(() =>
+    terrain3dProp !== undefined ? terrain3dProp : readMap3dPreference(true),
+  )
   const hasWindOverlay = Boolean(windOverlay?.features?.length)
   followUserRef.current = followUser
   geometryRef.current = geometry
@@ -600,6 +691,12 @@ export function MapView({
   onMapClickRef.current = onMapClick
   showWindArrowsRef.current = showWindArrows
   fitKeyRef.current = fitKey
+  terrain3dRef.current = terrain3d
+
+  useEffect(() => {
+    if (terrain3dProp === undefined) return
+    setTerrain3d(terrain3dProp)
+  }, [terrain3dProp])
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -615,6 +712,8 @@ export function MapView({
         style: style as string,
         center: [-3.7038, 40.4168],
         zoom: 10,
+        pitch: terrain3dRef.current ? 45 : 0,
+        maxPitch: 85,
         attributionControl: { compact: true },
       })
 
@@ -632,7 +731,7 @@ export function MapView({
         if (!map) return
         const key = fitKeyRef.current
         const shouldFit = fit && Boolean(key)
-        const ok = applyGeometry(map, geometryRef.current, shouldFit)
+        const ok = applyGeometry(map, geometryRef.current, shouldFit, terrain3dRef.current)
         if (shouldFit && ok && key) lastFittedKeyRef.current = key
         applySurfaceOverlay(map, surfaceRef.current)
         applyWindOverlay(map, windRef.current)
@@ -648,13 +747,18 @@ export function MapView({
         if (key && geo && geo.coordinates.length >= 2 && lastFittedKeyRef.current !== key) {
           requestAnimationFrame(() => {
             if (!mapRef.current) return
-            applyGeometry(mapRef.current, geometryRef.current, true)
+            applyGeometry(mapRef.current, geometryRef.current, true, terrain3dRef.current)
             lastFittedKeyRef.current = key
           })
         }
       }
 
       map.on('load', () => {
+        try {
+          setMapTerrainEnabled(map!, terrain3dRef.current)
+        } catch (err) {
+          console.warn('[maplibre] terrain', err)
+        }
         resize()
         requestAnimationFrame(() => {
           resize()
@@ -664,6 +768,13 @@ export function MapView({
       // Only repair missing overlay layers after a style swap — skip no-op styledata ticks.
       map.on('styledata', () => {
         if (!map?.isStyleLoaded()) return
+        try {
+          if (!map.getSource(MAP_TERRAIN_SOURCE_ID)) {
+            setMapTerrainEnabled(map, terrain3dRef.current)
+          }
+        } catch {
+          /* ignore */
+        }
         const needsRoute =
           Boolean(geometryRef.current?.coordinates?.length) && !map.getLayer('route-line')
         const needsWind =
@@ -698,6 +809,23 @@ export function MapView({
       if (mapRef.current === map) mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    try {
+      setMapTerrainEnabled(map, terrain3d)
+    } catch (err) {
+      console.warn('[maplibre] terrain toggle', err)
+    }
+    if (!terrain3d) {
+      map.easeTo({ pitch: 0, bearing: 0, duration: 500, essential: true })
+    } else if (geometryRef.current && geometryRef.current.coordinates.length >= 2) {
+      fitMapToGeometry(map, geometryRef.current, { terrain3d: true, duration: 900 })
+    } else {
+      map.easeTo({ pitch: 50, duration: 600, essential: true })
+    }
+  }, [terrain3d])
 
   useEffect(() => {
     const map = mapRef.current
@@ -737,7 +865,7 @@ export function MapView({
     const map = mapRef.current
     if (!map) return
     const shouldFit = Boolean(fitKey) && lastFittedKeyRef.current !== fitKey
-    const ok = applyGeometry(map, geometry, shouldFit)
+    const ok = applyGeometry(map, geometry, shouldFit, terrain3dRef.current)
     if (shouldFit && ok && fitKey) {
       lastFittedKeyRef.current = fitKey
     } else if (shouldFit && !ok) {
@@ -747,12 +875,12 @@ export function MapView({
         if (!m) return
         const key = fitKeyRef.current
         if (!key || lastFittedKeyRef.current === key) return
-        if (applyGeometry(m, geometryRef.current, true)) {
+        if (applyGeometry(m, geometryRef.current, true, terrain3dRef.current)) {
           lastFittedKeyRef.current = key
         }
       })
     } else if (!shouldFit) {
-      applyGeometry(map, geometry, false)
+      applyGeometry(map, geometry, false, terrain3dRef.current)
     }
     applySurfaceOverlay(map, surfaceRef.current)
     applyWindOverlay(map, windRef.current)
@@ -825,11 +953,20 @@ export function MapView({
       map.easeTo({
         center: [showUserLocation.lng, showUserLocation.lat],
         zoom,
+        pitch: terrain3dRef.current ? Math.max(map.getPitch(), 48) : map.getPitch(),
         duration: 650,
         essential: true,
       })
     }
   }, [showUserLocation, followUser])
+
+  function toggleTerrain() {
+    setTerrain3d((prev) => {
+      const next = !prev
+      writeMap3dPreference(next)
+      return next
+    })
+  }
 
   return (
     <div className={className ?? 'relative h-full min-h-[320px] w-full'}>
@@ -839,6 +976,17 @@ export function MapView({
         role="application"
         aria-label="Mapa de rutas ciclistas"
       />
+      {showTerrainToggle ? (
+        <button
+          type="button"
+          onClick={toggleTerrain}
+          className="absolute bottom-3 right-3 z-10 rounded-xl bg-white/95 px-3 py-1.5 text-xs font-semibold text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]"
+          aria-pressed={terrain3d}
+          title={terrain3d ? 'Cambiar a mapa plano' : 'Cambiar a mapa 3D con relieve'}
+        >
+          {terrain3d ? '3D · relieve' : 'Plano'}
+        </button>
+      ) : null}
       {surfaceOverlay?.features?.length && !hasWindOverlay ? (
         <div className="pointer-events-none absolute left-3 top-3 z-10 flex gap-2 rounded-xl bg-white/90 px-2 py-1.5 text-[10px] text-[var(--color-forest)] shadow ring-1 ring-[var(--color-fog)]">
           <span className="inline-flex items-center gap-1">
