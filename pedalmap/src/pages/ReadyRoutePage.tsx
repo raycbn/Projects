@@ -42,6 +42,7 @@ import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { applySelectedOption, ensureRouteOptions } from '@/lib/routeOptions'
 import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
+import { routeService } from '@/services/RouteService'
 import type { RouteDraft } from '@/domain/types'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 
@@ -98,6 +99,7 @@ export function ReadyRoutePage() {
   const [shareBusy, setShareBusy] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
   const [publishBusy, setPublishBusy] = useState(false)
+  const [optionsBusy, setOptionsBusy] = useState(false)
   const [windWatchBusy, setWindWatchBusy] = useState(false)
   const [postSaveHint, setPostSaveHint] = useState<'wind' | 'explore' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -286,6 +288,57 @@ export function ReadyRoutePage() {
       ),
       surfaceEdges: draft.surfaceEdges,
     })
+  }
+
+  async function handleRefreshOptions() {
+    if (!draft || !packet) return
+    const can =
+      draft.type === 'a_to_b' ||
+      draft.type === 'out_and_back' ||
+      draft.type === 'map_trace' ||
+      draft.type === 'circular'
+    if (!can) return
+    if ((draft.waypoints?.length ?? 0) < (draft.type === 'circular' ? 1 : 2)) {
+      flashMessage('Faltan puntos para buscar otras opciones.')
+      return
+    }
+    setOptionsBusy(true)
+    flashMessage('Buscando otras opciones…')
+    try {
+      const result = await routeService.calculate({
+        waypoints: draft.waypoints,
+        bikeType: draft.bikeType,
+        preferences: draft.preferences ?? [],
+        routeType: draft.type,
+        circularDistanceMeters: draft.circularDistanceMeters,
+        targetElevationGainMeters: draft.targetElevationGainMeters,
+        circularSeed: draft.circularSeed,
+        wantAlternatives: true,
+        title: draft.title,
+      })
+      const withOpts = ensureRouteOptions(result)
+      if ((withOpts.routeOptions?.length ?? 0) < 2) {
+        flashMessage('En esta zona solo encontramos un camino claro.')
+        return
+      }
+      const next = {
+        ...packet,
+        draft: withOpts,
+        source: packet.source === 'saved' ? ('saved' as const) : ('calculate' as const),
+      }
+      stashReadyRoute(next)
+      handoffEpochRef.current = readyRouteEpoch()
+      setPacket(next)
+      flashMessage(`Listo · ${withOpts.routeOptions!.length} opciones`)
+      window.setTimeout(() => {
+        optionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }, 80)
+    } catch (error) {
+      console.error('[ready-route] refresh options', error)
+      flashMessage('No se pudieron cargar otras opciones. Inténtalo de nuevo.')
+    } finally {
+      setOptionsBusy(false)
+    }
   }
 
   async function handleSave() {
@@ -624,12 +677,29 @@ export function ReadyRoutePage() {
               onPremiumRequired={() => showPaywall('route_option_premium')}
             />
           </div>
-        ) : packet?.source === 'calculate' ? (
-          <p className="rounded-2xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-stone)]">
-            En esta zona solo encontramos un camino claro. Prueba otro destino o marca «varias
-            opciones» en el planificador.
-          </p>
-        ) : null}
+        ) : (
+          <div ref={optionsRef} className="space-y-2 rounded-2xl bg-[var(--color-mist)] px-3 py-3">
+            <p className="text-xs text-[var(--color-stone)]">
+              {packet?.source === 'calculate'
+                ? 'Aquí solo hay un camino claro, o las opciones no se guardaron en este dispositivo.'
+                : 'Esta ruta guardada no trae variantes. Puedes buscar otras opciones con los mismos puntos.'}
+            </p>
+            {(draft.type === 'a_to_b' ||
+              draft.type === 'out_and_back' ||
+              draft.type === 'map_trace' ||
+              draft.type === 'circular') &&
+            (draft.waypoints?.length ?? 0) >= (draft.type === 'circular' ? 1 : 2) ? (
+              <Button
+                variant="secondary"
+                className="w-full"
+                disabled={optionsBusy}
+                onClick={() => void handleRefreshOptions()}
+              >
+                {optionsBusy ? 'Buscando opciones…' : 'Buscar otras opciones (hasta 3)'}
+              </Button>
+            ) : null}
+          </div>
+        )}
 
         <div className="space-y-2">
           <Button className="w-full !py-3 text-base" onClick={() => setRideOpen(true)}>

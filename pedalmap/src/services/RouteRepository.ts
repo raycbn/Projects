@@ -12,7 +12,7 @@ import {
   where,
   type Timestamp,
 } from 'firebase/firestore'
-import type { RouteDraft, SavedRoute } from '@/domain/types'
+import type { RouteAlternative, RouteDraft, SavedRoute } from '@/domain/types'
 import { FREE_LIMITS } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 import { createShareSlug } from '@/lib/share'
@@ -126,7 +126,7 @@ export function geometryFromStored(raw: unknown): SavedRoute['geometry'] {
 
 /**
  * Persist only what the shared/saved route page needs.
- * Drop bulky alternative options (duplicate geometries) that often blow the 1 MiB doc limit.
+ * Keep slim routeOptions (2–3) so Abrir from Mis rutas still offers variantes.
  */
 export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
   const title = String(draft.title || 'Ruta').slice(0, 120)
@@ -139,6 +139,33 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
       use: e.use,
       cycle_lane: e.cycle_lane,
     }))
+  const slimOptions = (draft.routeOptions ?? [])
+    .slice(0, 3)
+    .map((opt) =>
+      stripUndefinedDeep({
+        id: opt.id,
+        label: opt.label,
+        rank: opt.rank,
+        stats: opt.stats,
+        geometry: geometryToStored(opt.geometry, 700),
+        elevationProfile: downsampleElevation(opt.elevationProfile ?? [], 200),
+        instructions: (opt.instructions ?? []).slice(0, 20),
+      }),
+    )
+  const slimAlts =
+    slimOptions.length > 1
+      ? undefined
+      : (draft.alternatives ?? []).slice(0, 2).map((opt) =>
+          stripUndefinedDeep({
+            id: opt.id,
+            label: opt.label,
+            rank: opt.rank,
+            stats: opt.stats,
+            geometry: geometryToStored(opt.geometry, 700),
+            elevationProfile: downsampleElevation(opt.elevationProfile ?? [], 200),
+            instructions: (opt.instructions ?? []).slice(0, 20),
+          }),
+        )
   return stripUndefinedDeep({
     title,
     description: draft.description,
@@ -146,7 +173,7 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     bikeType: draft.bikeType,
     preferences: draft.preferences ?? [],
     waypoints: draft.waypoints ?? [],
-    geometry: geometryToStored(draft.geometry, 4000),
+    geometry: geometryToStored(draft.geometry, 3500),
     elevationProfile: downsampleElevation(draft.elevationProfile ?? [], 800),
     stats: draft.stats,
     circularDistanceMeters: draft.circularDistanceMeters,
@@ -157,6 +184,8 @@ export function toPersistedDraft(draft: RouteDraft): Record<string, unknown> {
     // Lean surface attrs so Abrir guardada keeps the paint overlay.
     surfaceEdges: surfaceEdges.length ? surfaceEdges : undefined,
     selectedOptionId: draft.selectedOptionId,
+    routeOptions: slimOptions.length > 1 ? slimOptions : undefined,
+    alternatives: slimAlts?.length ? slimAlts : undefined,
     bestWindWindow: draft.bestWindWindow,
   })
 }
@@ -626,6 +655,27 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
   }
 
   private mapDoc(id: string, data: Record<string, unknown>): SavedRoute {
+    const hydrateOpt = (raw: unknown): RouteAlternative | null => {
+      if (!raw || typeof raw !== 'object') return null
+      const opt = raw as Partial<RouteAlternative> & { geometry?: unknown }
+      if (!opt.id || !opt.stats || !opt.geometry) return null
+      return {
+        id: String(opt.id),
+        label: String(opt.label ?? 'Opción'),
+        rank: typeof opt.rank === 'number' ? opt.rank : undefined,
+        geometry: geometryFromStored(opt.geometry),
+        elevationProfile: opt.elevationProfile ?? [],
+        stats: opt.stats,
+        instructions: opt.instructions,
+        surfaceEdges: opt.surfaceEdges,
+      }
+    }
+    const routeOptions = Array.isArray(data.routeOptions)
+      ? data.routeOptions.map(hydrateOpt).filter((o): o is RouteAlternative => Boolean(o))
+      : undefined
+    const alternatives = Array.isArray(data.alternatives)
+      ? data.alternatives.map(hydrateOpt).filter((o): o is RouteAlternative => Boolean(o))
+      : undefined
     return {
       id,
       userId: String(data.userId),
@@ -642,6 +692,9 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
       targetElevationGainMeters: data.targetElevationGainMeters as number | undefined,
       instructions: data.instructions as SavedRoute['instructions'] | undefined,
       surfaceEdges: data.surfaceEdges as SavedRoute['surfaceEdges'] | undefined,
+      routeOptions: routeOptions && routeOptions.length > 1 ? routeOptions : undefined,
+      alternatives: alternatives?.length ? alternatives : undefined,
+      selectedOptionId: data.selectedOptionId ? String(data.selectedOptionId) : undefined,
       bestWindWindow: data.bestWindWindow as SavedRoute['bestWindWindow'] | undefined,
       windAlertEnabled: Boolean(data.windAlertEnabled),
       isPublic: Boolean(data.isPublic),

@@ -9,7 +9,7 @@ import {
 import type { RouteDraft } from '@/domain/types'
 
 describe('toPersistedDraft', () => {
-  it('strips undefined, keeps lean surface/instructions, drops bulky alts', () => {
+  it('strips undefined, keeps lean surface/instructions, and slim opciones', () => {
     const draft = {
       title: 'Test',
       type: 'a_to_b',
@@ -28,7 +28,37 @@ describe('toPersistedDraft', () => {
       description: undefined,
       instructions: undefined,
       surfaceEdges: [{ length: 12, surface: 'paved', road_class: 'secondary' }],
-      routeOptions: [{ id: 'x' }],
+      selectedOptionId: 'opt-1',
+      routeOptions: [
+        {
+          id: 'opt-1',
+          label: 'Opción 1',
+          rank: 1,
+          geometry: { type: 'LineString', coordinates: [[-3.7, 40.4], [-3.6, 40.5]] },
+          elevationProfile: [{ distanceMeters: 0, elevationMeters: 600 }],
+          stats: {
+            distanceMeters: 1000,
+            elevationGainMeters: 10,
+            elevationLossMeters: 5,
+            estimatedDurationSeconds: 300,
+            difficulty: 'easy',
+          },
+        },
+        {
+          id: 'opt-2',
+          label: 'Opción 2',
+          rank: 2,
+          geometry: { type: 'LineString', coordinates: [[-3.71, 40.41], [-3.59, 40.49]] },
+          elevationProfile: [{ distanceMeters: 0, elevationMeters: 610 }],
+          stats: {
+            distanceMeters: 1100,
+            elevationGainMeters: 20,
+            elevationLossMeters: 8,
+            estimatedDurationSeconds: 320,
+            difficulty: 'easy',
+          },
+        },
+      ],
       alternatives: [{ id: 'y' }],
     } as unknown as RouteDraft
 
@@ -40,7 +70,9 @@ describe('toPersistedDraft', () => {
     expect(payload.surfaceEdges).toEqual([
       { length: 12, surface: 'paved', road_class: 'secondary' },
     ])
-    expect('routeOptions' in payload).toBe(false)
+    expect(Array.isArray(payload.routeOptions)).toBe(true)
+    expect((payload.routeOptions as unknown[]).length).toBe(2)
+    // Legacy alts omitted when ranked routeOptions are present.
     expect('alternatives' in payload).toBe(false)
     expect(stripUndefinedDeep({ a: 1, b: undefined })).toEqual({ a: 1 })
 

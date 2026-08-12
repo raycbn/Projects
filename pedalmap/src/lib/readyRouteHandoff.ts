@@ -4,6 +4,7 @@
  * quota rejects the JSON (common on long Spanish A→B geometries).
  */
 import type { RouteDraft } from '@/domain/types'
+import { slimDraftKeepOptions } from '@/lib/slimRouteDraft'
 
 const READY_ROUTE_KEY = 'pedalmap_ready_route'
 
@@ -90,25 +91,9 @@ export function clearReadyRoute(): void {
 }
 
 /** Drop heavy elevation on non-selected options so sessionStorage can keep 2–3 geometries. */
-function slimPacketForStorage(packet: ReadyRoutePacket): ReadyRoutePacket {
-  const draft = packet.draft
-  const selected = draft.selectedOptionId
-  const routeOptions = draft.routeOptions?.map((opt) => {
-    if (opt.id === selected || opt.id === draft.routeOptions?.[0]?.id) return opt
-    return {
-      ...opt,
-      elevationProfile: (opt.elevationProfile ?? []).filter((_, i) => i % 4 === 0),
-      instructions: (opt.instructions ?? []).slice(0, 12),
-      surfaceEdges: (opt.surfaceEdges ?? []).slice(0, 80),
-    }
-  })
+export function slimPacketForStorage(packet: ReadyRoutePacket): ReadyRoutePacket {
   return {
     ...packet,
-    draft: {
-      ...draft,
-      routeOptions,
-      elevationProfile: (draft.elevationProfile ?? []).filter((_, i) => i % 2 === 0),
-      instructions: (draft.instructions ?? []).slice(0, 80),
-    },
+    draft: slimDraftKeepOptions(packet.draft),
   }
 }

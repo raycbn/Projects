@@ -29,6 +29,7 @@ import { applySelectedOption } from '@/lib/routeOptions'
 import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { clearReadyRoute } from '@/lib/readyRouteHandoff'
+import { slimDraftKeepOptions } from '@/lib/slimRouteDraft'
 
 const GUEST_CREATES_KEY = 'pedalmap_guest_creates'
 const LAST_DRAFT_KEY = 'pedalmap_last_draft'
@@ -123,7 +124,12 @@ function persistDraft(draft: RouteDraft | null, uid?: string | null) {
     if (!draft) {
       localStorage.removeItem(LAST_DRAFT_KEY)
     } else {
-      localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(draft))
+      try {
+        localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(draft))
+      } catch {
+        // Quota: keep opciones (slim geometries) so /ruta still shows 2–3 variants.
+        localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(slimDraftKeepOptions(draft)))
+      }
     }
   } catch {
     /* ignore quota */

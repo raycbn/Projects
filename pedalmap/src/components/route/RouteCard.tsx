@@ -168,6 +168,7 @@ export function RouteCard({
               savedRouteId: route.id,
               shareSlug: route.shareSlug,
               isPublic: route.isPublic === true,
+              source: 'saved',
             })
           }
         >
