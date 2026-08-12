@@ -680,9 +680,7 @@ export function ReadyRoutePage() {
         ) : (
           <div ref={optionsRef} className="space-y-2 rounded-2xl bg-[var(--color-mist)] px-3 py-3">
             <p className="text-xs text-[var(--color-stone)]">
-              {packet?.source === 'calculate'
-                ? 'Aquí solo hay un camino claro, o las opciones no se guardaron en este dispositivo.'
-                : 'Esta ruta guardada no trae variantes. Puedes buscar otras opciones con los mismos puntos.'}
+              Aún no hay variantes cargadas para esta ruta. Pulsa para buscar hasta 3 opciones.
             </p>
             {(draft.type === 'a_to_b' ||
               draft.type === 'out_and_back' ||
