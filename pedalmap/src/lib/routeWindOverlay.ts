@@ -149,11 +149,12 @@ export function buildRouteWindOverlay(
 
   const cum = cumulativeDistances(coords)
   const total = cum[cum.length - 1] || 1
-  // Segments stay dense for color; arrows are sparse so they fit inside the stripe.
-  const samples = Math.max(16, Math.min(36, opts.sampleCount ?? 24))
-  const arrowEvery = Math.max(3, Math.ceil(samples / 7))
+  // Dense segments for color; arrows denser + always at relative/color changes.
+  const samples = Math.max(20, Math.min(40, opts.sampleCount ?? 28))
+  const arrowEvery = Math.max(2, Math.ceil(samples / 12))
   const windToward = (wind.windFromDeg + 180) % 360
   const features: Feature<Point | LineString>[] = []
+  let prevRelative: string | null = null
 
   for (let s = 0; s < samples; s += 1) {
     const d0 = (total * s) / samples
@@ -194,7 +195,10 @@ export function buildRouteWindOverlay(
       })
     }
 
-    if (s % arrowEvery !== 0) continue
+    const colorChanged = prevRelative != null && prevRelative !== relativeKind
+    const cadenceHit = s % arrowEvery === 0
+    prevRelative = relativeKind
+    if (!colorChanged && !cadenceHit) continue
 
     const mid = pointAtDistance(coords, cum, (d0 + d1) / 2)
     if (!mid) continue
@@ -211,6 +215,7 @@ export function buildRouteWindOverlay(
         travelBearing: mid.travelBearing,
         label: `${Math.round(wind.windSpeedKmh)} km/h`,
         legLabel: leg === 'ruta' ? '' : leg.toUpperCase(),
+        atColorChange: colorChanged,
       },
       geometry: {
         type: 'Point',

@@ -76,19 +76,43 @@ describe('buildRouteWindOverlay', () => {
       const coords = (seg.geometry as LineString).coordinates
       expect(coords.length).toBeGreaterThanOrEqual(2)
     }
-    // Full overlay should include the corner when covering the whole hook.
     const allCoords = segments.flatMap((s) => (s.geometry as LineString).coordinates)
     const hasCorner = allCoords.some(
       ([lng, lat]) => Math.abs(lng - 0.01) < 1e-9 && Math.abs(lat - 0.01) < 1e-9,
     )
     expect(hasCorner).toBe(true)
-
-    const arrows = fc.features.filter((f) => f.properties?.kind === 'arrow')
-    for (const a of arrows) {
-      expect(a.geometry.type).toBe('Point')
-    }
-    // No off-route wind sticks.
     expect(fc.features.every((f) => f.properties?.kind !== 'barb')).toBe(true)
     expect(fc.features.every((f) => f.properties?.kind !== 'arrowhead')).toBe(true)
+  })
+
+  it('places an arrow when relative wind color changes along the route', () => {
+    // Eastbound then northbound: with wind from west, cola → lateral (color change).
+    const turn = {
+      type: 'LineString' as const,
+      coordinates: [
+        [0, 0],
+        [0.02, 0],
+        [0.04, 0],
+        [0.04, 0.02],
+        [0.04, 0.04],
+      ] as [number, number][],
+    }
+    const fc = buildRouteWindOverlay(turn, {
+      routeType: 'a_to_b',
+      sampleCount: 20,
+      hour: {
+        time: '2026-08-10T09:00',
+        temperatureC: 20,
+        precipitationMm: 0,
+        windSpeedKmh: 20,
+        windDirectionDeg: 270,
+        windGustsKmh: 24,
+      },
+    })
+    const arrows = fc.features.filter((f) => f.properties?.kind === 'arrow')
+    expect(arrows.length).toBeGreaterThan(3)
+    expect(arrows.some((f) => f.properties?.atColorChange === true)).toBe(true)
+    const kinds = new Set(arrows.map((f) => String(f.properties?.relative)))
+    expect(kinds.size).toBeGreaterThan(1)
   })
 })
