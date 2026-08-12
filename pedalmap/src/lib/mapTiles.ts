@@ -1,6 +1,8 @@
 /**
  * Map tile / style provider abstraction.
  * MapView reads VITE_MAP_STYLE_URL so providers can be swapped without UI rewrites.
+ *
+ * Default: OpenFreeMap Liberty (free, no key) + optional Mapterhorn 3D terrain in MapView.
  */
 
 export interface MapTileProviderInfo {
@@ -49,5 +51,5 @@ export const DEFAULT_TILE_PROVIDER: MapTileProviderInfo = {
   styleUrl: 'https://tiles.openfreemap.org/styles/liberty',
   requiresKey: false,
   notes:
-    'OpenFreeMap — free vector tiles suitable for MVP. Review usage terms for production scale; migrate to MapTiler/Stadia/self-host when traffic grows.',
+    'OpenFreeMap — free vector tiles. MapView can overlay free Mapterhorn DEM for 3D terrain.',
 }
