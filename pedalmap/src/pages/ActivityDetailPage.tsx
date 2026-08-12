@@ -235,6 +235,50 @@ export function ActivityDetailPage() {
         >
           {shareBusy ? 'Preparando…' : 'WhatsApp'}
         </Button>
+        <Button
+          variant="ghost"
+          disabled={shareBusy}
+          onClick={() => {
+            if (!activity) return
+            setShareBusy(true)
+            void shareActivityCard(
+              {
+                title: activity.title,
+                distanceMeters: activity.stats.distanceMeters,
+                elevationGainMeters: activity.stats.elevationGainMeters,
+                durationSeconds: activity.stats.movingTimeSeconds ?? activity.stats.durationSeconds,
+                bikeType: activity.bikeType,
+              },
+              `${window.location.origin}/actividades/${activity.id}`,
+              { alsoInstagram: true },
+            )
+              .then(() => {
+                setHint('Tarjeta descargada · abre Instagram y súbela a Stories')
+                track('activity_shared', { via: 'instagram' })
+              })
+              .catch(() => setHint('No se pudo preparar la tarjeta'))
+              .finally(() => setShareBusy(false))
+          }}
+        >
+          Instagram
+        </Button>
+        {user && activity.userId === user.uid ? (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              const next = !activity.isPublic
+              void activityRepository
+                .setPublic(activity.id, next)
+                .then(() => {
+                  setActivity({ ...activity, isPublic: next })
+                  setHint(next ? 'Salida pública en tu perfil' : 'Salida privada')
+                })
+                .catch(() => setHint('No se pudo cambiar la visibilidad'))
+            }}
+          >
+            {activity.isPublic ? 'Hacer privada' : 'Hacer pública'}
+          </Button>
+        ) : null}
         {user && !user.isAnonymous && geometry ? (
           <Button
             variant="ghost"

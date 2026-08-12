@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   type DocumentData,
@@ -38,6 +39,7 @@ function mapActivity(id: string, data: DocumentData): Activity {
     bikeType: data.bikeType,
     source: data.source as ActivitySource | undefined,
     externalId: data.externalId ? String(data.externalId) : undefined,
+    isPublic: data.isPublic === true,
     startedAt: data.startedAt,
     finishedAt: data.finishedAt,
     track: data.track ?? [],
@@ -121,6 +123,31 @@ export class ActivityRepository {
         .map((d) => mapActivity(d.id, d.data()))
         .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
     }
+  }
+
+  /** Public finished activities for a cyclist profile (opt-in). */
+  async listPublicForUser(userId: string, max = 10): Promise<Activity[]> {
+    try {
+      const q = query(
+        collection(getDb(), 'activities'),
+        where('userId', '==', userId),
+        where('isPublic', '==', true),
+        limit(Math.max(max, 20)),
+      )
+      const snap = await getDocs(q)
+      return snap.docs
+        .map((d) => mapActivity(d.id, d.data()))
+        .filter((a) => a.status === 'finished')
+        .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
+        .slice(0, max)
+    } catch (err) {
+      console.warn('[activities] listPublicForUser', err)
+      return []
+    }
+  }
+
+  async setPublic(activityId: string, isPublic: boolean): Promise<void> {
+    await setDoc(doc(getDb(), 'activities', activityId), { isPublic, updatedAt: serverTimestamp() }, { merge: true })
   }
 
   async findByExternalId(userId: string, externalId: string): Promise<Activity | null> {

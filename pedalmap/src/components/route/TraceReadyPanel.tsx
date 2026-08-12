@@ -20,6 +20,7 @@ import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { canSaveRoute } from '@/services/EntitlementService'
 import { routeRepository } from '@/services/RouteRepository'
+import { alertService } from '@/services/AlertService'
 import type { RouteDraft } from '@/domain/types'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
 import type { FeatureCollection } from 'geojson'
@@ -168,6 +169,11 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
         )
       }
       track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'trazar' })
+      void alertService.notifyRouteSaved({
+        routeTitle: draftToSave.title,
+        distanceMeters: draftToSave.stats.distanceMeters,
+        elevationGainMeters: draftToSave.stats.elevationGainMeters,
+      })
     } catch (error) {
       console.error('[trazar] save', error)
       const msg = error instanceof Error ? error.message : ''
@@ -211,6 +217,12 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
             : `Enlace: ${url}`,
       )
       track('route_shared', { via: 'trazar', public: true, share_after: true })
+      void alertService.notifyRouteSaved({
+        routeTitle: draft.title,
+        shareSlug: published.shareSlug,
+        distanceMeters: draft.stats.distanceMeters,
+        elevationGainMeters: draft.stats.elevationGainMeters,
+      })
     } catch (error) {
       closeWhatsAppPlaceholder(waWindow)
       console.error('[trazar] share', error)

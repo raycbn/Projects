@@ -28,6 +28,7 @@ import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
 import {
   canSaveRoute,
 } from '@/services/EntitlementService'
+import { alertService } from '@/services/AlertService'
 import { authService } from '@/services/AuthService'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import {
@@ -320,6 +321,11 @@ export function ReadyRoutePage() {
         setPostSaveHint('wind')
       }
       track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'ready_route' })
+      void alertService.notifyRouteSaved({
+        routeTitle: draft.title,
+        distanceMeters: draft.stats.distanceMeters,
+        elevationGainMeters: draft.stats.elevationGainMeters,
+      })
     } catch (error) {
       console.error('[ready-route] save', error)
       const msg = error instanceof Error ? error.message : ''

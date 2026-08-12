@@ -33,6 +33,7 @@ function mapPublicProfile(id: string, data: DocumentData): PublicProfile {
     displayName: data.displayName ?? null,
     photoURL: data.photoURL ?? null,
     bio: data.bio,
+    city: data.city ?? null,
     isPublic: data.isPublic !== false,
     followersCount: data.followersCount ?? 0,
     followingCount: data.followingCount ?? 0,
@@ -52,6 +53,7 @@ export class CommunityService {
     photoURL: string | null
     bio?: string
     email?: string | null
+    city?: string | null
   }): Promise<void> {
     const ref = doc(getDb(), 'publicProfiles', input.uid)
     const existing = await getDoc(ref)
@@ -64,6 +66,7 @@ export class CommunityService {
         displayName,
         photoURL: input.photoURL,
         ...(input.bio !== undefined ? { bio: input.bio } : {}),
+        ...(input.city !== undefined ? { city: input.city } : {}),
         isPublic: true,
         followersCount: existing.data()?.followersCount ?? 0,
         followingCount: existing.data()?.followingCount ?? 0,
@@ -275,6 +278,52 @@ export class CommunityService {
       )
     }
     await batch.commit()
+  }
+
+  /** Soft «Cheers» on a public route — idempotent per user. */
+  async toggleCheers(routeId: string, userId: string): Promise<{ cheered: boolean; count: number }> {
+    const edgeRef = doc(getDb(), 'routeCheers', routeId, 'users', userId)
+    const metaRef = doc(getDb(), 'routeCheers', routeId)
+    const [edge, meta] = await Promise.all([getDoc(edgeRef), getDoc(metaRef)])
+    const current = Number(meta.data()?.count ?? 0) || 0
+    if (edge.exists()) {
+      const batch = writeBatch(getDb())
+      batch.delete(edgeRef)
+      batch.set(
+        metaRef,
+        { count: Math.max(0, current - 1), updatedAt: serverTimestamp() },
+        { merge: true },
+      )
+      await batch.commit()
+      return { cheered: false, count: Math.max(0, current - 1) }
+    }
+    const batch = writeBatch(getDb())
+    batch.set(edgeRef, { userId, createdAt: serverTimestamp() })
+    batch.set(
+      metaRef,
+      { count: current + 1, updatedAt: serverTimestamp() },
+      { merge: true },
+    )
+    await batch.commit()
+    return { cheered: true, count: current + 1 }
+  }
+
+  async getCheersState(routeId: string, userId?: string | null): Promise<{ count: number; cheered: boolean }> {
+    const meta = await getDoc(doc(getDb(), 'routeCheers', routeId))
+    const count = Number(meta.data()?.count ?? 0) || 0
+    if (!userId) return { count, cheered: false }
+    const edge = await getDoc(doc(getDb(), 'routeCheers', routeId, 'users', userId))
+    return { count, cheered: edge.exists() }
+  }
+
+  async listNearYou(city: string, excludeUid?: string, max = 12): Promise<PublicProfile[]> {
+    const needle = city.trim().toLowerCase()
+    if (!needle) return []
+    const all = await this.listPublicProfiles(48)
+    return all
+      .filter((p) => p.uid !== excludeUid)
+      .filter((p) => (p.city || '').trim().toLowerCase() === needle)
+      .slice(0, max)
   }
 
   async listSegments(max = 30): Promise<Segment[]> {

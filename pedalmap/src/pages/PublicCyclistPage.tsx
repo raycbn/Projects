@@ -2,20 +2,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
+import { RouteThumb } from '@/components/athlete/RouteThumb'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { communityService } from '@/services/CommunityService'
 import { routeRepository } from '@/services/RouteRepository'
+import { activityRepository } from '@/services/ActivityRepository'
 import { alertService } from '@/services/AlertService'
 import { resolvePublicDisplayName } from '@/lib/communityIdentity'
-import { formatDistance, formatElevation } from '@/lib/stats'
+import { coordsFromGeometry, coordsFromTrack } from '@/lib/routeThumb'
+import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
 import { track } from '@/lib/analytics'
-import type { PublicProfile, SavedRoute } from '@/domain/types'
+import type { Activity, PublicProfile, SavedRoute } from '@/domain/types'
 
 export function PublicCyclistPage() {
   const { uid = '' } = useParams()
   const { user, profile, firebaseReady } = useAuth()
   const [person, setPerson] = useState<PublicProfile | null>(null)
   const [routes, setRoutes] = useState<SavedRoute[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [following, setFollowing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -42,12 +46,16 @@ export function PublicCyclistPage() {
     }
     setLoading(true)
     try {
-      const [pub, publicRoutes] = await Promise.all([
+      const [pub, publicRoutes, publicActs] = await Promise.all([
         communityService.getPublicProfile(uid),
         routeRepository.listPublicByUserIds([uid], 20),
+        activityRepository.isConfigured()
+          ? activityRepository.listPublicForUser(uid, 8)
+          : Promise.resolve([] as Activity[]),
       ])
       setPerson(pub)
       setRoutes(publicRoutes)
+      setActivities(publicActs)
       if (signedIn && user && !isSelf) {
         setFollowing(await communityService.isFollowing(user.uid, uid))
       } else {
@@ -57,6 +65,7 @@ export function PublicCyclistPage() {
       console.warn('[ciclista]', error)
       setPerson(null)
       setRoutes([])
+      setActivities([])
     } finally {
       setLoading(false)
     }
@@ -65,6 +74,13 @@ export function PublicCyclistPage() {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  const coverPoints = useMemo(() => {
+    const act = activities.find((a) => (a.track?.length || 0) >= 2)
+    if (act) return coordsFromTrack(act.track)
+    const route = routes.find((r) => coordsFromGeometry(r.geometry).length >= 2)
+    return route ? coordsFromGeometry(route.geometry) : []
+  }, [activities, routes])
 
   async function handleFollow() {
     if (!signedIn || !user || !uid || isSelf) {
@@ -151,7 +167,20 @@ export function PublicCyclistPage() {
       ) : (
         <div className="mt-6 space-y-5">
           <section className="overflow-hidden rounded-3xl bg-white/80 ring-1 ring-[var(--color-fog)]">
-            <div className="h-20 bg-[linear-gradient(135deg,var(--color-forest),var(--color-trail))] sm:h-24" />
+            <div className="relative h-20 overflow-hidden bg-[linear-gradient(135deg,var(--color-forest),var(--color-trail))] sm:h-24">
+              {coverPoints.length >= 2 ? (
+                <div className="absolute inset-0 flex items-center justify-center opacity-90">
+                  <RouteThumb
+                    points={coverPoints}
+                    width={360}
+                    height={96}
+                    stroke="rgba(255,255,255,0.85)"
+                    className="h-full w-full max-w-none"
+                  />
+                </div>
+              ) : null}
+              <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(7,21,16,0.35))]" />
+            </div>
             <div className="relative px-5 pb-5">
               <div className="-mt-10 flex items-end gap-4">
                 {person.photoURL ? (
@@ -169,6 +198,9 @@ export function PublicCyclistPage() {
                   <h1 className="truncate font-display text-2xl font-extrabold text-[var(--color-forest)]">
                     {name}
                   </h1>
+                  {person.city ? (
+                    <p className="mt-0.5 text-xs font-semibold text-[var(--color-trail)]">{person.city}</p>
+                  ) : null}
                   {person.bio ? (
                     <p className="mt-1 text-sm text-[var(--color-stone)]">{person.bio}</p>
                   ) : null}
@@ -236,6 +268,43 @@ export function PublicCyclistPage() {
             </div>
           </section>
 
+          {activities.length > 0 ? (
+            <section className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                Salidas públicas
+              </h2>
+              <ul className="space-y-2">
+                {activities.map((activity) => {
+                  const pts = coordsFromTrack(activity.track)
+                  return (
+                    <li key={activity.id}>
+                      <Link
+                        to={`/actividades/${activity.id}`}
+                        className="flex items-center gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
+                      >
+                        {pts.length >= 2 ? (
+                          <RouteThumb points={pts} width={72} height={44} className="shrink-0 opacity-90" />
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-[var(--color-forest)]">
+                            {activity.title}
+                          </p>
+                          <p className="text-xs text-[var(--color-stone)]">
+                            {formatDistance(activity.stats.distanceMeters)} ·{' '}
+                            {formatElevation(activity.stats.elevationGainMeters)} ·{' '}
+                            {formatDuration(
+                              activity.stats.movingTimeSeconds ?? activity.stats.durationSeconds,
+                            )}
+                          </p>
+                        </div>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
             <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
               Rutas públicas
@@ -246,23 +315,29 @@ export function PublicCyclistPage() {
               </p>
             ) : (
               <ul className="space-y-2">
-                {routes.map((route) => (
-                  <li key={route.id}>
-                    <Link
-                      to={route.shareSlug ? `/route/${route.shareSlug}` : '/explorar'}
-                      className="flex items-start justify-between gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-[var(--color-forest)]">{route.title}</p>
-                        <p className="text-xs text-[var(--color-stone)]">
-                          {formatDistance(route.stats.distanceMeters)} ·{' '}
-                          {formatElevation(route.stats.elevationGainMeters)}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs font-semibold text-[var(--color-trail)]">Ver</span>
-                    </Link>
-                  </li>
-                ))}
+                {routes.map((route) => {
+                  const pts = coordsFromGeometry(route.geometry)
+                  return (
+                    <li key={route.id}>
+                      <Link
+                        to={route.shareSlug ? `/route/${route.shareSlug}` : '/explorar'}
+                        className="flex items-center gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
+                      >
+                        {pts.length >= 2 ? (
+                          <RouteThumb points={pts} width={72} height={44} className="shrink-0 opacity-90" />
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-[var(--color-forest)]">{route.title}</p>
+                          <p className="text-xs text-[var(--color-stone)]">
+                            {formatDistance(route.stats.distanceMeters)} ·{' '}
+                            {formatElevation(route.stats.elevationGainMeters)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold text-[var(--color-trail)]">Ver</span>
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>

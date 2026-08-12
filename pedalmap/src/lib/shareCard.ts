@@ -91,10 +91,11 @@ export function buildRouteShareText(draft: RouteDraft, url: string): string {
     draft.title || 'Ruta PedalMap',
     `${formatDistance(draft.stats.distanceMeters)} · ${formatElevation(draft.stats.elevationGainMeters)} · ${formatMinutes(draft.stats.estimatedDurationSeconds)} · ${bikeLabel(draft.bikeType)}`,
     '',
-    'Hecha con PedalMap · ábrela (mapa, desnivel y viento):',
+    'Hecha con PedalMap · Hecho en España',
+    'Ábrela (mapa, desnivel y viento):',
     shareUrl,
     '',
-    'Crea la tuya gratis en pedalmap.es',
+    'Crea la tuya gratis → pedalmap.es',
   ]
   return lines.join('\n')
 }
@@ -293,19 +294,33 @@ export function buildActivityShareText(activity: ActivityShareInput, url?: strin
     activity.title || 'Salida PedalMap',
     `${formatDistance(activity.distanceMeters)} · ${formatElevation(activity.elevationGainMeters)} · ${formatDuration(activity.durationSeconds)}`,
     '',
-    'Análisis Free en PedalMap (movimiento, VAM, potencia estimada…).',
+    'Análisis Free en PedalMap · Hecho en España',
   ]
   if (url) {
     lines.push(withShareUtm(url))
   }
-  lines.push('', 'Crea tu próxima ruta en pedalmap.es')
+  lines.push('', 'Crea tu próxima ruta gratis → pedalmap.es')
   return lines.join('\n')
+}
+
+/** Download the PNG card for Instagram Stories / feed (no IG Graph API in-app). */
+export async function downloadShareCardPng(
+  blob: Blob,
+  filename = 'pedalmap-tarjeta.png',
+): Promise<void> {
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  a.rel = 'noopener'
+  a.click()
+  URL.revokeObjectURL(objectUrl)
 }
 
 export async function shareActivityCard(
   activity: ActivityShareInput,
   url?: string,
-  options?: ShareCardOptions,
+  options?: ShareCardOptions & { alsoInstagram?: boolean },
 ): Promise<'whatsapp' | 'shared' | 'copied' | 'downloaded'> {
   const text = buildActivityShareText(activity, url)
   const waUrl = buildWhatsAppShareUrl(text)
@@ -323,14 +338,16 @@ export async function shareActivityCard(
   const openedWhatsApp = navigateWhatsAppWindow(options?.waWindow, waUrl)
 
   void renderActivityShareCard(activity, url)
-    .then((blob) => {
-      const objectUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = objectUrl
-      a.download = 'pedalmap-salida.png'
-      a.rel = 'noopener'
-      a.click()
-      URL.revokeObjectURL(objectUrl)
+    .then(async (blob) => {
+      await downloadShareCardPng(blob, 'pedalmap-salida.png')
+      if (options?.alsoInstagram) {
+        // Soft open Instagram — user attaches the downloaded card.
+        try {
+          window.open('https://www.instagram.com/', '_blank', 'noopener')
+        } catch {
+          /* ignore */
+        }
+      }
     })
     .catch(() => undefined)
 

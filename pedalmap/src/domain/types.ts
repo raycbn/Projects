@@ -142,6 +142,8 @@ export interface SavedRoute extends RouteDraft {
   userId: string
   isPublic: boolean
   shareSlug?: string
+  /** Soft social: cheers count (client-maintained). */
+  cheersCount?: number
   /** Opt-in: watch this route for excellent wind windows (in-app / email stub). */
   windAlertEnabled?: boolean
   createdAt: string
@@ -164,6 +166,8 @@ export interface UserNotifications {
   followAlertsEmail?: boolean
   /** Browser/PWA notification when someone follows you (opt-in). */
   followAlertsPush?: boolean
+  /** Publish finished activities to your public profile (opt-in). */
+  activitiesPublic?: boolean
 }
 
 /** In-app / PWA inbox item (follows, etc.). */
@@ -354,6 +358,8 @@ export interface Activity {
   source?: ActivitySource
   /** e.g. strava:123456789 — used to avoid duplicate imports */
   externalId?: string
+  /** Opt-in: show on public cyclist profile. */
+  isPublic?: boolean
   startedAt: string
   finishedAt?: string
   track: ActivityTrackPoint[]
@@ -407,6 +413,8 @@ export interface PublicProfile {
   displayName: string | null
   photoURL: string | null
   bio?: string
+  /** Soft city label for «cerca de ti» / retos (e.g. Madrid). */
+  city?: string | null
   isPublic: boolean
   followersCount: number
   followingCount: number

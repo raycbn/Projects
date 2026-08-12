@@ -13,6 +13,9 @@ import { track } from '@/lib/analytics'
 import { isDiscoverableCyclist, resolvePublicDisplayName } from '@/lib/communityIdentity'
 import { alertService } from '@/services/AlertService'
 import { deliverPendingFollowNotifications } from '@/lib/followNotify'
+import { coordsFromGeometry } from '@/lib/routeThumb'
+import { RouteThumb } from '@/components/athlete/RouteThumb'
+import { CITY_CHALLENGES } from '@/content/growthContent'
 
 type Tab = 'rutas' | 'siguiendo' | 'ciclistas' | 'mas'
 
@@ -36,6 +39,9 @@ export function ExplorePage() {
   const [feedLoading, setFeedLoading] = useState(false)
   const [busyFollowId, setBusyFollowId] = useState<string | null>(null)
   const [peopleQuery, setPeopleQuery] = useState('')
+  const [cheers, setCheers] = useState<Record<string, { count: number; cheered: boolean }>>({})
+  const [nearYou, setNearYou] = useState<PublicProfile[]>([])
+  const [myCity, setMyCity] = useState<string | null>(null)
   const ready = firebaseReady && communityService.isConfigured()
   const signedIn = Boolean(user && !user.isAnonymous)
 
@@ -153,7 +159,36 @@ export function ExplorePage() {
   useEffect(() => {
     if (!signedIn || !user) return
     void deliverPendingFollowNotifications(user.uid)
+    void communityService.getPublicProfile(user.uid).then((p) => {
+      const city = p?.city?.trim() || null
+      setMyCity(city)
+      if (city) {
+        void communityService.listNearYou(city, user.uid, 8).then(setNearYou).catch(() => setNearYou([]))
+      }
+    })
   }, [signedIn, user])
+
+  useEffect(() => {
+    if (!feed.length || !ready) return
+    let cancelled = false
+    async function loadCheers() {
+      const next: Record<string, { count: number; cheered: boolean }> = {}
+      await Promise.all(
+        feed.slice(0, 12).map(async (route) => {
+          try {
+            next[route.id] = await communityService.getCheersState(route.id, user && !user.isAnonymous ? user.uid : null)
+          } catch {
+            next[route.id] = { count: 0, cheered: false }
+          }
+        }),
+      )
+      if (!cancelled) setCheers((prev) => ({ ...prev, ...next }))
+    }
+    void loadCheers()
+    return () => {
+      cancelled = true
+    }
+  }, [feed, ready, user])
 
   const tabs = useMemo(
     () =>
@@ -178,6 +213,20 @@ export function ExplorePage() {
         return name.includes(q) || bio.includes(q)
       })
   }, [people, user, peopleQuery])
+
+  async function handleCheers(routeId: string) {
+    if (!signedIn || !user) {
+      setMessage('Inicia sesión para dar Cheers.')
+      return
+    }
+    try {
+      const result = await communityService.toggleCheers(routeId, user.uid)
+      setCheers((prev) => ({ ...prev, [routeId]: result }))
+    } catch (error) {
+      console.warn('[cheers]', error)
+      setMessage('No se pudo registrar el Cheers.')
+    }
+  }
 
   async function handleFollow(followeeId: string) {
     if (!signedIn || !user) {
@@ -408,6 +457,9 @@ export function ExplorePage() {
                       key={route.id}
                       route={route}
                       authorLabel={authorNames[route.userId] || 'Ciclista'}
+                      cheers={cheers[route.id]}
+                      onCheers={() => void handleCheers(route.id)}
+                      canCheer={signedIn}
                     />
                   ))
                 : null}
@@ -423,6 +475,33 @@ export function ExplorePage() {
                     Ir a Perfil / login →
                   </Link>
                 </div>
+              ) : null}
+
+              {signedIn && myCity && nearYou.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-trail)]">
+                    Cerca de ti · {myCity}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {nearYou.map((p) => (
+                      <Link
+                        key={p.uid}
+                        to={`/ciclista/${p.uid}`}
+                        className="rounded-full bg-[var(--color-mist)] px-3 py-1.5 text-sm font-semibold text-[var(--color-forest)]"
+                      >
+                        {p.displayName || 'Ciclista'}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : signedIn && !myCity ? (
+                <p className="text-sm text-[var(--color-stone)]">
+                  Añade tu ciudad en{' '}
+                  <Link to="/perfil" className="font-semibold text-[var(--color-trail)]">
+                    Perfil
+                  </Link>{' '}
+                  para ver ciclistas cerca de ti.
+                </p>
               ) : null}
 
               <label className="block space-y-1">
@@ -516,6 +595,25 @@ export function ExplorePage() {
             <div className="space-y-6">
               <section className="space-y-3">
                 <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
+                  Reto semanal por ciudad
+                </h2>
+                <ul className="divide-y divide-[var(--color-fog)] rounded-2xl bg-white/80 ring-1 ring-[var(--color-fog)]">
+                  {CITY_CHALLENGES.map((c) => (
+                    <li key={c.slug} className="px-4 py-3">
+                      <p className="font-semibold text-[var(--color-forest)]">
+                        {c.city} · {c.targetKm} km
+                      </p>
+                      <p className="mt-0.5 text-sm text-[var(--color-stone)]">{c.blurb}</p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-[var(--color-stone)]">
+                  Pon tu ciudad en Perfil para «Cerca de ti» en Ciclistas.
+                </p>
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
                   Guías prácticas
                 </h2>
                 <div className="grid gap-3">
@@ -567,11 +665,24 @@ export function ExplorePage() {
   )
 }
 
-function RouteRow({ route, authorLabel }: { route: SavedRoute; authorLabel?: string }) {
+function RouteRow({
+  route,
+  authorLabel,
+  cheers,
+  onCheers,
+  canCheer,
+}: {
+  route: SavedRoute
+  authorLabel?: string
+  cheers?: { count: number; cheered: boolean }
+  onCheers?: () => void
+  canCheer?: boolean
+}) {
+  const points = coordsFromGeometry(route.geometry)
   return (
     <article className="rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)]">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           {authorLabel ? (
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-trail)]">
               {authorLabel}
@@ -582,12 +693,31 @@ function RouteRow({ route, authorLabel }: { route: SavedRoute; authorLabel?: str
             {route.bikeType} · {formatDistance(route.stats.distanceMeters)} ·{' '}
             {formatElevation(route.stats.elevationGainMeters)}
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {route.shareSlug ? (
+              <Link to={`/route/${route.shareSlug}`}>
+                <Button variant="ghost">Ver</Button>
+              </Link>
+            ) : null}
+            {onCheers ? (
+              <button
+                type="button"
+                disabled={!canCheer}
+                onClick={onCheers}
+                className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
+                  cheers?.cheered
+                    ? 'bg-[var(--color-mist)] text-[var(--color-forest)]'
+                    : 'text-[var(--color-stone)] ring-1 ring-[var(--color-fog)]'
+                }`}
+              >
+                Cheers{typeof cheers?.count === 'number' ? ` · ${cheers.count}` : ''}
+              </button>
+            ) : null}
+          </div>
         </div>
-        {route.shareSlug && (
-          <Link to={`/route/${route.shareSlug}`}>
-            <Button variant="ghost">Ver</Button>
-          </Link>
-        )}
+        {points.length >= 2 ? (
+          <RouteThumb points={points} width={88} height={56} className="shrink-0 opacity-90" />
+        ) : null}
       </div>
     </article>
   )

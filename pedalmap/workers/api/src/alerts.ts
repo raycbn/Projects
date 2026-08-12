@@ -153,3 +153,63 @@ export async function handleFollowAlertEmail(
     pwaHint: !hasPwaPush,
   })
 }
+
+type RouteSavedBody = {
+  routeTitle?: string
+  shareSlug?: string
+  distanceMeters?: number
+  elevationGainMeters?: number
+}
+
+/** Soft email after saving/publishing a route — never blocks the product path. */
+export async function handleRouteSavedEmail(
+  request: Request,
+  env: Env,
+  identity: FirebaseIdentity,
+): Promise<Response> {
+  if (identity.isAnonymous) {
+    return json({ error: 'Se requiere una cuenta real' }, 401)
+  }
+  const to = identity.email?.trim()
+  if (!to) {
+    return json({ ok: true, sent: false, reason: 'no_email' })
+  }
+
+  const body = (await request.json().catch(() => ({}))) as RouteSavedBody
+  const title = String(body.routeTitle || 'Tu ruta').slice(0, 120)
+  const appUrl = resolveAppUrl(env, request)
+  const link = body.shareSlug
+    ? `${appUrl}/route/${encodeURIComponent(body.shareSlug)}`
+    : `${appUrl}/my-routes`
+  const dist =
+    typeof body.distanceMeters === 'number'
+      ? `${(body.distanceMeters / 1000).toFixed(1)} km`
+      : null
+  const elev =
+    typeof body.elevationGainMeters === 'number'
+      ? `+${Math.round(body.elevationGainMeters)} m`
+      : null
+  const stats = [dist, elev].filter(Boolean).join(' · ')
+
+  const subject = `PedalMap · ruta lista: ${title}`
+  const text = [
+    `Hola,`,
+    ``,
+    `Tu ruta «${title}» ya está guardada${stats ? ` (${stats})` : ''}.`,
+    `Ábrela: ${link}`,
+    ``,
+    `Siguiente paso: exporta GPX, mira el viento o compártela con la grupeta.`,
+    `Crear otra gratis: ${appUrl}/route-planner`,
+    ``,
+    `— PedalMap · Hecho en España`,
+  ].join('\n')
+
+  const result = await sendMail(env, {
+    to,
+    subject,
+    text,
+    from: env.MAIL_FROM || 'PedalMap <aviso@pedalmap.es>',
+  })
+
+  return json({ ok: true, sent: result.sent, reason: result.reason, id: result.id })
+}

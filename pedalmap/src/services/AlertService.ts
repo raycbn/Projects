@@ -72,6 +72,31 @@ export class AlertService {
       console.warn('[alerts] follow notify', error)
     }
   }
+
+  /** Fire-and-forget: email after any saved/published route. */
+  async notifyRouteSaved(input: {
+    routeTitle: string
+    shareSlug?: string
+    distanceMeters?: number
+    elevationGainMeters?: number
+  }): Promise<void> {
+    if (!this.isConfigured()) return
+    const user = getFirebaseAuth().currentUser
+    if (!user || user.isAnonymous) return
+    try {
+      const token = await user.getIdToken()
+      await fetch(`${apiBase()}/alerts/route-saved`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      })
+    } catch (error) {
+      console.warn('[alerts] route-saved', error)
+    }
+  }
 }
 
 export const alertService = new AlertService()

@@ -11,9 +11,20 @@ import { BRAND_EMAILS } from '@/lib/brandEmails'
 import { enableFollowPushPreference } from '@/lib/followNotify'
 import { resolvePublicDisplayName } from '@/lib/communityIdentity'
 import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
+import {
+  buildYearHeatmap,
+  evaluateMilestones,
+  sumWeekStats,
+  sumYearStats,
+} from '@/lib/athleteStats'
+import { coordsFromGeometry, coordsFromTrack } from '@/lib/routeThumb'
+import { RouteThumb } from '@/components/athlete/RouteThumb'
+import { ActivityHeatmap } from '@/components/athlete/ActivityHeatmap'
 import { communityService } from '@/services/CommunityService'
 import { activityRepository } from '@/services/ActivityRepository'
 import { routeRepository } from '@/services/RouteRepository'
+import { doc, getDoc } from 'firebase/firestore'
+import { getDb } from '@/lib/firebase'
 import {
   ANNUAL_TRIAL_DAYS,
   FREE_TRIALS,
@@ -23,32 +34,6 @@ import {
   type RoutePreference,
   type SavedRoute,
 } from '@/domain/types'
-
-type YearStats = {
-  rides: number
-  distanceMeters: number
-  elevationGainMeters: number
-  movingSeconds: number
-}
-
-function yearKey(iso: string): number {
-  const t = Date.parse(iso)
-  return Number.isFinite(t) ? new Date(t).getFullYear() : new Date().getFullYear()
-}
-
-function sumYearStats(activities: Activity[]): YearStats {
-  const year = new Date().getFullYear()
-  const rows = activities.filter((a) => a.status === 'finished' && yearKey(a.startedAt) === year)
-  return {
-    rides: rows.length,
-    distanceMeters: rows.reduce((s, a) => s + (a.stats.distanceMeters || 0), 0),
-    elevationGainMeters: rows.reduce((s, a) => s + (a.stats.elevationGainMeters || 0), 0),
-    movingSeconds: rows.reduce(
-      (s, a) => s + (a.stats.movingTimeSeconds ?? a.stats.durationSeconds ?? 0),
-      0,
-    ),
-  }
-}
 
 export function ProfilePage() {
   usePageMeta({
@@ -67,15 +52,19 @@ export function ProfilePage() {
   const [alertsBusy, setAlertsBusy] = useState(false)
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null)
   const [bioDraft, setBioDraft] = useState('')
+  const [cityDraft, setCityDraft] = useState('')
   const [bioSaving, setBioSaving] = useState(false)
   const [activities, setActivities] = useState<Activity[]>([])
   const [routes, setRoutes] = useState<SavedRoute[]>([])
   const [statsLoading, setStatsLoading] = useState(false)
+  const [trialing, setTrialing] = useState(false)
+  const [trialEnd, setTrialEnd] = useState<string | null>(null)
 
   const windAlertsEnabled = Boolean(profile?.notifications?.windAlertsEnabled)
   const windAlertsEmail = Boolean(profile?.notifications?.windAlertsEmail)
   const followAlertsEmail = profile?.notifications?.followAlertsEmail !== false
   const followAlertsPush = Boolean(profile?.notifications?.followAlertsPush)
+  const activitiesPublic = Boolean(profile?.notifications?.activitiesPublic)
 
   const displayName = useMemo(
     () =>
@@ -85,6 +74,23 @@ export function ProfilePage() {
   )
   const photoURL = profile?.photoURL || user?.photoURL || null
   const yearStats = useMemo(() => sumYearStats(activities), [activities])
+  const weekStats = useMemo(() => sumWeekStats(activities), [activities])
+  const heatDays = useMemo(() => buildYearHeatmap(activities), [activities])
+  const milestones = useMemo(
+    () =>
+      evaluateMilestones({
+        activities,
+        routes,
+        followersCount: publicProfile?.followersCount ?? 0,
+      }),
+    [activities, routes, publicProfile?.followersCount],
+  )
+  const coverPoints = useMemo(() => {
+    const lastAct = activities.find((a) => a.status === 'finished' && a.track?.length >= 2)
+    if (lastAct) return coordsFromTrack(lastAct.track)
+    const lastRoute = routes.find((r) => coordsFromGeometry(r.geometry).length >= 2)
+    return lastRoute ? coordsFromGeometry(lastRoute.geometry) : []
+  }, [activities, routes])
   const recentActivities = useMemo(
     () => activities.filter((a) => a.status === 'finished').slice(0, 5),
     [activities],
@@ -127,8 +133,18 @@ export function ProfilePage() {
         if (cancelled) return
         setPublicProfile(pub)
         setBioDraft(pub?.bio || '')
+        setCityDraft(pub?.city || '')
         setActivities(acts)
         setRoutes(ownRoutes)
+        try {
+          const sub = await getDoc(doc(getDb(), 'subscriptions', user.uid))
+          const status = String(sub.data()?.status || '')
+          setTrialing(status === 'trialing')
+          const end = sub.data()?.currentPeriodEnd
+          setTrialEnd(end ? String(end) : null)
+        } catch {
+          setTrialing(false)
+        }
       } catch (error) {
         console.warn('[perfil] athlete load', error)
       } finally {
@@ -168,10 +184,11 @@ export function ProfilePage() {
         photoURL: profile?.photoURL ?? user.photoURL,
         email: user.email ?? profile?.email,
         bio: bioDraft.trim().slice(0, 280),
+        city: cityDraft.trim().slice(0, 40) || null,
       })
       const pub = await communityService.getPublicProfile(user.uid)
       setPublicProfile(pub)
-      setMessage('Bio pública actualizada.')
+      setMessage('Perfil público actualizado.')
     } catch (error) {
       console.error('[profile] bio', error)
       setMessage('No se pudo guardar la bio.')
@@ -191,6 +208,7 @@ export function ProfilePage() {
         windAlertsEmail: next.windAlertsEmail ?? windAlertsEmail,
         followAlertsEmail,
         followAlertsPush,
+        activitiesPublic,
       }
       if (!notifications.windAlertsEnabled) {
         notifications.windAlertsEmail = false
@@ -234,6 +252,7 @@ export function ProfilePage() {
         windAlertsEmail,
         followAlertsEmail: next.followAlertsEmail ?? followAlertsEmail,
         followAlertsPush: push,
+        activitiesPublic,
       })
       if (next.followAlertsPush !== true || push) {
         setMessage('Avisos de comunidad guardados.')
@@ -260,7 +279,20 @@ export function ProfilePage() {
         <div className="mt-6 space-y-5">
           {/* Athlete hero */}
           <section className="overflow-hidden rounded-3xl bg-white/80 ring-1 ring-[var(--color-fog)]">
-            <div className="h-20 bg-[linear-gradient(135deg,var(--color-forest),var(--color-trail))] sm:h-24" />
+            <div className="relative h-28 overflow-hidden bg-[linear-gradient(135deg,var(--color-forest),var(--color-trail))] sm:h-32">
+              {coverPoints.length >= 2 ? (
+                <div className="absolute inset-0 flex items-center justify-center opacity-90">
+                  <RouteThumb
+                    points={coverPoints}
+                    width={360}
+                    height={120}
+                    stroke="rgba(255,255,255,0.85)"
+                    className="h-full w-full max-w-none"
+                  />
+                </div>
+              ) : null}
+              <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(7,21,16,0.35))]" />
+            </div>
             <div className="relative px-5 pb-5 pt-0">
               <div className="-mt-10 flex items-end gap-4">
                 {photoURL ? (
@@ -280,7 +312,7 @@ export function ProfilePage() {
                       {displayName}
                     </h2>
                     <span className="rounded-full bg-[var(--color-mist)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-forest)]">
-                      {profile?.plan === 'premium' ? 'Premium' : 'Free'}
+                      {trialing ? 'Trial' : profile?.plan === 'premium' ? 'Premium' : 'Free'}
                     </span>
                   </div>
                   <p className="mt-0.5 truncate text-sm text-[var(--color-stone)]">
@@ -288,6 +320,20 @@ export function ProfilePage() {
                   </p>
                 </div>
               </div>
+
+              {trialing ? (
+                <p className="mt-3 rounded-2xl bg-[var(--color-mist)] px-3 py-2 text-sm text-[var(--color-forest)]">
+                  Prueba Premium activa
+                  {trialEnd
+                    ? ` · hasta ${new Date(trialEnd).toLocaleDateString('es-ES')}`
+                    : ` · ${ANNUAL_TRIAL_DAYS} días en el plan anual`}
+                  . Gestiona en{' '}
+                  <Link to="/premium" className="font-semibold text-[var(--color-trail)]">
+                    Premium
+                  </Link>
+                  .
+                </p>
+              ) : null}
 
               {!user.isAnonymous ? (
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -326,14 +372,24 @@ export function ProfilePage() {
                   <textarea
                     value={bioDraft}
                     onChange={(e) => setBioDraft(e.target.value.slice(0, 280))}
-                    rows={3}
-                    placeholder="Cuéntanos cómo ruedas: zona, bici, objetivos…"
+                    rows={2}
+                    placeholder="Cómo ruedas: zona, bici, objetivos…"
                     className="w-full rounded-2xl border-0 bg-[var(--color-mist)]/50 px-3 py-2 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] outline-none placeholder:text-[var(--color-stone)] focus:ring-2 focus:ring-[var(--color-trail)]"
+                  />
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                    Ciudad
+                  </label>
+                  <input
+                    type="text"
+                    value={cityDraft}
+                    onChange={(e) => setCityDraft(e.target.value.slice(0, 40))}
+                    placeholder="Madrid, Barcelona…"
+                    className="min-h-11 w-full rounded-2xl border-0 bg-[var(--color-mist)]/50 px-3 text-sm text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] outline-none placeholder:text-[var(--color-stone)] focus:ring-2 focus:ring-[var(--color-trail)]"
                   />
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-[var(--color-stone)]">{bioDraft.length}/280</p>
                     <Button type="button" variant="secondary" disabled={bioSaving} onClick={() => void handleSaveBio()}>
-                      {bioSaving ? 'Guardando…' : 'Guardar bio'}
+                      {bioSaving ? 'Guardando…' : 'Guardar perfil'}
                     </Button>
                   </div>
                   <Link
@@ -347,12 +403,12 @@ export function ProfilePage() {
             </div>
           </section>
 
-          {/* YTD stats */}
+          {/* Week + year + heatmap + compact milestones — one composition */}
           {!user.isAnonymous ? (
-            <section className="space-y-3 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+            <section className="space-y-4 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">
-                  Este año
+                  Actividad
                 </h2>
                 <Link to="/actividades" className="text-sm font-semibold text-[var(--color-trail)]">
                   Ver todo
@@ -361,13 +417,72 @@ export function ProfilePage() {
               {statsLoading ? (
                 <p className="text-sm text-[var(--color-stone)]">Cargando estadísticas…</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <Stat label="Salidas" value={String(yearStats.rides)} />
-                  <Stat label="Distancia" value={formatDistance(yearStats.distanceMeters)} />
-                  <Stat label="Desnivel" value={formatElevation(yearStats.elevationGainMeters)} />
-                  <Stat label="Tiempo" value={formatDuration(yearStats.movingSeconds)} />
-                </div>
+                <>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                      Esta semana
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--color-forest)]">
+                      <span className="font-semibold">{weekStats.rides}</span> salidas ·{' '}
+                      {formatDistance(weekStats.distanceMeters)} ·{' '}
+                      {formatElevation(weekStats.elevationGainMeters)} ·{' '}
+                      {formatDuration(weekStats.movingSeconds)}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Stat label="Año · salidas" value={String(yearStats.rides)} />
+                    <Stat label="Distancia" value={formatDistance(yearStats.distanceMeters)} />
+                    <Stat label="Desnivel" value={formatElevation(yearStats.elevationGainMeters)} />
+                    <Stat label="Tiempo" value={formatDuration(yearStats.movingSeconds)} />
+                  </div>
+                  <ActivityHeatmap days={heatDays} className="mt-1" />
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
+                      Hitos
+                    </p>
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                      {milestones.map((m) => (
+                        <li
+                          key={m.id}
+                          title={m.hint}
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            m.unlocked
+                              ? 'bg-[var(--color-mist)] text-[var(--color-forest)]'
+                              : 'text-[var(--color-stone)] ring-1 ring-[var(--color-fog)]'
+                          }`}
+                        >
+                          {m.unlocked ? '✓ ' : ''}
+                          {m.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
               )}
+            </section>
+          ) : null}
+
+          {!user.isAnonymous && profile?.plan === 'premium' ? (
+            <section className="space-y-2 rounded-3xl bg-white/80 p-5 ring-1 ring-[var(--color-fog)]">
+              <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Pack Grupeta</h2>
+              <p className="text-sm text-[var(--color-stone)]">
+                Invita a 2 amigos: en el checkout anual pueden usar el código{' '}
+                <strong className="text-[var(--color-forest)]">GRUPETA</strong> (promo Stripe) o este
+                enlace.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const url = `${window.location.origin}/premium?grupeta=1&ref=${user.uid}`
+                  const text = `Únete a mi grupeta en PedalMap (planificador de rutas bici). Prueba Premium: ${url} — código GRUPETA en el checkout anual.`
+                  void navigator.clipboard?.writeText(text)
+                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+                  setMessage('Invitación Grupeta lista para WhatsApp.')
+                }}
+              >
+                Invitar por WhatsApp
+              </Button>
             </section>
           ) : null}
 
@@ -388,26 +503,31 @@ export function ProfilePage() {
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {recentActivities.map((activity) => (
-                    <li key={activity.id}>
-                      <Link
-                        to={`/actividades/${activity.id}`}
-                        className="flex items-start justify-between gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-[var(--color-forest)]">
-                            {activity.title}
-                          </p>
-                          <p className="text-xs text-[var(--color-stone)]">
-                            {formatDistance(activity.stats.distanceMeters)} ·{' '}
-                            {formatElevation(activity.stats.elevationGainMeters)} ·{' '}
-                            {formatDuration(activity.stats.movingTimeSeconds ?? activity.stats.durationSeconds)}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-xs font-semibold text-[var(--color-trail)]">Ver</span>
-                      </Link>
-                    </li>
-                  ))}
+                  {recentActivities.map((activity) => {
+                    const pts = coordsFromTrack(activity.track)
+                    return (
+                      <li key={activity.id}>
+                        <Link
+                          to={`/actividades/${activity.id}`}
+                          className="flex items-center gap-3 rounded-2xl bg-[var(--color-mist)]/50 px-3 py-3 transition hover:bg-[var(--color-mist)]"
+                        >
+                          {pts.length >= 2 ? (
+                            <RouteThumb points={pts} width={64} height={40} className="shrink-0 opacity-90" />
+                          ) : null}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-[var(--color-forest)]">
+                              {activity.title}
+                            </p>
+                            <p className="text-xs text-[var(--color-stone)]">
+                              {formatDistance(activity.stats.distanceMeters)} ·{' '}
+                              {formatElevation(activity.stats.elevationGainMeters)} ·{' '}
+                              {formatDuration(activity.stats.movingTimeSeconds ?? activity.stats.durationSeconds)}
+                            </p>
+                          </div>
+                        </Link>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
               <Link to="/actividades/conectar" className="inline-flex text-sm font-semibold text-[var(--color-trail)]">
@@ -581,6 +701,40 @@ export function ProfilePage() {
                   <span className="block text-xs text-[var(--color-stone)]">
                     iPhone: Safari → Compartir → Añadir a pantalla de inicio. Android: Chrome →
                     Instalar app. Luego abre PedalMap desde el icono y acepta avisos.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--color-forest)]">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={activitiesPublic}
+                  disabled={alertsBusy}
+                  onChange={(e) => {
+                    if (!profile) return
+                    setAlertsBusy(true)
+                    void updateNotifications({
+                      ...profile.notifications,
+                      windAlertsEnabled,
+                      windAlertsEmail,
+                      followAlertsEmail,
+                      followAlertsPush,
+                      activitiesPublic: e.target.checked,
+                    })
+                      .then(() => setMessage(
+                        e.target.checked
+                          ? 'Las nuevas salidas pueden publicarse en tu perfil (márcalas en cada salida).'
+                          : 'Salidas públicas desactivadas por defecto.',
+                      ))
+                      .catch(() => setMessage('No se pudo guardar la preferencia.'))
+                      .finally(() => setAlertsBusy(false))
+                  }}
+                />
+                <span>
+                  Actividad pública (opt-in)
+                  <span className="block text-xs text-[var(--color-stone)]">
+                    Permite marcar salidas como públicas en tu ficha de ciclista. Por defecto siguen
+                    privadas.
                   </span>
                 </span>
               </label>

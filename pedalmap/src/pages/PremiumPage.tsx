@@ -207,6 +207,32 @@ export function PremiumPage() {
         </p>
       )}
 
+      <section className="mt-10 space-y-2 rounded-[1.75rem] bg-white/80 p-6 ring-1 ring-[var(--color-fog)]">
+        <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Pack Grupeta</h2>
+        <p className="text-sm text-[var(--color-stone)]">
+          Invita a 2 amigos. En el checkout anual usa el código promo{' '}
+          <strong className="text-[var(--color-forest)]">GRUPETA</strong> (Stripe) o comparte este
+          enlace. Hecho en España.
+        </p>
+        {params.get('grupeta') === '1' ? (
+          <p className="text-sm font-semibold text-[var(--color-trail)]">
+            Código GRUPETA listo — elígelo en Checkout al pagar el anual.
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            const url = `${window.location.origin}/premium?grupeta=1`
+            const text = `Únete a PedalMap Premium (rutas bici con viento y GPX). Checkout anual + código GRUPETA: ${url}`
+            void navigator.clipboard?.writeText(text)
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+          }}
+        >
+          Compartir invitación
+        </Button>
+      </section>
+
       <Link to="/route-planner" className="mt-8 inline-block">
         <Button variant="ghost">Volver a crear ruta</Button>
       </Link>

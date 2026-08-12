@@ -8,32 +8,43 @@ interface PremiumCardProps {
   onClose?: () => void
 }
 
-export function PremiumCard({ reason, onClose }: PremiumCardProps) {
-  const title =
-    reason === 'guest_limit'
-      ? 'Cupo de invitado agotado en este dispositivo'
-      : reason === 'circular_premium'
-        ? 'Tu Objetivo gratis de este mes ya está usado'
-        : reason === 'gpx_export'
-          ? 'Tu GPX gratis de esta semana ya está usado'
-          : reason === 'filter_limit'
-            ? 'Free permite hasta 2 filtros a la vez'
-            : reason === 'save_limit'
-              ? 'Has llegado al límite de rutas guardadas'
-              : 'Has llegado a un límite Free'
+const COPY: Record<string, { title: string; body: string }> = {
+  guest_limit: {
+    title: 'Cupo de invitado agotado en este dispositivo',
+    body: 'Entra o crea cuenta para seguir creando rutas Free este mes.',
+  },
+  circular_premium: {
+    title: 'Tu Objetivo gratis de este mes ya está usado',
+    body: `Free incluye ${FREE_TRIALS.circularPerMonth} Objetivo al mes. Premium deja Objetivo ilimitado, GPX y guardados sin techo.`,
+  },
+  gpx_export: {
+    title: 'Tu GPX gratis de esta semana ya está usado',
+    body: `Free incluye ${FREE_TRIALS.gpxPerWeek} GPX a la semana. Premium exporta sin límite a Garmin, Wahoo y apps.`,
+  },
+  filter_limit: {
+    title: 'Free permite hasta 2 filtros a la vez',
+    body: 'Desactiva un filtro o pasa a Premium para combinar más de 2.',
+  },
+  save_limit: {
+    title: 'Has llegado al límite de rutas guardadas',
+    body: 'Free guarda hasta 5 rutas. Premium las guarda todas y desbloquea GPX/Objetivo.',
+  },
+  create_limit: {
+    title: 'Has llegado al límite de creaciones del mes',
+    body: 'Free crea hasta 15 rutas al mes. Premium no tiene techo de creación.',
+  },
+  wind_alert_limit: {
+    title: 'Free avisa en 1 ruta guardada',
+    body: 'Quita el aviso de otra ruta o pasa a Premium para vigilar todas.',
+  },
+}
 
-  const body =
-    reason === 'circular_premium'
-      ? `Free incluye ${FREE_TRIALS.circularPerMonth} Objetivo al mes para probar. Premium deja Objetivo ilimitado, además de GPX y guardados sin techo.`
-      : reason === 'gpx_export'
-        ? `Free incluye ${FREE_TRIALS.gpxPerWeek} GPX a la semana. Premium exporta sin límite a Garmin, Wahoo y apps.`
-        : reason === 'filter_limit'
-          ? 'Desactiva un filtro o pasa a Premium para combinar más de 2.'
-          : reason === 'guest_limit'
-            ? 'Entra o crea cuenta para seguir creando rutas Free este mes.'
-            : reason === 'save_limit'
-              ? 'Free guarda hasta 5 rutas. Premium las guarda todas.'
-              : 'Desbloquea PedalMap Premium cuando quieras planificar sin fricciones.'
+export function PremiumCard({ reason, onClose }: PremiumCardProps) {
+  const key = reason || 'default'
+  const copy = COPY[key] || {
+    title: 'Has llegado a un límite Free',
+    body: 'Desbloquea PedalMap Premium cuando quieras planificar sin fricciones.',
+  }
 
   return (
     <div
@@ -47,9 +58,9 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           PedalMap Premium
         </p>
         <h2 id="premium-title" className="mt-2 font-display text-2xl font-extrabold leading-tight">
-          {title}
+          {copy.title}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-white/70">{body}</p>
+        <p className="mt-3 text-sm leading-relaxed text-white/70">{copy.body}</p>
         <ul className="mt-5 space-y-2 text-sm text-white/80">
           {[
             'Rutas y guardados ilimitados',
@@ -57,6 +68,7 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
             'Objetivo ilimitado',
             'Más de 2 filtros a la vez',
             'Avisos de viento en todas tus rutas',
+            'Pack Grupeta: invita amigos (código GRUPETA)',
           ].map((item) => (
             <li key={item} className="flex gap-2">
               <span className="text-[var(--color-signal)]" aria-hidden>
@@ -67,7 +79,7 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           ))}
         </ul>
         <p className="mt-4 text-xs text-white/55">
-          Anual: {ANNUAL_TRIAL_DAYS} días de prueba antes de cobrar.
+          Anual: {ANNUAL_TRIAL_DAYS} días de prueba antes de cobrar. Hecho en España.
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
           <Link
@@ -78,13 +90,10 @@ export function PremiumCard({ reason, onClose }: PremiumCardProps) {
           </Link>
           {onClose && (
             <Button variant="ghost" className="!text-white/90 !border-white/15" onClick={onClose}>
-              Seguir
+              Seguir Free
             </Button>
           )}
         </div>
-        <p className="mt-4 text-[11px] leading-relaxed text-white/45">
-          Free ya incluye 1 GPX/semana y 1 Objetivo/mes. Premium quita los topes.
-        </p>
       </div>
     </div>
   )
