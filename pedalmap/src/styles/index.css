@@ -118,10 +118,29 @@
   }
 }
 
+@keyframes cheer-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  35% {
+    transform: scale(1.35) rotate(-12deg);
+  }
+  65% {
+    transform: scale(1.1) rotate(8deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
 .animate-rise {
   animation: rise-in 0.55s ease-out both;
 }
 
 .animate-pulse-soft {
   animation: pulse-soft 1.6s ease-in-out infinite;
+}
+
+.animate-cheer-pop {
+  animation: cheer-pop 0.45s ease-out;
 }

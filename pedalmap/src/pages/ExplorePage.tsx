@@ -228,6 +228,14 @@ export function ExplorePage() {
     try {
       const result = await communityService.toggleCheers(routeId, user.uid)
       setCheers((prev) => ({ ...prev, [routeId]: result }))
+      if (result.cheered) {
+        const cheerName =
+          resolvePublicDisplayName(
+            profile?.displayName ?? user.displayName,
+            user.email ?? profile?.email,
+          ) || 'Un ciclista'
+        void alertService.notifyCheers(routeId, cheerName)
+      }
     } catch (error) {
       console.warn('[cheers]', error)
       setMessage('No se pudo registrar el Cheers.')
@@ -725,19 +733,32 @@ function RouteRow({
                 type="button"
                 disabled={!canCheer}
                 onClick={onCheers}
-                className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
+                aria-pressed={cheers?.cheered === true}
+                className={`inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition ${
                   cheers?.cheered
-                    ? 'bg-[var(--color-mist)] text-[var(--color-forest)]'
-                    : 'text-[var(--color-stone)] ring-1 ring-[var(--color-fog)]'
+                    ? 'bg-[color-mix(in_oklab,var(--color-trail)_16%,white)] text-[var(--color-forest)] ring-1 ring-[var(--color-trail)]/30'
+                    : 'text-[var(--color-stone)] ring-1 ring-[var(--color-fog)] hover:text-[var(--color-forest)]'
                 }`}
               >
-                Cheers{typeof cheers?.count === 'number' ? ` · ${cheers.count}` : ''}
+                <span
+                  aria-hidden
+                  className={`inline-block text-base leading-none ${
+                    cheers?.cheered ? 'animate-cheer-pop' : ''
+                  }`}
+                >
+                  🙌
+                </span>
+                <span>Cheers</span>
+                {typeof cheers?.count === 'number' ? (
+                  <span className="tabular-nums opacity-80">· {cheers.count}</span>
+                ) : null}
               </button>
             ) : canCheer === false ? (
               <Link
                 to="/login"
-                className="min-h-10 rounded-xl px-3 text-sm font-semibold text-[var(--color-stone)] ring-1 ring-[var(--color-fog)] inline-flex items-center"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-[var(--color-stone)] ring-1 ring-[var(--color-fog)]"
               >
+                <span aria-hidden>🙌</span>
                 Cheers · entrar
               </Link>
             ) : null}

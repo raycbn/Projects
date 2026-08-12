@@ -216,26 +216,39 @@ export class RouteRepository {
   }
 
 async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
-    // Prefer per-user queries (userId index already exists) and filter isPublic
-    // client-side — avoids requiring a composite isPublic+userId index.
+    // Must include isPublic==true in the query: non-owners cannot list another
+    // user's private routes, so a bare userId query is denied by security rules.
+    // Composite index: isPublic + userId (firestore.indexes.json).
     const ids = [...new Set(userIds.filter(Boolean))].slice(0, 20)
     if (!ids.length) return []
     const rows: SavedRoute[] = []
     await Promise.all(
       ids.map(async (userId) => {
         try {
-          const q = query(collection(getDb(), 'routes'), where('userId', '==', userId))
+          const q = query(
+            collection(getDb(), 'routes'),
+            where('userId', '==', userId),
+            where('isPublic', '==', true),
+          )
           const snap = await getDocs(q)
           for (const d of snap.docs) {
-            const route = this.mapDoc(d.id, d.data())
-            if (route.isPublic) rows.push(route)
+            rows.push(this.mapDoc(d.id, d.data()))
           }
         } catch (err) {
-          console.warn('[routes] listPublicByUserIds', userId, err)
+          console.warn('[routes] listPublicByUserIds composite failed', userId, err)
+          try {
+            const all = await this.listPublic(Math.max(max * 2, 40))
+            for (const route of all) {
+              if (route.userId === userId) rows.push(route)
+            }
+          } catch (fallbackErr) {
+            console.warn('[routes] listPublicByUserIds fallback', userId, fallbackErr)
+          }
         }
       }),
     )
-    return rows
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    return [...byId.values()]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, max)
   }

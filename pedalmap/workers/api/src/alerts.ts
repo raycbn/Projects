@@ -2,7 +2,7 @@ import type { Env } from './types'
 import { json, resolveAppUrl } from './types'
 import type { FirebaseIdentity } from './firebaseAuth'
 import { sendMail } from './mail'
-import { readUserFollowNotifyTarget } from './firestore'
+import { readRouteOwnerBrief, readUserFollowNotifyTarget } from './firestore'
 
 type WindAlertBody = {
   routeId?: string
@@ -159,6 +159,84 @@ type RouteSavedBody = {
   shareSlug?: string
   distanceMeters?: number
   elevationGainMeters?: number
+}
+
+type CheersAlertBody = {
+  routeId?: string
+  cheerDisplayName?: string
+}
+
+/**
+ * Notify route owner that someone gave Cheers (email).
+ * Soft-fails without RESEND / missing email so cheers UX never breaks.
+ */
+export async function handleCheersAlertEmail(
+  request: Request,
+  env: Env,
+  identity: FirebaseIdentity,
+): Promise<Response> {
+  if (identity.isAnonymous) {
+    return json({ error: 'Se requiere una cuenta real' }, 401)
+  }
+
+  const body = (await request.json().catch(() => ({}))) as CheersAlertBody
+  const routeId = String(body.routeId || '').trim()
+  if (!routeId) {
+    return json({ error: 'routeId inválido' }, 400)
+  }
+
+  const cheerName = String(body.cheerDisplayName || 'Un ciclista').slice(0, 80)
+  const appUrl = resolveAppUrl(env, request)
+  const route = await readRouteOwnerBrief(env, routeId)
+  if (!route) {
+    return json({ ok: true, sent: false, reason: 'route_missing' })
+  }
+  if (!route.isPublic) {
+    return json({ ok: true, sent: false, reason: 'route_private' })
+  }
+  if (route.userId === identity.uid) {
+    return json({ ok: true, sent: false, reason: 'self_cheers' })
+  }
+
+  const target = await readUserFollowNotifyTarget(env, route.userId)
+  if (!target) {
+    return json({ ok: true, sent: false, reason: 'service_account_missing' })
+  }
+  if (!target.followAlertsEmail) {
+    return json({ ok: true, sent: false, reason: 'opted_out' })
+  }
+  const to = target.email?.trim()
+  if (!to) {
+    return json({ ok: true, sent: false, reason: 'no_owner_email' })
+  }
+
+  const link = route.shareSlug
+    ? `${appUrl}/route/${encodeURIComponent(route.shareSlug)}`
+    : `${appUrl}/explorar`
+  const subject = `PedalMap · ${cheerName} te dio Cheers 🙌`
+  const text = [
+    `Hola${target.displayName ? ` ${target.displayName}` : ''},`,
+    ``,
+    `${cheerName} te dio Cheers 🙌 en tu ruta «${route.title}».`,
+    `Ver ruta: ${link}`,
+    ``,
+    `— PedalMap`,
+    `Puedes desactivar estos correos en Perfil → Avisos de comunidad.`,
+  ].join('\n')
+
+  const result = await sendMail(env, {
+    to,
+    subject,
+    text,
+    from: env.MAIL_FROM || 'PedalMap <aviso@pedalmap.es>',
+  })
+
+  return json({
+    ok: true,
+    sent: result.sent,
+    reason: result.reason,
+    id: result.id,
+  })
 }
 
 /** Soft email after saving/publishing a route — never blocks the product path. */

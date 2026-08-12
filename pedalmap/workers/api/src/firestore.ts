@@ -314,6 +314,29 @@ export async function readUserEntitlements(
   }
 }
 
+/** Brief public route fields for cheers / share emails. */
+export async function readRouteOwnerBrief(
+  env: Env,
+  routeId: string,
+): Promise<{ userId: string; title: string; shareSlug: string | null; isPublic: boolean } | null> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return null
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, token, `routes/${routeId}`)
+  if (!doc) return null
+  const userId = fieldString(doc, 'userId')
+  if (!userId) return null
+  const fields = doc.fields as Record<string, unknown> | undefined
+  const isPublic = Boolean((fields?.isPublic as { booleanValue?: boolean } | undefined)?.booleanValue)
+  return {
+    userId,
+    title: fieldString(doc, 'title') || 'Tu ruta',
+    shareSlug: fieldString(doc, 'shareSlug'),
+    isPublic,
+  }
+}
+
 /** Follow-alert target: email + prefs from users/{uid}. */
 export async function readUserFollowNotifyTarget(
   env: Env,

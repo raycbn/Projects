@@ -4,7 +4,12 @@ import { handleOrsProxy } from './ors'
 import { handleValhallaProxy } from './valhalla'
 import { handleBikeRoute } from './bikeRoute'
 import { handleCheckout, handlePortal, handleWebhook } from './stripe'
-import { handleWindAlertEmail, handleFollowAlertEmail, handleRouteSavedEmail } from './alerts'
+import {
+  handleWindAlertEmail,
+  handleFollowAlertEmail,
+  handleRouteSavedEmail,
+  handleCheersAlertEmail,
+} from './alerts'
 import { enforceRateLimit } from './rateLimit'
 import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 import { handleMintCustomToken } from './customToken'
@@ -384,6 +389,19 @@ export default {
         })
         if (limited) return withCors(env, request, limited)
         return withCors(env, request, await handleRouteSavedEmail(request, env, identity))
+      }
+
+      if (path === '/alerts/cheers' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 30,
+          windowSec: 60,
+          prefix: 'alerts-cheers',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleCheersAlertEmail(request, env, identity))
       }
 
       if (path === '/strava/oauth/start' && request.method === 'POST') {

@@ -226,7 +226,7 @@ export function PublicCyclistPage() {
                 </div>
                 <div className="rounded-2xl bg-[var(--color-mist)]/70 px-2 py-3">
                   <p className="font-display text-xl font-bold text-[var(--color-forest)]">
-                    {person.routesPublicCount}
+                    {Math.max(person.routesPublicCount || 0, routes.length)}
                   </p>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-stone)]">
                     Rutas

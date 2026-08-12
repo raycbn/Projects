@@ -97,6 +97,26 @@ export class AlertService {
       console.warn('[alerts] route-saved', error)
     }
   }
+
+  /** Fire-and-forget: email route owner when someone gives Cheers. */
+  async notifyCheers(routeId: string, cheerDisplayName: string): Promise<void> {
+    if (!this.isConfigured()) return
+    const user = getFirebaseAuth().currentUser
+    if (!user || user.isAnonymous) return
+    try {
+      const token = await user.getIdToken()
+      await fetch(`${apiBase()}/alerts/cheers`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ routeId, cheerDisplayName }),
+      })
+    } catch (error) {
+      console.warn('[alerts] cheers notify', error)
+    }
+  }
 }
 
 export const alertService = new AlertService()
