@@ -38,6 +38,20 @@ export interface ValhallaEdgeAttr {
   bicycle_network?: number
 }
 
+/** Valhalla's edge.bicycle_network bitmask: 1=lcn, 2=rcn, 4=ncn, 8=icn. */
+function hasSignedCycleNetwork(value: number | undefined): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+function isCycleInfrastructure(edge: ValhallaEdgeAttr): boolean {
+  const use = (edge.use || '').toLowerCase()
+  const roadClass = (edge.road_class || '').toLowerCase()
+  const lane = (edge.cycle_lane || '').toLowerCase()
+  if (use === 'cycleway' || roadClass === 'cycleway') return true
+  if (lane && lane !== 'none') return true
+  return hasSignedCycleNetwork(edge.bicycle_network)
+}
+
 /**
  * Build PedalMap SurfaceStats from Valhalla trace_attributes edges.
  * Lengths from Valhalla are kilometers.
@@ -52,11 +66,15 @@ export function surfaceStatsFromValhallaEdges(
   let unpavedM = 0
   let unknownM = 0
   let totalM = 0
+  let cycleNetworkM = 0
+  let cycleInfraM = 0
 
   for (const edge of edges) {
     const meters = Math.max(0, (edge.length ?? 0) * 1000)
     if (meters <= 0) continue
     totalM += meters
+    if (hasSignedCycleNetwork(edge.bicycle_network)) cycleNetworkM += meters
+    if (isCycleInfrastructure(edge)) cycleInfraM += meters
 
     const surfKey = (edge.surface || '').toLowerCase()
     const mapped = SURFACE_MAP[surfKey]
@@ -117,6 +135,8 @@ export function surfaceStatsFromValhallaEdges(
     unknownPercent: (unknownM / denom) * 100,
     surfaces,
     waytypes,
+    cycleNetworkPercent: (cycleNetworkM / denom) * 100,
+    cycleInfraPercent: (cycleInfraM / denom) * 100,
   }
 
   stats.suitability = scoreSurfaceSuitability(bikeType, stats)

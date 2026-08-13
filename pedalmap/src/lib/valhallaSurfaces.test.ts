@@ -57,4 +57,25 @@ describe('valhallaSurfaces', () => {
     expect(stats.unpavedPercent ?? 0).toBeGreaterThan(70)
     expect(stats.suitability?.score ?? 0).toBeGreaterThanOrEqual(75)
   })
+
+  it('computes cycle network / infra share from bicycle_network + cycleway edges (free Strava-popularity stand-in)', () => {
+    const stats = surfaceStatsFromValhallaEdges('road', [
+      // Signed EuroVelo/Vías Verdes-style relation (lcn bit set).
+      { length: 1.0, surface: 'paved', road_class: 'secondary', use: 'road', bicycle_network: 1 },
+      // Dedicated cycleway, no signed network.
+      { length: 1.0, surface: 'paved_smooth', road_class: 'cycleway', use: 'cycleway' },
+      // Plain road, no cycle infra at all.
+      { length: 2.0, surface: 'paved', road_class: 'residential', use: 'road' },
+    ])
+    expect(stats.cycleNetworkPercent ?? 0).toBeCloseTo(25, 0)
+    expect(stats.cycleInfraPercent ?? 0).toBeCloseTo(50, 0)
+  })
+
+  it('reports zero cycle network / infra when there is none', () => {
+    const stats = surfaceStatsFromValhallaEdges('road', [
+      { length: 2.0, surface: 'paved', road_class: 'residential', use: 'road' },
+    ])
+    expect(stats.cycleNetworkPercent ?? 0).toBe(0)
+    expect(stats.cycleInfraPercent ?? 0).toBe(0)
+  })
 })

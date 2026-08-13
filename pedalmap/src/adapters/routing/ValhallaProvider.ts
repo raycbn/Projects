@@ -61,6 +61,7 @@ function payloadToPartial(
       road_class: e.road_class,
       use: e.use,
       cycle_lane: e.cycle_lane,
+      bicycle_network: e.bicycle_network,
     })),
   }
 }

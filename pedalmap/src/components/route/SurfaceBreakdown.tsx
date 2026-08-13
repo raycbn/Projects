@@ -165,6 +165,12 @@ export function SurfaceBreakdown({ surfaceStats }: SurfaceBreakdownProps) {
                 ))}
               </ul>
             )}
+            {(surfaceStats.cycleNetworkPercent ?? 0) > 0 && (
+              <p className="border-t border-[var(--color-fog)] pt-2 text-xs text-[var(--color-stone)]">
+                {Math.round(surfaceStats.cycleNetworkPercent ?? 0)}% discurre por red ciclista
+                señalizada (EuroVelo, Vías Verdes, redes locales)
+              </p>
+            )}
             {suitability?.notes?.length ? (
               <ul className="space-y-0.5 border-t border-[var(--color-fog)] pt-2 text-xs text-[var(--color-stone)]">
                 {suitability.notes.slice(0, 3).map((note) => (
