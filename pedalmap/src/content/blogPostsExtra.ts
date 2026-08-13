@@ -730,7 +730,8 @@ export const blogPostsExtra: BlogPost[] = [
       },
     ],
     relatedPaths: [
-      { to: '/blog/alternativa-komoot-espana', label: 'vs Komoot' },
+      { to: '/alternativa-bikemap', label: 'Landing vs Bikemap' },
+      { to: '/alternativa-komoot', label: 'vs Komoot' },
       { to: '/blog/pedalmap-vs-strava', label: 'vs Strava' },
       { to: '/mejor-planificador-rutas-bici', label: 'Planificador ES' },
     ],
