@@ -60,7 +60,7 @@ export function SeoContentPage({ content }: { content: SeoPageContent }) {
           <Button>Abrir planificador</Button>
         </Link>
         <Link
-          to="/"
+          to="/que-es-pedalmap"
           className="inline-flex items-center text-sm font-semibold text-[var(--color-forest)] underline-offset-4 hover:underline"
         >
           Qué es PedalMap

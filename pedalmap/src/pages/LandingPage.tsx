@@ -157,6 +157,37 @@ export function LandingPage() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-6xl px-4 py-14 md:px-6">
+        <h2 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">
+          Guías para empezar
+        </h2>
+        <p className="mt-2 max-w-2xl text-[var(--color-stone)]">
+          Rutas, GPX y ciudades — el atajo a lo que más buscan los ciclistas en Google.
+        </p>
+        <ul className="mt-8 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+          {[
+            ['/crear-ruta-bicicleta', 'Crear ruta bicicleta'],
+            ['/crear-ruta-gpx', 'Crear ruta GPX'],
+            ['/calcular-desnivel-ruta-bici', 'Calcular desnivel'],
+            ['/alternativa-komoot', 'Alternativa a Komoot'],
+            ['/rutas-bicicleta-madrid', 'Rutas bici Madrid'],
+            ['/rutas-bicicleta-barcelona', 'Rutas bici Barcelona'],
+            ['/exportar-gpx-garmin', 'GPX a Garmin'],
+            ['/pasar-ruta-wahoo', 'Pasar ruta a Wahoo'],
+            ['/blog', 'Blog ciclista'],
+          ].map(([to, label]) => (
+            <li key={to}>
+              <Link
+                to={to}
+                className="block rounded-2xl px-4 py-3 text-sm font-semibold text-[var(--color-forest)] ring-1 ring-[var(--color-fog)] transition hover:bg-[var(--color-mist)] hover:ring-[var(--color-trail)]"
+              >
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {/* Testimonios ocultos de momento — contenido en growthContent.TESTIMONIALS; reactivar cuando se pida. */}
 
       <section className="bg-[var(--color-mist)] px-4 py-16 md:px-6">

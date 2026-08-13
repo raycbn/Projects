@@ -4,7 +4,7 @@ import { RichText } from '@/components/blog/RichText'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
 import { getPostBySlug } from '@/content/blogPosts'
-import { blogPostingJsonLd } from '@/lib/jsonLd'
+import { blogPostingJsonLd, breadcrumbJsonLd } from '@/lib/jsonLd'
 
 export function BlogPostPage() {
   const { slug = '' } = useParams()
@@ -14,17 +14,25 @@ export function BlogPostPage() {
     title: post ? `${post.title} | PedalMap` : 'Artículo | PedalMap',
     description: post?.description || 'Guía PedalMap',
     path: post ? `/blog/${post.slug}` : '/blog',
+    ogType: post ? 'article' : 'website',
   })
 
   useJsonLd(
     `blog-${slug}`,
     post
-      ? blogPostingJsonLd({
-          title: post.title,
-          description: post.description,
-          slug: post.slug,
-          date: post.date,
-        })
+      ? [
+          blogPostingJsonLd({
+            title: post.title,
+            description: post.description,
+            slug: post.slug,
+            date: post.date,
+          }),
+          breadcrumbJsonLd([
+            { name: 'PedalMap', path: '/' },
+            { name: 'Blog', path: '/blog' },
+            { name: post.title, path: `/blog/${post.slug}` },
+          ]),
+        ]
       : { '@context': 'https://schema.org', '@type': 'WebPage', name: 'Blog' },
   )
 

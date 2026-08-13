@@ -6,6 +6,8 @@ interface PageMeta {
   description: string
   path: string
   image?: string
+  /** Open Graph type — use article for blog posts. */
+  ogType?: 'website' | 'article'
   /** When true, ask crawlers not to index (private/app routes). */
   noindex?: boolean
 }
@@ -30,7 +32,14 @@ function upsertCanonical(href: string) {
   link.href = href
 }
 
-export function usePageMeta({ title, description, path, image, noindex = false }: PageMeta) {
+export function usePageMeta({
+  title,
+  description,
+  path,
+  image,
+  ogType = 'website',
+  noindex = false,
+}: PageMeta) {
   useEffect(() => {
     const url = absoluteUrl(path)
     const ogImage = image || DEFAULT_OG_IMAGE
@@ -41,7 +50,7 @@ export function usePageMeta({ title, description, path, image, noindex = false }
     upsertMeta('property', 'og:title', title)
     upsertMeta('property', 'og:description', description)
     upsertMeta('property', 'og:url', url)
-    upsertMeta('property', 'og:type', 'website')
+    upsertMeta('property', 'og:type', ogType)
     upsertMeta('property', 'og:locale', 'es_ES')
     upsertMeta('property', 'og:image', ogImage)
     upsertMeta('property', 'og:image:width', '1200')
@@ -52,5 +61,5 @@ export function usePageMeta({ title, description, path, image, noindex = false }
     upsertMeta('name', 'twitter:description', description)
     upsertMeta('name', 'twitter:image', ogImage)
     upsertCanonical(url)
-  }, [title, description, path, image, noindex])
+  }, [title, description, path, image, ogType, noindex])
 }

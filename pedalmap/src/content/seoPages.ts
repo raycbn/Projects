@@ -1,6 +1,7 @@
 import type { SeoPageContent } from '@/pages/SeoContentPage'
+import { seoRankPages } from '@/content/seoRankPages'
 
-export const seoPages: SeoPageContent[] = [
+const seoPagesBase: SeoPageContent[] = [
   {
     path: '/que-es-pedalmap',
     kind: 'intent',
@@ -54,7 +55,9 @@ export const seoPages: SeoPageContent[] = [
     body: [
       'PedalMap es un planificador de rutas de bicicleta para crear salidas reales en España: eliges salida y destino (o un Objetivo circular), el tipo de bici y calculas un recorrido con distancia, tiempo, desnivel y composición de suelo.',
       'A diferencia de un GPS genérico, el motor tiene en cuenta carretera, urbana, gravel, MTB o e-bike para priorizar vías más adecuadas. Verás un % de idoneidad y un perfil de elevación sincronizado con el mapa.',
-      'No necesitas cuenta para probar. Cuando quieras guardar rutas, avisos de viento o sincronizar, crea una cuenta Free. Premium quita los límites de creaciones, GPX y Objetivo.',
+      'Flujo típico: 1) Abre el planificador. 2) Busca origen y destino o activa Objetivo. 3) Elige el perfil de bici. 4) Calcula y revisa viento relativo al sentido de la ruta. 5) Guarda, comparte o exporta GPX a Garmin, Wahoo, OsmAnd u Organic Maps.',
+      'Ejemplos habituales: rodaje urbano en Madrid Río / Casa de Campo, costa y Collserola en Barcelona, o una circular de entreno por kilómetros y desnivel sin destino fijo. El mismo producto cubre toda España.',
+      'No necesitas cuenta para probar. Cuando quieras guardar rutas, avisos de viento o sincronizar, crea una cuenta Free. Premium quita los límites de creaciones, GPX y Objetivo (el anual incluye 7 días de prueba).',
     ],
     faqs: [
       {
@@ -65,11 +68,20 @@ export const seoPages: SeoPageContent[] = [
         q: '¿Qué datos veo al crear la ruta?',
         a: 'Distancia, tiempo estimado, desnivel, composición de superficie, idoneidad según tu bici y viento relativo al sentido del recorrido.',
       },
+      {
+        q: '¿Cómo crear una ruta circular?',
+        a: 'Usa modo Objetivo: indicas km y desnivel deseados y generamos una circular alrededor del punto de partida.',
+      },
+      {
+        q: '¿Puedo llevarla al Garmin o Wahoo?',
+        a: 'Sí, exportando GPX. Guías: exportar a Garmin y pasar ruta a Wahoo.',
+      },
     ],
     related: [
       { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/planificador-rutas-bici', label: 'Planificador de rutas bici' },
       { to: '/crear-ruta-gpx', label: 'Crear ruta GPX' },
+      { to: '/calcular-desnivel-ruta-bici', label: 'Calcular desnivel' },
       { to: '/ruta-circular-bicicleta', label: 'Ruta circular' },
       { to: '/rutas-bicicleta-madrid', label: 'Rutas bici Madrid' },
     ],
@@ -83,8 +95,9 @@ export const seoPages: SeoPageContent[] = [
     heading: 'Planificador de rutas bici',
     body: [
       'El planificador combina búsqueda de lugares, waypoints y preferencias de ciclismo para preparar salidas realistas: menos sorpresas de asfalto o pista cuando no las quieres.',
-      'Puedes priorizar carril bici, evitar carreteras principales o buscar menor desnivel según tu forma. Tras calcular, revisas viento relativo a la ruta, superficie y exportas GPX o abres la navegación.',
-      'Empieza Free. Si entrenas a menudo o quieres Objetivo ilimitado y avisos, Premium incluye 7 días de prueba en el plan anual.',
+      'Puedes priorizar el perfil carretera, urbana, gravel, MTB o e-bike; el motor (Valhalla primero, ORS de respaldo) busca vías más coherentes con ese uso. Tras calcular, revisas viento relativo a la ruta, superficie, desnivel e idoneidad.',
+      'Sirve igual para un A→B diario, una escapada de fin de semana o un Objetivo circular por kilómetros y metros +. Luego guardas, compartes o exportas GPX a Garmin, Wahoo, OsmAnd u Organic Maps.',
+      'Empieza Free. Si entrenas a menudo o quieres Objetivo ilimitado y avisos de viento en rutas guardadas, Premium incluye 7 días de prueba en el plan anual.',
     ],
     faqs: [
       {
@@ -93,12 +106,21 @@ export const seoPages: SeoPageContent[] = [
       },
       {
         q: '¿Puedo exportar la ruta a Garmin o Wahoo?',
-        a: 'Sí, via GPX. Free: 1 descarga/semana. Premium: ilimitado. Guías en el blog para Connect y ELEMNT.',
+        a: 'Sí, via GPX. Free: 1 descarga/semana. Premium: ilimitado. Ver guías Garmin y Wahoo.',
+      },
+      {
+        q: '¿Es un planificador solo para España?',
+        a: 'El producto y el dominio (pedalmap.es) están pensados para ciclistas en España, con guías locales y copy en español.',
+      },
+      {
+        q: '¿En qué se diferencia de Komoot?',
+        a: 'Komoot destaca por comunidad y colecciones de tracks. PedalMap se centra en planificar tu salida con desnivel, viento y superficie antes de rodar.',
       },
     ],
     related: [
       { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
+      { to: '/alternativa-komoot', label: 'Alternativa a Komoot' },
       { to: '/planificador-rutas-gravel', label: 'Planificador gravel' },
       { to: '/planificador-rutas-mtb', label: 'Planificador MTB' },
       { to: '/crear-ruta-gpx', label: 'Exportar GPX' },
@@ -113,23 +135,33 @@ export const seoPages: SeoPageContent[] = [
     heading: 'Crear ruta GPX',
     body: [
       'Calcula tu ruta en PedalMap y exporta un GPX válido para GPS o apps de navegación. También puedes importar un track para revisar elevación y estadísticas antes de salir.',
-      'La exportación GPX ilimitada forma parte de Premium; Free incluye 1 descarga por semana para validar el flujo completo.',
-      'Si usas Garmin Connect o Wahoo, el GPX se carga como actividad/recorrido planificado. En móvil, OsmAnd y Organic Maps abren el mismo archivo sin fricción.',
+      'La exportación GPX ilimitada forma parte de Premium; Free incluye 1 descarga por semana para validar el flujo completo con tu dispositivo real.',
+      'Si usas Garmin Connect o Wahoo ELEMNT, el GPX se carga como curso/recorrido planificado. En móvil, OsmAnd y Organic Maps abren el mismo archivo sin fricción.',
+      'Antes de exportar, aprovecha el perfil de desnivel y el viento relativo al sentido de la ruta: el archivo que llega al GPS ya refleja la salida que quieres hacer. Guías dedicadas para Garmin y Wahoo.',
     ],
     faqs: [
       {
         q: '¿El GPX de PedalMap funciona en Garmin Edge?',
-        a: 'Sí. Exportas el .gpx, lo importas en Garmin Connect como curso y sincronizas el Edge.',
+        a: 'Sí. Exportas el .gpx, lo importas en Garmin Connect como curso y sincronizas el Edge. Detalle en la guía Exportar GPX a Garmin.',
       },
       {
         q: '¿Cuántos GPX puedo descargar gratis?',
         a: '1 por semana en Free. Premium = exportaciones ilimitadas.',
       },
+      {
+        q: '¿Sirve para Wahoo ELEMNT?',
+        a: 'Sí. Mismo GPX; lo importas en la app ELEMNT. Ver Pasar ruta a Wahoo.',
+      },
+      {
+        q: '¿Puedo importar un GPX ajeno?',
+        a: 'Sí, para revisar elevación y estadísticas antes de repetir o adaptar la salida.',
+      },
     ],
     related: [
+      { to: '/exportar-gpx-garmin', label: 'GPX a Garmin' },
+      { to: '/pasar-ruta-wahoo', label: 'GPX a Wahoo' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
-      { to: '/blog/exportar-gpx-garmin', label: 'Guía Garmin' },
-      { to: '/blog/pasar-ruta-wahoo', label: 'Guía Wahoo' },
+      { to: '/calcular-desnivel-ruta-bici', label: 'Calcular desnivel' },
       { to: '/premium', label: 'Ver Premium' },
     ],
   },
@@ -230,7 +262,8 @@ export const seoPages: SeoPageContent[] = [
     body: [
       'Si buscas una alternativa a Komoot centrada en planificar la salida en España —no en una red social de tracks—, PedalMap está pensado para eso: mapa, tipo de bici, desnivel, superficie y viento relativo a la ruta, con exportación GPX.',
       'Komoot es potente y tiene mucha comunidad. PedalMap no pretende copiarlo: prioriza un flujo claro en español (pedalmap.es), freemium transparente y datos útiles antes de rodar (incluido viento en el sentido del recorrido).',
-      'Prueba Free sin tarjeta. Si ya usas Garmin o Wahoo, el GPX de PedalMap encaja en el mismo flujo que con otras apps. Comparativa honesta y tutoriales en el blog.',
+      'Casos en los que encaja bien: preparar un A→B o una circular de entreno, mirar metros y suelo según carretera/gravel/MTB, y llevar el track a Garmin o Wahoo. Si lo que quieres es explorar colecciones enormes de tracks ajenos, Komoot sigue siendo referencia.',
+      'Prueba Free sin tarjeta. Comparativa honesta y tutoriales en el blog; también puedes mirar alternativas a Strava (planificar) y a Bikemap.',
     ],
     faqs: [
       {
@@ -241,9 +274,18 @@ export const seoPages: SeoPageContent[] = [
         q: '¿Puedo pasar rutas de PedalMap a mi GPS?',
         a: 'Sí, exportando GPX a Garmin Connect, Wahoo, OsmAnd u Organic Maps.',
       },
+      {
+        q: '¿PedalMap es gratis?',
+        a: 'Sí hay plan Free con límites. Premium quita techos de creaciones, GPX y Objetivo; el anual incluye 7 días de prueba.',
+      },
+      {
+        q: '¿Y frente a Bikemap o Strava?',
+        a: 'Strava brilla registrando y socializando la actividad; Bikemap por mapas/tracks. PedalMap es la capa de planificación previa. Ver guías vs Strava y vs Bikemap.',
+      },
     ],
     related: [
       { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
+      { to: '/alternativa-bikemap', label: 'Alternativa a Bikemap' },
       { to: '/blog/alternativa-komoot-espana', label: 'Comparativa en el blog' },
       { to: '/planificador-rutas-bici', label: 'Planificador' },
       { to: '/crear-ruta-gpx', label: 'GPX' },
@@ -289,12 +331,33 @@ export const seoPages: SeoPageContent[] = [
     heading: 'Rutas de bicicleta en Madrid',
     body: [
       'Madrid ofrece salidas muy distintas en poca distancia: Casa de Campo y Madrid Río para rodajes urbanos, Monte del Pardo y la sierra norte (Colmenar, Soto del Real, Manzanares) para más desnivel, o escapadas a la zona oeste hacia El Escorial.',
-      'Con PedalMap trazas el recorrido eligiendo tu bici, revisas el desnivel real y la superficie, y guardas o exportas GPX antes de salir. Ideal para preparar el fin de semana sin improvisar en el asfalto.',
-      'Si buscas más técnico, mira también rutas MTB o gravel en Madrid. El mismo planificador sirve para los tres perfiles.',
+      'Con PedalMap trazas el recorrido eligiendo tu bici (carretera, urbana, gravel o MTB), revisas el desnivel real y la superficie, y miras el viento relativo al sentido de la ruta antes de salir. Ideal para preparar el fin de semana sin improvisar en el asfalto.',
+      'Clásicos a planificar: bucles por Casa de Campo, subidas hacia Navacerrada, conexiones gravel por pistas de sierra, o un Objetivo circular de entreno alrededor de tu barrio. Exporta GPX a Garmin/Wahoo o navega desde el móvil.',
+      'Si buscas más técnico, mira también rutas MTB o gravel en Madrid. El mismo planificador sirve para los tres perfiles. Empieza Free; Premium cuando entrenes a menudo.',
+    ],
+    faqs: [
+      {
+        q: '¿Dónde planificar rutas fáciles en Madrid?',
+        a: 'Casa de Campo y Madrid Río son buenos puntos de partida urbanos. Calcula con perfil urbana o carretera y revisa el desnivel.',
+      },
+      {
+        q: '¿Puedo preparar la sierra o Navacerrada?',
+        a: 'Sí. Traza la aproximación, mira el perfil de elevación y exporta GPX. Hay guía dedicada al Puerto de Navacerrada.',
+      },
+      {
+        q: '¿Hay rutas gravel y MTB en Madrid?',
+        a: 'Sí: hubs de gravel Madrid y MTB Madrid, además del planificador general.',
+      },
+      {
+        q: '¿PedalMap es gratis en Madrid?',
+        a: 'Puedes calcular Free. Los límites de guardado/GPX/Objetivo suben con Premium.',
+      },
     ],
     related: [
       { to: '/rutas-mtb-madrid', label: 'MTB Madrid' },
       { to: '/rutas-gravel-madrid', label: 'Gravel Madrid' },
+      { to: '/rutas-casa-de-campo-madrid', label: 'Casa de Campo' },
+      { to: '/puerto-navacerrada-bici', label: 'Navacerrada' },
       { to: '/blog/ruta-ejemplo-madrid', label: 'Ejemplo práctico Madrid' },
       { to: '/rutas-bicicleta-barcelona', label: 'Rutas bici Barcelona' },
     ],
@@ -345,13 +408,33 @@ export const seoPages: SeoPageContent[] = [
       'Planifica rutas de bicicleta en Barcelona y alrededores: costa, Collserola, desnivel y GPX con PedalMap.',
     heading: 'Rutas de bicicleta en Barcelona',
     body: [
-      'Barcelona combina paseos costeros, subidas a Collserola y escapadas hacia el Maresme o el Baix Llobregat. Con PedalMap eliges el tipo de bici, trazas salida y llegada y revisas desnivel y superficie antes de salir.',
-      'Útil tanto para rodajes urbanos con carril bici como para salidas de fin de semana con más metros positivos. Exporta GPX o navega desde el móvil.',
-      'Si vienes de Madrid u otra ciudad, el mismo flujo te sirve: Free para probar, Premium cuando entrenes a menudo.',
+      'Barcelona combina paseos costeros, subidas a Collserola y escapadas hacia el Maresme o el Baix Llobregat. Con PedalMap eliges el tipo de bici, trazas salida y llegada y revisas desnivel, superficie y viento antes de salir.',
+      'Útil tanto para rodajes urbanos con carril bici como para salidas de fin de semana con más metros positivos. Calcula un A→B, una ida-vuelta o un Objetivo circular, y exporta GPX o navega desde el móvil.',
+      'Zonas típicas a preparar: frente marítimo, Collserola (carretera/gravel/MTB según firme), conexiones hacia Mataró o el Llobregat. El mismo flujo te sirve si vienes de Madrid u otra ciudad.',
+      'Empieza Free para probar; Premium cuando entrenes a menudo y quieras GPX/Objetivo sin límites.',
+    ],
+    faqs: [
+      {
+        q: '¿Cómo planificar Collserola?',
+        a: 'Elige el perfil (carretera, gravel o MTB) según el firme, calcula desde la ciudad y revisa el desnivel. Hay guía Collserola dedicada.',
+      },
+      {
+        q: '¿Sirve para rutas costeras?',
+        a: 'Sí. Perfil carretera o urbana; mira el viento relativo a la ruta — en costa marca mucho.',
+      },
+      {
+        q: '¿Hay MTB y gravel en Barcelona?',
+        a: 'Sí: hubs MTB Barcelona y gravel Barcelona además del planificador general.',
+      },
+      {
+        q: '¿Puedo exportar a Garmin o Wahoo?',
+        a: 'Sí, via GPX tras calcular la ruta.',
+      },
     ],
     related: [
       { to: '/rutas-mtb-barcelona', label: 'MTB Barcelona' },
       { to: '/rutas-gravel-barcelona', label: 'Gravel Barcelona' },
+      { to: '/rutas-collserola-barcelona', label: 'Collserola' },
       { to: '/blog/ruta-ejemplo-barcelona', label: 'Ejemplo Barcelona' },
       { to: '/rutas-bicicleta-madrid', label: 'Rutas bici Madrid' },
     ],
@@ -749,14 +832,31 @@ export const seoPages: SeoPageContent[] = [
       'Planifica la subida al Puerto de Navacerrada: desnivel, perfil carretera y GPX con PedalMap.',
     heading: 'Puerto de Navacerrada en bicicleta',
     body: [
-      'Navacerrada es un clásico de carretera en la sierra de Madrid. Improvisar el puerto sin mirar el perfil es el error más común.',
-      'Con PedalMap trazas la aproximación, ves el desnivel acumulado y exportas GPX a Garmin o Wahoo. Perfil carretera recomendado.',
-      'Combina con guías Madrid y gravel/MTB de sierra si buscas variantes.',
+      'Navacerrada es un clásico de carretera en la sierra de Madrid. Improvisar el puerto sin mirar el perfil es el error más común: los metros se acumulan y el viento en crestas cambia la sensación del esfuerzo.',
+      'Con PedalMap trazas la aproximación (Madrid, Collado Villalba, Cercedilla…), ves el desnivel acumulado en el gráfico y exportas GPX a Garmin o Wahoo. Perfil carretera recomendado; gravel/MTB solo si conoces el firme lateral.',
+      'Combina con el hub de rutas Madrid y la guía de calcular desnivel si quieres fijar metros + con modo Objetivo en otras salidas de sierra. Respeta tráfico y condiciones de invierno/verano.',
+    ],
+    faqs: [
+      {
+        q: '¿Qué perfil de bici uso para Navacerrada?',
+        a: 'Carretera en la subida clásica. Revisa siempre el desnivel en PedalMap antes de salir.',
+      },
+      {
+        q: '¿Puedo llevar el puerto al Garmin?',
+        a: 'Sí: calcula, exporta GPX e impórtalo en Connect. Guía GPX Garmin.',
+      },
+      {
+        q: '¿Hay artículo más detallado?',
+        a: 'Sí, en el blog: Puerto de Navacerrada en bicicleta (guía práctica). Esta página es el hub de planificación.',
+      },
     ],
     related: [
       { to: '/blog/puerto-navacerrada-bici', label: 'Artículo Navacerrada' },
       { to: '/rutas-bicicleta-madrid', label: 'Madrid' },
+      { to: '/calcular-desnivel-ruta-bici', label: 'Calcular desnivel' },
       { to: '/crear-ruta-gpx', label: 'GPX' },
     ],
   },
 ]
+
+export const seoPages: SeoPageContent[] = [...seoPagesBase, ...seoRankPages]

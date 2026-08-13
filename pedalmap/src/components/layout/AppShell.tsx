@@ -98,8 +98,17 @@ export function AppShell() {
               <Link className="hover:text-[var(--color-forest)]" to="/crear-ruta-bicicleta">
                 Crear ruta
               </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/crear-ruta-gpx">
+                GPX
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/planificador-rutas-bici">
+                Planificador
+              </Link>
               <Link className="hover:text-[var(--color-forest)]" to="/planificador-rutas-gravel">
                 Gravel
+              </Link>
+              <Link className="hover:text-[var(--color-forest)]" to="/calcular-desnivel-ruta-bici">
+                Desnivel
               </Link>
               <Link className="hover:text-[var(--color-forest)]" to="/ruta-circular-bicicleta">
                 Circular

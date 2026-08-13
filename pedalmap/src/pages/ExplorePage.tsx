@@ -356,6 +356,34 @@ export function ExplorePage() {
         <div className="mt-8 space-y-4">
           {tab === 'rutas' && (
             <>
+              <nav
+                className="rounded-2xl bg-[var(--color-mist)]/80 px-4 py-3 ring-1 ring-[var(--color-fog)]"
+                aria-label="Guías destacadas"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-trail)]">
+                  Guías útiles
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                  {[
+                    ['/crear-ruta-bicicleta', 'Crear ruta'],
+                    ['/crear-ruta-gpx', 'GPX'],
+                    ['/calcular-desnivel-ruta-bici', 'Desnivel'],
+                    ['/rutas-bicicleta-madrid', 'Madrid'],
+                    ['/rutas-bicicleta-barcelona', 'Barcelona'],
+                    ['/alternativa-komoot', 'vs Komoot'],
+                    ['/blog', 'Blog'],
+                  ].map(([to, label]) => (
+                    <li key={to}>
+                      <Link
+                        to={to}
+                        className="font-semibold text-[var(--color-forest)] underline-offset-2 hover:underline"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
               {routes.length === 0 ? (
                 <div className="space-y-4">
                   <Empty hint="Aún no hay rutas públicas de la comunidad. Mientras tanto, estas ideas de Madrid/Sierra:" />

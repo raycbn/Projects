@@ -120,12 +120,14 @@ function setRoot(html: string, inner: string): string {
 
 function writePage(template: string, page: PageSpec) {
   const url = page.path === '/' ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}${page.path}`
+  const ogType = page.path.startsWith('/blog/') ? 'article' : 'website'
   let html = template
   html = upsertTitle(html, page.title)
   html = upsertMeta(html, 'name', 'description', page.description)
   html = upsertMeta(html, 'property', 'og:title', page.title)
   html = upsertMeta(html, 'property', 'og:description', page.description)
   html = upsertMeta(html, 'property', 'og:url', url)
+  html = upsertMeta(html, 'property', 'og:type', ogType)
   html = upsertMeta(html, 'property', 'og:image', DEFAULT_OG_IMAGE)
   html = upsertMeta(html, 'property', 'og:image:width', '1200')
   html = upsertMeta(html, 'property', 'og:image:height', '630')
@@ -232,12 +234,19 @@ const pages: PageSpec[] = [
         ?.map((c) => ` · <a href="${c.to}">${escapeHtml(c.label)}</a>`)
         .join('') ?? ''
     }</p>`,
-    jsonLd: blogPostingJsonLd({
-      title: post.title,
-      description: post.description,
-      slug: post.slug,
-      date: post.date,
-    }),
+    jsonLd: [
+      blogPostingJsonLd({
+        title: post.title,
+        description: post.description,
+        slug: post.slug,
+        date: post.date,
+      }),
+      breadcrumbJsonLd([
+        { name: 'PedalMap', path: '/' },
+        { name: 'Blog', path: '/blog' },
+        { name: post.title, path: `/blog/${post.slug}` },
+      ]),
+    ],
   })),
   {
     path: '/premium',

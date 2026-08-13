@@ -21,8 +21,9 @@ const blogPostsCore: BlogPost[] = [
       '¿Ruta lista y el Edge vacío? PedalMap → exportar GPX → Garmin Connect.\npedalmap.es/crear-ruta-gpx\n#ciclismo #garmin #gpx #pedalmap',
     lead:
       'Si quieres **crear una ruta GPX** y llevarla a tu Garmin, PedalMap cubre el flujo completo: planificar con desnivel y superficie, exportar el archivo e importarlo en Connect.',
-    primaryCta: { to: '/crear-ruta-gpx', label: 'Crear / exportar ruta GPX' },
+    primaryCta: { to: '/exportar-gpx-garmin', label: 'Guía hub GPX Garmin' },
     secondaryCtas: [
+      { to: '/crear-ruta-gpx', label: 'Crear / exportar ruta GPX' },
       { to: '/route-planner', label: 'Abrir planificador' },
       { to: '/premium', label: 'GPX ilimitado (Premium)' },
     ],
@@ -77,8 +78,9 @@ const blogPostsCore: BlogPost[] = [
       },
     ],
     relatedPaths: [
+      { to: '/exportar-gpx-garmin', label: 'Hub GPX Garmin' },
       { to: '/crear-ruta-gpx', label: 'Página crear ruta GPX' },
-      { to: '/blog/pasar-ruta-wahoo', label: 'GPX a Wahoo' },
+      { to: '/pasar-ruta-wahoo', label: 'Hub Wahoo' },
       { to: '/blog/gpx-osmand-organic-maps', label: 'GPX en el móvil' },
     ],
   },
@@ -95,8 +97,9 @@ const blogPostsCore: BlogPost[] = [
       'PedalMap → GPX → app Wahoo. Suelo, viento y desnivel antes de salir.\npedalmap.es/crear-ruta-gpx\n#wahoo #gpx #ciclismo',
     lead:
       'Wahoo ELEMNT entiende rutas en GPX. La forma limpia de trabajar: **planificar la ruta en PedalMap**, exportar y cargar el archivo en el ecosistema Wahoo.',
-    primaryCta: { to: '/crear-ruta-gpx', label: 'Ir a crear ruta GPX' },
+    primaryCta: { to: '/pasar-ruta-wahoo', label: 'Guía hub Wahoo' },
     secondaryCtas: [
+      { to: '/crear-ruta-gpx', label: 'Ir a crear ruta GPX' },
       { to: '/route-planner', label: 'Planificar ahora' },
       { to: '/premium', label: 'Exportaciones ilimitadas' },
     ],
@@ -131,8 +134,9 @@ const blogPostsCore: BlogPost[] = [
       },
     ],
     relatedPaths: [
+      { to: '/pasar-ruta-wahoo', label: 'Hub Wahoo' },
       { to: '/crear-ruta-gpx', label: 'Crear ruta GPX' },
-      { to: '/blog/exportar-gpx-garmin', label: 'Garmin' },
+      { to: '/exportar-gpx-garmin', label: 'Hub Garmin' },
       { to: '/premium', label: 'Premium' },
     ],
   },
@@ -471,8 +475,9 @@ const blogPostsCore: BlogPost[] = [
       '40 km llanos ≠ 40 km con 900 m+. Ves desnivel +/− al calcular en PedalMap.\npedalmap.es/route-planner\n#desnivel #ciclismo',
     lead:
       'Al **calcular una ruta en bici**, los kilómetros solos engañan. El desnivel positivo/negativo y el perfil de elevación dicen cómo será el entreno.',
-    primaryCta: { to: '/route-planner', label: 'Calcular desnivel en el planificador' },
+    primaryCta: { to: '/calcular-desnivel-ruta-bici', label: 'Hub: calcular desnivel' },
     secondaryCtas: [
+      { to: '/route-planner', label: 'Abrir planificador' },
       { to: '/blog/ruta-circular-objetivo', label: 'Circular por km + desnivel' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
     ],
@@ -503,6 +508,7 @@ const blogPostsCore: BlogPost[] = [
       },
     ],
     relatedPaths: [
+      { to: '/calcular-desnivel-ruta-bici', label: 'Hub desnivel' },
       { to: '/route-planner', label: 'Planificador' },
       { to: '/blog/viento-en-la-ruta', label: 'Viento' },
       { to: '/blog/ruta-circular-objetivo', label: 'Objetivo' },

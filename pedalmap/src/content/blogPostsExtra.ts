@@ -102,7 +102,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Entrenar en bici con calor en España: planifica hora, desnivel y agua',
     description:
       'Consejos para salidas estivales: horarios, desnivel, viento y cómo preparar la ruta en PedalMap antes de salir con calor.',
-    date: '2026-08-14',
+    date: '2026-07-27',
     readMinutes: 5,
     tags: ['Verano', 'Entrenamiento', 'Seguridad'],
     socialHook: 'Con 35 ºC el desnivel miente el doble',
@@ -152,7 +152,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Ruta en bici por Casa de Campo (Madrid): cómo planificarla',
     description:
       'Cómo trazar una salida por Casa de Campo y Madrid Río con PedalMap: perfil urbana/carretera, desnivel y GPX.',
-    date: '2026-08-15',
+    date: '2026-07-28',
     readMinutes: 5,
     tags: ['Madrid', 'Urbana', 'Ejemplo'],
     socialHook: 'Casa de Campo sin improvisar el recorrido',
@@ -194,7 +194,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Subir a Collserola en bici: planifica desnivel y perfil',
     description:
       'Collserola desde Barcelona: carretera, gravel o MTB. Cómo ver el desnivel real y exportar GPX con PedalMap.',
-    date: '2026-08-16',
+    date: '2026-07-29',
     readMinutes: 5,
     tags: ['Barcelona', 'Collserola', 'Desnivel'],
     socialHook: 'Collserola: los metros se ven antes de sudarlos',
@@ -236,7 +236,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Subir el Puerto de Navacerrada en bici: desnivel y cómo prepararlo',
     description:
       'Cómo planificar la subida a Navacerrada: kilómetros, desnivel y track GPX con PedalMap antes del puerto.',
-    date: '2026-08-17',
+    date: '2026-07-30',
     readMinutes: 5,
     tags: ['Madrid', 'Puerto', 'Carretera'],
     socialHook: 'Navacerrada sin sorpresas en el perfil',
@@ -278,7 +278,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Gravel en la Sierra de Guadarrama: cómo planificar pistas y desnivel',
     description:
       'Guía gravel Guadarrama: perfil gravel, superficie, viento y GPX con PedalMap para pistas y caminos.',
-    date: '2026-08-18',
+    date: '2026-07-31',
     readMinutes: 6,
     tags: ['Gravel', 'Madrid', 'Sierra'],
     socialHook: 'Guadarrama gravel: firme y metros antes de salir',
@@ -320,7 +320,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Qué es un archivo GPX y para qué sirve en ciclismo',
     description:
       'Explicación simple del formato GPX: qué contiene, cómo usarlo en Garmin/Wahoo/móvil y cómo crearlo en PedalMap.',
-    date: '2026-08-19',
+    date: '2026-08-01',
     readMinutes: 5,
     tags: ['GPX', 'Tutorial', 'Inicio'],
     socialHook: 'GPX = la ruta en un archivo. Punto.',
@@ -362,7 +362,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Cómo usar waypoints al crear una ruta en bicicleta',
     description:
       'Añade puntos intermedios para evitar nacionales, pasar por un pueblo o forzar un puerto. Guía práctica en PedalMap.',
-    date: '2026-08-20',
+    date: '2026-08-02',
     readMinutes: 5,
     tags: ['Planificar', 'Tutorial'],
     socialHook: 'Un waypoint evita la nacional fea',
@@ -404,7 +404,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Planificar rutas en e-bike: autonomía, desnivel y perfil',
     description:
       'Cómo crear rutas para bicicleta eléctrica: desnivel, distancia y perfil e-bike en PedalMap.',
-    date: '2026-08-21',
+    date: '2026-08-03',
     readMinutes: 5,
     tags: ['E-bike', 'Planificar'],
     socialHook: 'E-bike también necesita desnivel de verdad',
@@ -446,7 +446,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Importar un GPX y revisar el desnivel antes de salir',
     description:
       'Cómo usar un track GPX ajeno: impórtalo, mira elevación y decide si la salida es realista. Flujo en PedalMap.',
-    date: '2026-08-22',
+    date: '2026-08-04',
     readMinutes: 5,
     tags: ['GPX', 'Desnivel', 'Seguridad'],
     socialHook: 'Te pasan un GPX: ¿has mirado los metros?',
@@ -488,7 +488,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Ciclismo en Zaragoza y el viento: planifica el sentido de la ruta',
     description:
       'El cierzo cambia la salida. Cómo usar el viento relativo a la ruta en PedalMap para rodajes en Zaragoza.',
-    date: '2026-08-23',
+    date: '2026-08-05',
     readMinutes: 5,
     tags: ['Zaragoza', 'Viento', 'Local'],
     socialHook: 'En Zaragoza el viento es el puerto',
@@ -530,7 +530,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Entrenar en Mallorca desde Palma: cómo planificar km y puertos',
     description:
       'Stage en Mallorca: costa vs puertos. Planifica desnivel y GPX desde Palma con PedalMap.',
-    date: '2026-08-24',
+    date: '2026-08-06',
     readMinutes: 5,
     tags: ['Mallorca', 'Palma', 'Entrenamiento'],
     socialHook: 'Mallorca: decide costa o puerto antes del hotel',
@@ -572,7 +572,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Priorizar carril bici al crear una ruta urbana',
     description:
       'Cómo orientar el planificador hacia carriles y vías tranquilas en ciudad con PedalMap.',
-    date: '2026-08-25',
+    date: '2026-08-07',
     readMinutes: 4,
     tags: ['Urbana', 'Seguridad', 'Planificar'],
     socialHook: 'Ruta urbana ≠ la más corta en nacional',
@@ -614,7 +614,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Avisos de viento en rutas guardadas: para qué sirven',
     description:
       'Cómo los avisos de viento ayudan a decidir si sales o cambias el sentido de una ruta guardada en PedalMap.',
-    date: '2026-08-26',
+    date: '2026-08-08',
     readMinutes: 4,
     tags: ['Viento', 'Premium', 'Producto'],
     socialHook: 'La ruta guardada también sufre el viento del finde',
@@ -656,7 +656,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Cómo guardar una ruta de bicicleta y reutilizarla',
     description:
       'Guarda salidas en PedalMap para repetir entrenos, compartirlas o exportar GPX más tarde. Límites Free.',
-    date: '2026-08-27',
+    date: '2026-08-09',
     readMinutes: 4,
     tags: ['Tutorial', 'Producto'],
     socialHook: 'La buena ruta se guarda. La mala se improvisa otra vez.',
@@ -698,7 +698,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Alternativa a Bikemap para planificar rutas en España',
     description:
       'Si buscas una alternativa a Bikemap centrada en planificar en España con desnivel, viento y GPX, prueba PedalMap.',
-    date: '2026-08-28',
+    date: '2026-08-10',
     readMinutes: 5,
     tags: ['Comparativa', 'Bikemap'],
     socialHook: '¿Alternativa a Bikemap en español?',
@@ -706,7 +706,7 @@ export const blogPostsExtra: BlogPost[] = [
       'Planificar en ES con desnivel y GPX: PedalMap.\npedalmap.es/blog/alternativa-bikemap\n#bikemap #ciclismo #pedalmap',
     lead:
       'Bikemap tiene comunidad y tracks. Si lo que necesitas es **planificar tú** la salida en España con viento y perfiles, PedalMap encaja.',
-    primaryCta: { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
+    primaryCta: { to: '/alternativa-bikemap', label: 'Alternativa a Bikemap' },
     secondaryCtas: [
       { to: '/alternativa-komoot', label: 'También vs Komoot' },
       { to: '/route-planner', label: 'Probar free' },
@@ -740,7 +740,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Preparar una marcha cicloturista: desnivel, GPX y ritmo',
     description:
       'Checklist para marchas y gran fondos: revisar desnivel del recorrido oficial, entrenar con Objetivo y llevar GPX.',
-    date: '2026-08-29',
+    date: '2026-08-11',
     readMinutes: 6,
     tags: ['Cicloturismo', 'Entrenamiento', 'GPX'],
     socialHook: 'La marcha se gana el mes anterior, no al dorsal',
@@ -782,7 +782,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Komoot, Strava y PedalMap: qué hace cada uno (sin confusiones)',
     description:
       'Tabla clara: Komoot (tracks/comunidad), Strava (actividad social), PedalMap (planificar en España). Cuándo usar cada app.',
-    date: '2026-08-30',
+    date: '2026-08-12',
     readMinutes: 6,
     tags: ['Comparativa', 'Komoot', 'Strava'],
     socialHook: 'Tres apps, tres trabajos. No las mezcles.',
@@ -824,7 +824,7 @@ export const blogPostsExtra: BlogPost[] = [
     title: 'Ideas de rutas para el fin de semana (y cómo calcularlas en 10 minutos)',
     description:
       'Plantilla rápida: elige ciudad, perfil de bici, km/desnivel y calcula en PedalMap antes del sábado.',
-    date: '2026-08-31',
+    date: '2026-08-13',
     readMinutes: 4,
     tags: ['Tutorial', 'Fin de semana'],
     socialHook: 'El finde se planifica el jueves',

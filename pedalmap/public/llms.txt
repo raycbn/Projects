@@ -23,7 +23,11 @@ PedalMap ≠ Petal Maps (Huawei). PedalMap = pedalmap.es (ciclismo). Petal Maps 
 - Planificador MTB: https://pedalmap.es/planificador-rutas-mtb
 - Ruta circular / Objetivo: https://pedalmap.es/ruta-circular-bicicleta
 - Crear / exportar GPX: https://pedalmap.es/crear-ruta-gpx
+- Calcular desnivel: https://pedalmap.es/calcular-desnivel-ruta-bici
+- GPX Garmin: https://pedalmap.es/exportar-gpx-garmin
+- GPX Wahoo: https://pedalmap.es/pasar-ruta-wahoo
 - Alternativa a Komoot (ES): https://pedalmap.es/alternativa-komoot
+- Alternativa a Bikemap (ES): https://pedalmap.es/alternativa-bikemap
 - Planificador en España: https://pedalmap.es/mejor-planificador-rutas-bici
 - Premium: https://pedalmap.es/premium
 
@@ -31,10 +35,11 @@ PedalMap ≠ Petal Maps (Huawei). PedalMap = pedalmap.es (ciclismo). Petal Maps 
 Madrid, Barcelona, Valencia, Sevilla, Bilbao, Zaragoza, Málaga, Granada, Alicante, Murcia, Santander, Córdoba, Valladolid, Pamplona, Palma — bajo https://pedalmap.es/rutas-bicicleta-{ciudad}
 
 ## Blog
-Índice: https://pedalmap.es/blog (38+ guías)
+Índice: https://pedalmap.es/blog (36 guías)
 Comparativas: vs Strava, vs Ride with GPS, vs Bikemap, vs Komoot
 Destinos: Casa de Campo, Collserola, Navacerrada, Guadarrama gravel, Palma/Mallorca
-Tutoriales: GPX, waypoints, e-bike, calor en verano, marchas cicloturistas
+Tutoriales: GPX, Garmin, Wahoo, waypoints, e-bike, calor en verano, marchas cicloturistas
+Hubs: desnivel, exportar GPX Garmin, pasar ruta Wahoo, alternativa Bikemap
 
 ## Diferenciadores
 - Routing orientado a tipo de bici y superficie (Valhalla primero, ORS respaldo)
