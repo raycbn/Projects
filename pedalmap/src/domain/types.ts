@@ -56,6 +56,15 @@ export interface SurfaceStats {
     notes: string[]
     bikeType: BikeType
   }
+  /**
+   * Share of distance on an OSM signed cycle network (icn/ncn/rcn/lcn —
+   * EuroVelo, Vías Verdes, redes locales). Free public-data stand-in for
+   * Strava's athlete-popularity routing signal: no GPS heatmap, but the
+   * same "cyclists actually go this way" intent.
+   */
+  cycleNetworkPercent?: number
+  /** Share of distance on a cycleway, cycle lane, or signed cycle network. */
+  cycleInfraPercent?: number
 }
 
 export interface RouteAlternative {
@@ -73,6 +82,7 @@ export interface RouteAlternative {
     road_class?: string
     use?: string
     cycle_lane?: string
+    bicycle_network?: number
   }>
 }
 
@@ -118,6 +128,7 @@ export interface RouteDraft {
     road_class?: string
     use?: string
     cycle_lane?: string
+    bicycle_network?: number
   }>
   /**
    * All ranked route options for this calculation (Opción 1..N), including the active one.
@@ -212,6 +223,18 @@ export interface FreemiumLimits {
   maxActivePreferences: number
 }
 
+/**
+ * Routing toggles that never count against the Free `maxActivePreferences`
+ * cap. Both are plain Valhalla costing knobs (no extra provider call), so
+ * gating them behind a filter slot only punishes Free users for asking the
+ * router to prefer bike infrastructure or flatter terrain — not for a
+ * genuinely premium feature.
+ */
+export const FREE_ROUTING_TOGGLES: readonly RoutePreference[] = [
+  'prefer_bike_lanes',
+  'prefer_less_elevation',
+]
+
 export const FREE_LIMITS: FreemiumLimits = {
   maxRoutesSaved: 5,
   maxRoutesCreatedPerMonth: 15,
@@ -284,6 +307,7 @@ export interface RoutingResult {
     road_class?: string
     use?: string
     cycle_lane?: string
+    bicycle_network?: number
   }>
   alternatives?: Array<{
     geometry: RouteGeometry
