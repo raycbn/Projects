@@ -96,17 +96,18 @@ export class CommunityService {
   }
 
   async listPublicProfiles(max = 24): Promise<PublicProfile[]> {
-    // Composite index: isPublic ASC + updatedAt DESC (firestore.indexes.json).
-    // Cap keeps the query cheap; Explore asks for a high max so the directory is complete.
+    // Equality-only (no orderBy): some profiles lack Timestamp updatedAt and vanish
+    // from ordered queries. Fetch up to `max` and sort client-side.
     const take = Math.min(Math.max(max, 1), 500)
     const q = query(
       collection(getDb(), 'publicProfiles'),
       where('isPublic', '==', true),
-      orderBy('updatedAt', 'desc'),
       limit(take),
     )
     const snap = await getDocs(q)
-    return snap.docs.map((d) => mapPublicProfile(d.id, d.data()))
+    return snap.docs
+      .map((d) => mapPublicProfile(d.id, d.data()))
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
   }
 
   async follow(followerId: string, followeeId: string): Promise<void> {

@@ -109,7 +109,7 @@ export function ExplorePage() {
           }),
           communityService.listPublicProfiles(200).catch((error) => {
             console.warn('[explore] profiles', error)
-            throw error
+            return [] as PublicProfile[]
           }),
         ])
         if (cancelled) return
