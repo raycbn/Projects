@@ -1,5 +1,10 @@
 import type { ElevationPoint, LatLng, RouteDraft, RouteGeometry } from '@/domain/types'
-import { buildStatsFromProfile, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
+import {
+  buildStatsFromProfile,
+  haversineMeters,
+  normalizeCyclingElevationProfile,
+  pathDistanceMeters,
+} from '@/lib/stats'
 
 function escapeXml(value: string): string {
   return value
@@ -10,11 +15,55 @@ function escapeXml(value: string): string {
     .replaceAll("'", '&apos;')
 }
 
+/** Cumulative distance (meters) at each coordinate, matching pathDistanceMeters' metric. */
+function cumulativeDistances(coordinates: [number, number][]): number[] {
+  const out: number[] = [0]
+  for (let i = 1; i < coordinates.length; i += 1) {
+    const [lngA, latA] = coordinates[i - 1]
+    const [lngB, latB] = coordinates[i]
+    out.push(out[i - 1] + haversineMeters({ lat: latA, lng: lngA }, { lat: latB, lng: lngB }))
+  }
+  return out
+}
+
+/**
+ * Linear-interpolate elevation at a given distance along the route.
+ *
+ * The elevation profile is sampled every ~30-40 m (Valhalla elevation_interval)
+ * while the geometry polyline has a point every few meters — the profile is
+ * almost always much sparser than the coordinates. Pairing them by array
+ * index (old behavior) leaves most trkpts near the end of a route with no
+ * elevation at all once the profile array runs out. Distance-based lookup
+ * fixes that regardless of how the two arrays are sized.
+ */
+function elevationAtDistance(profile: ElevationPoint[], distanceMeters: number): number | undefined {
+  if (!profile.length) return undefined
+  const first = profile[0]
+  const last = profile[profile.length - 1]
+  if (distanceMeters <= first.distanceMeters) return first.elevationMeters
+  if (distanceMeters >= last.distanceMeters) return last.elevationMeters
+
+  let lo = 0
+  let hi = profile.length - 1
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (profile[mid].distanceMeters <= distanceMeters) lo = mid
+    else hi = mid
+  }
+  const a = profile[lo]
+  const b = profile[hi]
+  const span = b.distanceMeters - a.distanceMeters
+  if (span <= 0) return a.elevationMeters
+  const t = (distanceMeters - a.distanceMeters) / span
+  return a.elevationMeters + (b.elevationMeters - a.elevationMeters) * t
+}
+
 export function exportRouteToGpx(route: Pick<RouteDraft, 'title' | 'description' | 'geometry' | 'elevationProfile'>): string {
-  const elevByIndex = route.elevationProfile
-  const points = route.geometry.coordinates.map(([lng, lat], index) => {
-    const elev = elevByIndex[index]?.elevationMeters
-    const eleTag = elev !== undefined ? `<ele>${elev.toFixed(1)}</ele>` : ''
+  const coordinates = route.geometry.coordinates
+  const distances = cumulativeDistances(coordinates)
+  const points = coordinates.map(([lng, lat], index) => {
+    const elev = elevationAtDistance(route.elevationProfile, distances[index])
+    const eleTag = elev !== undefined && Number.isFinite(elev) ? `<ele>${elev.toFixed(1)}</ele>` : ''
     return `<trkpt lat="${lat}" lon="${lng}">${eleTag}</trkpt>`
   })
 

@@ -40,4 +40,32 @@ describe('gpx', () => {
   it('rejects invalid GPX', () => {
     expect(() => parseGpx('<not-gpx>')).toThrow()
   })
+
+  it('interpolates elevation by distance when the profile is sparser than the geometry', () => {
+    // Simulates a routed draft: dense polyline (Valhalla shape) vs a coarse
+    // elevation profile sampled every ~30-40 m. Old index-pairing left most
+    // trkpts near the route's tail without any <ele> at all.
+    const coordinates: [number, number][] = Array.from({ length: 20 }, (_, i) => [
+      -3.7 + i * 0.0005,
+      40.4 + i * 0.0005,
+    ])
+    const elevationProfile = [
+      { distanceMeters: 0, elevationMeters: 600 },
+      { distanceMeters: 500, elevationMeters: 650 },
+      { distanceMeters: 1000, elevationMeters: 700 },
+    ]
+    const xml = exportRouteToGpx({
+      title: 'Ruta densa',
+      geometry: { type: 'LineString', coordinates },
+      elevationProfile,
+    })
+    const eleMatches = [...xml.matchAll(/<ele>([\d.]+)<\/ele>/g)]
+    // Every trkpt gets an elevation — none silently dropped past profile[2].
+    expect(eleMatches).toHaveLength(coordinates.length)
+    const first = Number(eleMatches[0][1])
+    const last = Number(eleMatches[eleMatches.length - 1][1])
+    expect(first).toBeCloseTo(600, 0)
+    expect(last).toBeGreaterThan(600)
+    expect(last).toBeLessThanOrEqual(700)
+  })
 })
