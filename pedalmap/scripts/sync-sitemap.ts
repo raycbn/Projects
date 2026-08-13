@@ -12,14 +12,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
 const out = join(root, 'public', 'sitemap.xml')
 
-type Entry = { loc: string; changefreq: string; priority: string }
+type Entry = { loc: string; changefreq: string; priority: string; lastmod?: string }
+
+const today = new Date().toISOString().slice(0, 10)
 
 const staticEntries: Entry[] = [
-  { loc: 'https://pedalmap.es/', changefreq: 'weekly', priority: '1.0' },
-  { loc: 'https://pedalmap.es/route-planner', changefreq: 'weekly', priority: '0.9' },
-  { loc: 'https://pedalmap.es/explorar', changefreq: 'weekly', priority: '0.8' },
-  { loc: 'https://pedalmap.es/blog', changefreq: 'weekly', priority: '0.85' },
-  { loc: 'https://pedalmap.es/premium', changefreq: 'monthly', priority: '0.5' },
+  { loc: 'https://pedalmap.es/', changefreq: 'weekly', priority: '1.0', lastmod: today },
+  { loc: 'https://pedalmap.es/route-planner', changefreq: 'weekly', priority: '0.9', lastmod: today },
+  { loc: 'https://pedalmap.es/explorar', changefreq: 'weekly', priority: '0.8', lastmod: today },
+  { loc: 'https://pedalmap.es/blog', changefreq: 'weekly', priority: '0.85', lastmod: today },
+  { loc: 'https://pedalmap.es/premium', changefreq: 'monthly', priority: '0.5', lastmod: today },
   { loc: 'https://pedalmap.es/privacidad', changefreq: 'yearly', priority: '0.3' },
   { loc: 'https://pedalmap.es/cookies', changefreq: 'yearly', priority: '0.3' },
   { loc: 'https://pedalmap.es/terminos', changefreq: 'yearly', priority: '0.3' },
@@ -29,12 +31,14 @@ const seoEntries: Entry[] = seoPages.map((p) => ({
   loc: `https://pedalmap.es${p.path}`,
   changefreq: 'monthly',
   priority: p.kind === 'compare' || p.path === '/que-es-pedalmap' ? '0.9' : p.kind === 'intent' ? '0.85' : '0.75',
+  lastmod: today,
 }))
 
 const blogEntries: Entry[] = blogPosts.map((p) => ({
   loc: `https://pedalmap.es/blog/${p.slug}`,
   changefreq: 'monthly',
   priority: '0.8',
+  lastmod: p.date,
 }))
 
 const seen = new Set<string>()
@@ -48,10 +52,10 @@ for (const e of [...staticEntries, ...seoEntries, ...blogEntries]) {
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${all
-  .map(
-    (e) =>
-      `  <url><loc>${e.loc}</loc><changefreq>${e.changefreq}</changefreq><priority>${e.priority}</priority></url>`,
-  )
+  .map((e) => {
+    const lastmod = e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ''
+    return `  <url><loc>${e.loc}</loc>${lastmod}<changefreq>${e.changefreq}</changefreq><priority>${e.priority}</priority></url>`
+  })
   .join('\n')}
 </urlset>
 `

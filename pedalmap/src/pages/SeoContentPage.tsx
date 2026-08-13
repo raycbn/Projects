@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
-import { faqPageJsonLd, webPageJsonLd } from '@/lib/jsonLd'
+import { faqPageJsonLd, webPageJsonLd, breadcrumbJsonLd } from '@/lib/jsonLd'
 import type { FaqItem } from '@/content/faqs'
 
 export interface SeoPageContent {
@@ -31,10 +31,14 @@ export function SeoContentPage({ content }: { content: SeoPageContent }) {
       name: content.heading,
       description: content.description,
     })
+    const crumbs = breadcrumbJsonLd([
+      { name: 'PedalMap', path: '/' },
+      { name: content.heading, path: content.path },
+    ])
     if (content.faqs && content.faqs.length > 0) {
-      return [page, faqPageJsonLd(content.faqs)]
+      return [page, crumbs, faqPageJsonLd(content.faqs)]
     }
-    return page
+    return [page, crumbs]
   }, [content.path, content.heading, content.description, content.faqs])
   useJsonLd(`seo-${content.path}`, jsonLd)
 

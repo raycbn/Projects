@@ -15,6 +15,9 @@ import {
   organizationJsonLd,
   softwareApplicationJsonLd,
   webPageJsonLd,
+  webSiteJsonLd,
+  blogPostingJsonLd,
+  breadcrumbJsonLd,
 } from '../src/lib/jsonLd'
 import { DEFAULT_OG_IMAGE, SITE_ORIGIN } from '../src/lib/site'
 import { markdownLinksToHtml } from '../src/lib/markdownInline'
@@ -155,7 +158,12 @@ const pages: PageSpec[] = [
       'Empieza gratis, exporta GPX y pasa a Premium cuando necesites rutas y Objetivo sin límites.',
       ...landingFaqs.map((f) => `${f.q} ${f.a}`),
     ],
-    jsonLd: [organizationJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(landingFaqs)],
+    jsonLd: [
+      organizationJsonLd(),
+      webSiteJsonLd(),
+      softwareApplicationJsonLd(),
+      faqPageJsonLd(landingFaqs),
+    ],
     related: [
       { to: '/que-es-pedalmap', label: 'Qué es PedalMap' },
       { to: '/crear-ruta-bicicleta', label: 'Crear ruta bicicleta' },
@@ -169,6 +177,10 @@ const pages: PageSpec[] = [
       name: p.heading,
       description: p.description,
     })
+    const crumbs = breadcrumbJsonLd([
+      { name: 'PedalMap', path: '/' },
+      { name: p.heading, path: p.path },
+    ])
     return {
       path: p.path,
       title: p.title,
@@ -180,7 +192,9 @@ const pages: PageSpec[] = [
       ],
       related: p.related,
       jsonLd:
-        p.faqs && p.faqs.length > 0 ? [pageLd, faqPageJsonLd(p.faqs)] : pageLd,
+        p.faqs && p.faqs.length > 0
+          ? [pageLd, crumbs, faqPageJsonLd(p.faqs)]
+          : [pageLd, crumbs],
     }
   }),
   {
@@ -218,18 +232,12 @@ const pages: PageSpec[] = [
         ?.map((c) => ` · <a href="${c.to}">${escapeHtml(c.label)}</a>`)
         .join('') ?? ''
     }</p>`,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: post.title,
+    jsonLd: blogPostingJsonLd({
+      title: post.title,
       description: post.description,
-      datePublished: post.date,
-      dateModified: post.date,
-      author: { '@type': 'Organization', name: 'PedalMap' },
-      publisher: { '@type': 'Organization', name: 'PedalMap', url: SITE_ORIGIN },
-      mainEntityOfPage: `${SITE_ORIGIN}/blog/${post.slug}`,
-      inLanguage: 'es-ES',
-    },
+      slug: post.slug,
+      date: post.date,
+    }),
   })),
   {
     path: '/premium',

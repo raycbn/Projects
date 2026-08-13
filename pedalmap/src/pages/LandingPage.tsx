@@ -20,6 +20,7 @@ import {
   faqPageJsonLd,
   organizationJsonLd,
   softwareApplicationJsonLd,
+  webSiteJsonLd,
 } from '@/lib/jsonLd'
 
 export function LandingPage() {
@@ -34,7 +35,12 @@ export function LandingPage() {
   })
 
   const jsonLd = useMemo(
-    () => [organizationJsonLd(), softwareApplicationJsonLd(), faqPageJsonLd(landingFaqs)],
+    () => [
+      organizationJsonLd(),
+      webSiteJsonLd(),
+      softwareApplicationJsonLd(),
+      faqPageJsonLd(landingFaqs),
+    ],
     [],
   )
   useJsonLd('landing', jsonLd)

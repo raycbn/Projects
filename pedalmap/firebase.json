@@ -91,7 +91,34 @@
         ]
       },
       {
+        "source": "/favicon-*.png",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=86400"
+          }
+        ]
+      },
+      {
+        "source": "/favicon.svg",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=86400"
+          }
+        ]
+      },
+      {
         "source": "/apple-touch-icon.png",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public,max-age=86400"
+          }
+        ]
+      },
+      {
+        "source": "/icon-*.png",
         "headers": [
           {
             "key": "Cache-Control",

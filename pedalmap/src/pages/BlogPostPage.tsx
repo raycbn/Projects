@@ -4,7 +4,7 @@ import { RichText } from '@/components/blog/RichText'
 import { usePageMeta } from '@/hooks/usePageMeta'
 import { useJsonLd } from '@/hooks/useJsonLd'
 import { getPostBySlug } from '@/content/blogPosts'
-import { SITE_ORIGIN } from '@/lib/site'
+import { blogPostingJsonLd } from '@/lib/jsonLd'
 
 export function BlogPostPage() {
   const { slug = '' } = useParams()
@@ -19,22 +19,12 @@ export function BlogPostPage() {
   useJsonLd(
     `blog-${slug}`,
     post
-      ? {
-          '@context': 'https://schema.org',
-          '@type': 'BlogPosting',
-          headline: post.title,
+      ? blogPostingJsonLd({
+          title: post.title,
           description: post.description,
-          datePublished: post.date,
-          dateModified: post.date,
-          author: { '@type': 'Organization', name: 'PedalMap' },
-          publisher: {
-            '@type': 'Organization',
-            name: 'PedalMap',
-            url: SITE_ORIGIN,
-          },
-          mainEntityOfPage: `${SITE_ORIGIN}/blog/${post.slug}`,
-          inLanguage: 'es-ES',
-        }
+          slug: post.slug,
+          date: post.date,
+        })
       : { '@context': 'https://schema.org', '@type': 'WebPage', name: 'Blog' },
   )
 

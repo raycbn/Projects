@@ -2,15 +2,28 @@ import { SITE_ORIGIN, SITE_NAME, DEFAULT_OG_IMAGE } from '@/lib/site'
 import { BRAND_EMAILS } from '@/lib/brandEmails'
 import type { FaqItem } from '@/content/faqs'
 
+/** Brand mark for Knowledge Graph / publisher (min 112×112; we serve 512). */
+export function organizationLogoJsonLd() {
+  return {
+    '@type': 'ImageObject',
+    url: `${SITE_ORIGIN}/logo.png`,
+    contentUrl: `${SITE_ORIGIN}/logo.png`,
+    width: 512,
+    height: 512,
+    caption: 'PedalMap',
+  }
+}
+
 export function organizationJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
+    '@id': `${SITE_ORIGIN}/#organization`,
     name: SITE_NAME,
     legalName: 'PedalMap',
     url: SITE_ORIGIN,
-    logo: `${SITE_ORIGIN}/logo.png`,
-    image: `${SITE_ORIGIN}/og-square.jpg`,
+    logo: organizationLogoJsonLd(),
+    image: [`${SITE_ORIGIN}/og-square.jpg`, `${SITE_ORIGIN}/logo.png`],
     email: BRAND_EMAILS.hello,
     description:
       'PedalMap es un planificador de rutas de bicicleta para España (no confundir con Petal Maps de Huawei): mapa, desnivel, viento, superficie según el tipo de bici y exportación GPX.',
@@ -38,6 +51,22 @@ export function organizationJsonLd() {
   }
 }
 
+export function webSiteJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${SITE_ORIGIN}/#website`,
+    name: SITE_NAME,
+    alternateName: ['Pedal Map', 'pedalmap.es'],
+    url: SITE_ORIGIN,
+    description:
+      'Planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie y GPX.',
+    inLanguage: 'es-ES',
+    publisher: { '@id': `${SITE_ORIGIN}/#organization` },
+    about: { '@id': `${SITE_ORIGIN}/#organization` },
+  }
+}
+
 export function softwareApplicationJsonLd() {
   return {
     '@context': 'https://schema.org',
@@ -49,6 +78,7 @@ export function softwareApplicationJsonLd() {
     operatingSystem: 'Web',
     url: SITE_ORIGIN,
     image: DEFAULT_OG_IMAGE,
+    logo: organizationLogoJsonLd(),
     description:
       'Planificador de rutas de bicicleta para España: mapa, desnivel, viento, superficie según tu bici (carretera, urbana, gravel, MTB, e-bike) y exportación GPX para Garmin, Wahoo, OsmAnd y Organic Maps.',
     featureList: [
@@ -69,11 +99,8 @@ export function softwareApplicationJsonLd() {
     },
     countriesSupported: 'ES',
     inLanguage: 'es-ES',
-    creator: {
-      '@type': 'Organization',
-      name: SITE_NAME,
-      url: SITE_ORIGIN,
-    },
+    creator: { '@id': `${SITE_ORIGIN}/#organization` },
+    publisher: { '@id': `${SITE_ORIGIN}/#organization` },
   }
 }
 
@@ -103,11 +130,53 @@ export function webPageJsonLd(opts: {
     name: opts.name,
     description: opts.description,
     url: `${SITE_ORIGIN}${opts.path}`,
-    isPartOf: {
-      '@type': 'WebSite',
+    isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+    about: { '@id': `${SITE_ORIGIN}/#organization` },
+    inLanguage: 'es-ES',
+  }
+}
+
+export function breadcrumbJsonLd(items: Array<{ name: string; path: string }>) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: `${SITE_ORIGIN}${item.path}`,
+    })),
+  }
+}
+
+export function blogPostingJsonLd(opts: {
+  title: string
+  description: string
+  slug: string
+  date: string
+  dateModified?: string
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: opts.title,
+    description: opts.description,
+    datePublished: opts.date,
+    dateModified: opts.dateModified ?? opts.date,
+    image: [`${SITE_ORIGIN}/og-share.jpg`, `${SITE_ORIGIN}/logo.png`],
+    author: { '@id': `${SITE_ORIGIN}/#organization` },
+    publisher: {
+      '@type': 'Organization',
+      '@id': `${SITE_ORIGIN}/#organization`,
       name: SITE_NAME,
       url: SITE_ORIGIN,
+      logo: organizationLogoJsonLd(),
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `${SITE_ORIGIN}/blog/${opts.slug}`,
     },
     inLanguage: 'es-ES',
+    isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
   }
 }
