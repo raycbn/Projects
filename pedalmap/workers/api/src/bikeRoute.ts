@@ -295,7 +295,16 @@ type TripJson = {
 
 const ROUTE_ELEVATION_INTERVAL_M = 30
 
-/** Build a continuous elevation profile from Valhalla leg.elevation arrays. */
+/**
+ * Build a continuous elevation profile from Valhalla leg.elevation arrays.
+ *
+ * Each leg is sampled independently by Valhalla, so the last sample of leg N
+ * and the first sample of leg N+1 both land on the same physical point (the
+ * waypoint/via) but can report slightly different elevation. Left as-is, that
+ * produces a fake spike right at every via — the more vias (Trazar mode),
+ * the more of these join artifacts stack up into inflated elevation gain.
+ * We average the two instead of pushing a duplicate-distance sample.
+ */
 function profileFromRouteLegs(
   legs: NonNullable<NonNullable<TripJson['trip']>['legs']>,
   coordinates: [number, number][],
@@ -313,6 +322,13 @@ function profileFromRouteLegs(
       const elev = elevs[i]
       if (elev === null || elev === undefined || !Number.isFinite(elev)) continue
       const distanceMeters = offsetM + i * interval
+
+      const prev = out[out.length - 1]
+      if (i === 0 && prev && prev.distanceMeters === distanceMeters) {
+        out[out.length - 1] = { ...prev, elevationMeters: (prev.elevationMeters + elev) / 2 }
+        continue
+      }
+
       out.push({
         distanceMeters,
         elevationMeters: elev,
@@ -404,6 +420,9 @@ async function enrichTrip(
           'edge.road_class',
           'edge.use',
           'edge.cycle_lane',
+          // OSM signed cycle network (icn/ncn/rcn/lcn bitmask) — free public-data
+          // stand-in for a Strava-style "popular with cyclists" signal.
+          'edge.bicycle_network',
         ],
       },
     }).catch(() => ({ edges: [] })),
