@@ -15,6 +15,10 @@ import { GPXImporter } from '@/components/gpx/GPXImporter'
 import { track } from '@/lib/analytics'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
+import {
+  readCycleNetworkOverlayPreference,
+  writeCycleNetworkOverlayPreference,
+} from '@/lib/mapOverlays'
 import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 import { routeCameraKey } from '@/lib/mapCamera'
@@ -94,6 +98,7 @@ export function RoutePlanner() {
     showArrows: boolean
     loading: boolean
   }>({ overlay: null, caption: null, showArrows: true, loading: false })
+  const [showCycleNetwork, setShowCycleNetwork] = useState(readCycleNetworkOverlayPreference)
 
   const isTrace = routeType === 'map_trace'
   const activeDraft = editDraft ?? draft
@@ -342,6 +347,7 @@ export function RoutePlanner() {
               windOverlay={traceWind.overlay}
               windCaption={traceWind.caption}
               showWindArrows={traceWind.showArrows}
+              showCycleNetwork={showCycleNetwork}
               fitKey={fitKey}
               onMapClick={handleMapTap}
               onWaypointDrag={(id, position) => updateWaypointPosition(id, position)}
@@ -350,6 +356,29 @@ export function RoutePlanner() {
 
           <div className="absolute left-3 right-3 top-3 z-10 flex flex-wrap gap-2">
             {modeChips}
+          </div>
+
+          <div className="absolute right-3 top-14 z-10 flex flex-col items-end gap-2">
+            <button
+              type="button"
+              className={clsx(
+                'rounded-xl px-3 py-2 text-xs font-semibold shadow-sm ring-1 ring-[var(--color-fog)]',
+                showCycleNetwork
+                  ? 'bg-[var(--color-forest)] text-white'
+                  : 'bg-white/95 text-[var(--color-forest)]',
+              )}
+              aria-pressed={showCycleNetwork}
+              title="Redes ciclistas señalizadas (EuroVelo, Vías Verdes…) — capa gratis, datos OSM"
+              onClick={() => {
+                setShowCycleNetwork((v) => {
+                  const next = !v
+                  writeCycleNetworkOverlayPreference(next)
+                  return next
+                })
+              }}
+            >
+              {showCycleNetwork ? 'Ocultar red ciclista' : 'Ver red ciclista'}
+            </button>
           </div>
 
           {traceWind.loading && activeDraft && !traceWind.overlay?.features?.length ? (

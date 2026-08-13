@@ -14,6 +14,7 @@ import {
   routeStartBearing,
   writeMap3dPreference,
 } from '@/lib/map3d'
+import { CYCLE_NETWORK_ATTRIBUTION, CYCLE_NETWORK_TILE_URL } from '@/lib/mapOverlays'
 
 /**
  * Vite bundles MapLibre into a chunk, so its relative worker URL breaks
@@ -60,6 +61,8 @@ interface MapViewProps {
   showTerrainToggle?: boolean
   /** Force 3D on/off; omit to use saved preference (default on). */
   terrain3d?: boolean
+  /** Free OSM signed cycle-network overlay (EuroVelo, Vías Verdes…) — opt-in, off by default. */
+  showCycleNetwork?: boolean
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
@@ -137,6 +140,41 @@ function ensureRouteLayers(map: Map) {
       'route-line-casing',
     )
   }
+}
+
+/**
+ * Free stand-in for Strava's popularity heatmap: OSM signed cycle-network
+ * relations rendered by Waymarked Trails (no API key). Purely visual — it
+ * never feeds routing, only helps the rider see where cyclists actually go.
+ * Inserted below the route stack so the route line always stays on top.
+ */
+function ensureCycleNetworkLayer(map: Map) {
+  if (!map.getSource('cycle-network')) {
+    map.addSource('cycle-network', {
+      type: 'raster',
+      tiles: [CYCLE_NETWORK_TILE_URL],
+      tileSize: 256,
+      attribution: CYCLE_NETWORK_ATTRIBUTION,
+    })
+  }
+  if (!map.getLayer('cycle-network-layer')) {
+    const beforeId = map.getLayer('route-line-casing') ? 'route-line-casing' : undefined
+    map.addLayer(
+      {
+        id: 'cycle-network-layer',
+        type: 'raster',
+        source: 'cycle-network',
+        paint: { 'raster-opacity': 0.65 },
+        layout: { visibility: 'none' },
+      },
+      beforeId,
+    )
+  }
+}
+
+function setCycleNetworkVisible(map: Map, visible: boolean) {
+  if (!map.getLayer('cycle-network-layer')) return
+  map.setLayoutProperty('cycle-network-layer', 'visibility', visible ? 'visible' : 'none')
 }
 
 function ensureSurfaceLayers(map: Map) {
@@ -745,6 +783,7 @@ export function MapView({
   showWindArrows = true,
   showTerrainToggle = true,
   terrain3d: terrain3dProp,
+  showCycleNetwork = false,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -769,6 +808,7 @@ export function MapView({
   const [terrain3d, setTerrain3d] = useState(() =>
     terrain3dProp !== undefined ? terrain3dProp : readMap3dPreference(true),
   )
+  const showCycleNetworkRef = useRef(showCycleNetwork)
   const hasWindOverlay = Boolean(windOverlay?.features?.length)
   followUserRef.current = followUser
   geometryRef.current = geometry
@@ -779,6 +819,7 @@ export function MapView({
   showWindArrowsRef.current = showWindArrows
   fitKeyRef.current = fitKey
   terrain3dRef.current = terrain3d
+  showCycleNetworkRef.current = showCycleNetwork
 
   useEffect(() => {
     if (terrain3dProp === undefined) return
@@ -823,6 +864,8 @@ export function MapView({
         applySurfaceOverlay(map, surfaceRef.current)
         applyWindOverlay(map, windRef.current)
         setWindArrowLayersVisible(map, showWindArrowsRef.current)
+        ensureCycleNetworkLayer(map)
+        setCycleNetworkVisible(map, showCycleNetworkRef.current)
       }
 
       const resize = () => {
@@ -881,7 +924,9 @@ export function MapView({
           Boolean(windRef.current?.features?.length) && !map.getLayer('route-wind-segments')
         const needsSurface =
           Boolean(surfaceRef.current?.features?.length) && !map.getLayer('route-surface-line')
-        if (!needsRoute && !needsWind && !needsSurface) return
+        const needsCycleNetwork =
+          showCycleNetworkRef.current && !map.getLayer('cycle-network-layer')
+        if (!needsRoute && !needsWind && !needsSurface && !needsCycleNetwork) return
         if (needsWind) rebuildWindLayers(map)
         paintFromRef(false)
         raiseRouteOverlayLayers(map)
@@ -1025,6 +1070,13 @@ export function MapView({
       })
     }
   }, [windOverlay, showWindArrows])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    ensureCycleNetworkLayer(map)
+    setCycleNetworkVisible(map, showCycleNetwork)
+  }, [showCycleNetwork])
 
   useEffect(() => {
     const map = mapRef.current
