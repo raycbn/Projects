@@ -21,8 +21,23 @@ function scoreOf(stats: RouteStats): number {
 }
 
 /**
+ * Free public-data stand-in for Strava's RouteMaster "athlete popularity"
+ * signal: OSM signed cycle networks (icn/ncn/rcn/lcn) + cycleways/lanes.
+ * Only used as a tie-breaker among alternatives with near-identical surface
+ * fit — never strong enough to override a genuinely better surface match.
+ */
+function cycleFitOf(stats: RouteStats): number {
+  const s = stats.surfaceStats
+  if (!s) return 0
+  const network = Math.max(0, Math.min(100, s.cycleNetworkPercent ?? 0))
+  const infra = Math.max(0, Math.min(100, s.cycleInfraPercent ?? 0))
+  return network * 0.6 + infra * 0.4
+}
+
+/**
  * Build a stable, ranked list of route options (Opción 1..N).
- * Active geometry is the best surface fit (or the shortest if tied).
+ * Active geometry is the best surface fit; among near-ties, prefer more
+ * cycle infrastructure; final tie-break is the shortest distance.
  */
 export function rankRouteOptions(candidates: RouteOptionCandidate[]): RankedRouteBundle {
   if (!candidates.length) {
@@ -32,6 +47,8 @@ export function rankRouteOptions(candidates: RouteOptionCandidate[]): RankedRout
   const sorted = [...candidates].sort((a, b) => {
     const scoreDiff = scoreOf(b.stats) - scoreOf(a.stats)
     if (Math.abs(scoreDiff) > 0.5) return scoreDiff
+    const cycleDiff = cycleFitOf(b.stats) - cycleFitOf(a.stats)
+    if (Math.abs(cycleDiff) > 3) return cycleDiff
     return a.stats.distanceMeters - b.stats.distanceMeters
   })
 

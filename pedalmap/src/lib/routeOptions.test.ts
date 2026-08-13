@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { applySelectedOption, ensureRouteOptions, rankRouteOptions } from './routeOptions'
 import type { RouteStats } from '@/domain/types'
 
-function stats(distanceMeters: number, score: number): RouteStats {
+function stats(
+  distanceMeters: number,
+  score: number,
+  cycle?: { cycleNetworkPercent?: number; cycleInfraPercent?: number },
+): RouteStats {
   return {
     distanceMeters,
     elevationGainMeters: 100,
@@ -18,11 +22,17 @@ function stats(distanceMeters: number, score: number): RouteStats {
         notes: [],
         bikeType: 'road',
       },
+      ...cycle,
     },
   }
 }
 
-function candidate(distanceMeters: number, score: number, lngOffset = 0) {
+function candidate(
+  distanceMeters: number,
+  score: number,
+  lngOffset = 0,
+  cycle?: { cycleNetworkPercent?: number; cycleInfraPercent?: number },
+) {
   return {
     geometry: {
       type: 'LineString' as const,
@@ -32,7 +42,7 @@ function candidate(distanceMeters: number, score: number, lngOffset = 0) {
       ] as [number, number][],
     },
     elevationProfile: [],
-    stats: stats(distanceMeters, score),
+    stats: stats(distanceMeters, score, cycle),
     instructions: [`Go ${distanceMeters}`],
   }
 }
@@ -49,6 +59,23 @@ describe('rankRouteOptions', () => {
     expect(bundle.routeOptions[0].stats.surfaceStats?.suitability?.score).toBe(90)
     expect(bundle.selectedOptionId).toBe('opt-1')
     expect(bundle.active.stats.distanceMeters).toBe(11000)
+  })
+
+  it('breaks near-ties in surface fit using cycle network / infra share', () => {
+    const bundle = rankRouteOptions([
+      candidate(11500, 80, 0, { cycleNetworkPercent: 0, cycleInfraPercent: 5 }),
+      candidate(11000, 80.3, 0.01, { cycleNetworkPercent: 60, cycleInfraPercent: 40 }),
+    ])
+    // Suitability scores are within the 0.5 near-tie band — cycle share decides.
+    expect(bundle.active.stats.surfaceStats?.cycleNetworkPercent).toBe(60)
+  })
+
+  it('never lets cycle network share override a clearly better surface fit', () => {
+    const bundle = rankRouteOptions([
+      candidate(11000, 40, 0, { cycleNetworkPercent: 100, cycleInfraPercent: 100 }),
+      candidate(12000, 90, 0.01, { cycleNetworkPercent: 0, cycleInfraPercent: 0 }),
+    ])
+    expect(bundle.active.stats.surfaceStats?.suitability?.score).toBe(90)
   })
 
   it('keeps all options when applying a selection', () => {
