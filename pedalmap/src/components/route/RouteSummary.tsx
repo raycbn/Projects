@@ -70,6 +70,21 @@ export function RouteSummary({ stats, compact }: RouteSummaryProps) {
             ))}
           </p>
         )}
+
+        {!compact && (
+          <details className="mt-3 rounded-xl bg-[var(--color-mist)]/60 px-3 py-2 text-xs text-[var(--color-stone)]">
+            <summary className="cursor-pointer font-semibold text-[var(--color-forest)]">
+              ¿Por qué mi desnivel no coincide con Strava/Garmin?
+            </summary>
+            <p className="mt-2">
+              Este desnivel sale del modelo de elevación del mapa (DEM), no de un barómetro.
+              Filtramos el ruido con un umbral de 10 m — el mismo criterio que usa Strava cuando
+              no hay altímetro barométrico. Un ciclocomputador con barómetro (Garmin, Wahoo…)
+              suele dar una cifra distinta para el mismo recorrido: no es un fallo, son dos formas
+              distintas de medir lo mismo.
+            </p>
+          </details>
+        )}
       </div>
 
       {!compact && stats.surfaceStats && <SurfaceBreakdown surfaceStats={stats.surfaceStats} />}
