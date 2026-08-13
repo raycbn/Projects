@@ -33,7 +33,7 @@ export function RouteSummary({ stats, compact }: RouteSummaryProps) {
         aria-label="Resumen de la ruta"
       >
         <p className="label-caps">Distancia</p>
-        <p className="mt-1 font-display text-2xl font-extrabold tracking-tight text-[var(--color-forest)] md:text-3xl">
+        <p className="mt-1 font-display text-xl font-extrabold tracking-tight text-[var(--color-forest)] md:text-2xl">
           {formatDistance(stats.distanceMeters)}
         </p>
 
