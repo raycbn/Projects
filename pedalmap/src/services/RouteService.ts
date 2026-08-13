@@ -10,6 +10,7 @@ import type {
 } from '@/domain/types'
 import { RoutingError } from '@/domain/types'
 import { rankRouteOptions } from '@/lib/routeOptions'
+import { shortPlaceNameForTitle } from '@/lib/shortPlaceName'
 
 export interface CalculateRouteInput {
   waypoints: Waypoint[]
@@ -55,8 +56,10 @@ export class RouteService {
     }
 
     const result: RoutingResult = await this.provider.calculateRoute(parsed.data)
-    const startName = sorted[0]?.name
+    const startName = sorted[0]?.name ? shortPlaceNameForTitle(sorted[0].name) : undefined
     const endName = sorted[sorted.length - 1]?.name
+      ? shortPlaceNameForTitle(sorted[sorted.length - 1].name)
+      : undefined
     const title =
       input.title ||
       (input.routeType === 'circular'
