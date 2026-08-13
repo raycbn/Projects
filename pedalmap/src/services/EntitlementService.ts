@@ -1,5 +1,5 @@
 import type { FreemiumLimits, RoutePreference, UserPlan, UserProfile } from '@/domain/types'
-import { FREE_LIMITS, FREE_TRIALS, PREMIUM_LIMITS } from '@/domain/types'
+import { FREE_LIMITS, FREE_ROUTING_TOGGLES, FREE_TRIALS, PREMIUM_LIMITS } from '@/domain/types'
 import {
   guestCircularUsedThisMonth,
   guestGpxUsedThisWeek,
@@ -9,6 +9,15 @@ import {
 
 export function getLimits(plan: UserPlan): FreemiumLimits {
   return plan === 'premium' ? PREMIUM_LIMITS : FREE_LIMITS
+}
+
+/** True for routing toggles that never consume a Free filter slot (see FREE_ROUTING_TOGGLES). */
+export function isFreeRoutingToggle(id: RoutePreference): boolean {
+  return (FREE_ROUTING_TOGGLES as readonly string[]).includes(id)
+}
+
+function countedPreferences(preferences: RoutePreference[]): RoutePreference[] {
+  return preferences.filter((id) => !isFreeRoutingToggle(id))
 }
 
 export function canSaveRoute(profile: UserProfile | null): { ok: boolean; reason?: string } {
@@ -104,7 +113,7 @@ export function applyPreferenceToggle(
   if (id === 'prefer_unpaved') next = next.filter((v) => v !== 'avoid_unpaved')
 
   const limit = maxActivePreferences(profile)
-  if (next.length > limit) {
+  if (countedPreferences(next).length > limit) {
     return { ok: false, reason: 'filter_limit', next: current }
   }
   return { ok: true, next }
@@ -115,8 +124,10 @@ export function clampPreferencesForPlan(
   profile: UserProfile | null,
 ): RoutePreference[] {
   const limit = maxActivePreferences(profile)
-  if (preferences.length <= limit) return preferences
-  return preferences.slice(0, limit)
+  const counted = countedPreferences(preferences)
+  if (counted.length <= limit) return preferences
+  const keepCounted = new Set(counted.slice(0, limit))
+  return preferences.filter((id) => isFreeRoutingToggle(id) || keepCounted.has(id))
 }
 
 /** @deprecated use clampPreferencesForPlan — kept for older tests */

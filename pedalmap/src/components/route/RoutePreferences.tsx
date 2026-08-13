@@ -1,7 +1,11 @@
 import clsx from 'clsx'
 import type { RoutePreference, UserProfile } from '@/domain/types'
 import { ORS_SUPPORTED_PREFERENCES } from '@/adapters/routing/OpenRouteServiceProvider'
-import { applyPreferenceToggle, maxActivePreferences } from '@/services/EntitlementService'
+import {
+  applyPreferenceToggle,
+  isFreeRoutingToggle,
+  maxActivePreferences,
+} from '@/services/EntitlementService'
 import { FREE_LIMITS } from '@/domain/types'
 
 const OPTIONS: Array<{ id: RoutePreference; label: string; hint?: string }> = [
@@ -39,6 +43,7 @@ export function RoutePreferencesPanel({
 }: RoutePreferencesProps) {
   const limit = maxActivePreferences(profile)
   const unlimited = !Number.isFinite(limit)
+  const countedCount = value.filter((id) => !isFreeRoutingToggle(id)).length
 
   function toggle(id: RoutePreference) {
     if (!ORS_SUPPORTED_PREFERENCES.includes(id)) return
@@ -59,12 +64,17 @@ export function RoutePreferencesPanel({
         Puedes combinar varios filtros a la vez
         {unlimited
           ? ' (Premium: sin límite).'
-          : ` (Free: hasta ${FREE_LIMITS.maxActivePreferences} · ${value.length}/${limit}).`}
+          : ` (Free: hasta ${FREE_LIMITS.maxActivePreferences} · ${countedCount}/${limit}).`}
+        {' '}
+        <span title="Estos filtros son ajustes directos del motor de rutas — siempre gratis, no cuentan en tu límite.">
+          Carril bici y menor desnivel son gratis siempre.
+        </span>
       </p>
       <div className="flex flex-col gap-1.5">
         {OPTIONS.map((opt) => {
           const checked = value.includes(opt.id)
-          const atLimit = !checked && !unlimited && value.length >= limit
+          const free = isFreeRoutingToggle(opt.id)
+          const atLimit = !checked && !unlimited && !free && countedCount >= limit
           return (
             <label
               key={opt.id}
@@ -83,6 +93,11 @@ export function RoutePreferencesPanel({
               />
               <span>
                 {opt.label}
+                {free && (
+                  <span className="ml-1.5 rounded-full bg-[var(--color-signal)]/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-forest)]">
+                    Gratis
+                  </span>
+                )}
                 {opt.hint && (
                   <span className="mt-0.5 block text-[11px] text-[var(--color-stone)]">{opt.hint}</span>
                 )}

@@ -9,6 +9,7 @@ import {
   clampPreferencesForPlan,
   freeCircularRemaining,
   freeGpxRemaining,
+  isFreeRoutingToggle,
   maxActivePreferences,
   windAlertRouteLimit,
   windAlertRoutesRemaining,
@@ -88,16 +89,37 @@ describe('entitlements', () => {
 
     const first = applyPreferenceToggle([], 'prefer_shorter', profile({ plan: 'free' }))
     expect(first.ok).toBe(true)
-    const second = applyPreferenceToggle(first.next, 'prefer_bike_lanes', profile({ plan: 'free' }))
+    const second = applyPreferenceToggle(first.next, 'avoid_traffic', profile({ plan: 'free' }))
     expect(second.ok).toBe(true)
     expect(second.next).toHaveLength(2)
-    const third = applyPreferenceToggle(second.next, 'avoid_traffic', profile({ plan: 'free' }))
+    const third = applyPreferenceToggle(second.next, 'prefer_secondary_roads', profile({ plan: 'free' }))
     expect(third.ok).toBe(false)
     if (!third.ok) expect(third.reason).toBe('filter_limit')
 
-    const premium = applyPreferenceToggle(second.next, 'avoid_traffic', profile({ plan: 'premium' }))
+    const premium = applyPreferenceToggle(second.next, 'prefer_secondary_roads', profile({ plan: 'premium' }))
     expect(premium.ok).toBe(true)
     if (premium.ok) expect(premium.next).toHaveLength(3)
+  })
+
+  it('never counts prefer_bike_lanes / prefer_less_elevation against the Free filter cap', () => {
+    expect(isFreeRoutingToggle('prefer_bike_lanes')).toBe(true)
+    expect(isFreeRoutingToggle('prefer_less_elevation')).toBe(true)
+    expect(isFreeRoutingToggle('avoid_traffic')).toBe(false)
+
+    const free = profile({ plan: 'free' })
+    let prefs: import('@/domain/types').RoutePreference[] = []
+    for (const id of ['prefer_bike_lanes', 'prefer_less_elevation', 'prefer_shorter', 'avoid_traffic'] as const) {
+      const result = applyPreferenceToggle(prefs, id, free)
+      expect(result.ok, id).toBe(true)
+      if (result.ok) prefs = result.next
+    }
+    // Both free toggles + 2 counted (Free cap) all stayed active — the two free
+    // toggles never consumed a slot.
+    expect(prefs).toEqual(['prefer_bike_lanes', 'prefer_less_elevation', 'prefer_shorter', 'avoid_traffic'])
+
+    const overLimit = applyPreferenceToggle(prefs, 'prefer_secondary_roads', free)
+    expect(overLimit.ok).toBe(false)
+    if (!overLimit.ok) expect(overLimit.reason).toBe('filter_limit')
   })
 
   it('clamps preferences for free plan', () => {
@@ -106,6 +128,16 @@ describe('entitlements', () => {
       profile({ plan: 'free' }),
     )
     expect(filtered).toHaveLength(2)
+  })
+
+  it('clamps counted preferences but always keeps free routing toggles', () => {
+    const filtered = clampPreferencesForPlan(
+      ['prefer_bike_lanes', 'prefer_shorter', 'avoid_primary_roads', 'prefer_unpaved', 'prefer_less_elevation'],
+      profile({ plan: 'free' }),
+    )
+    expect(filtered).toContain('prefer_bike_lanes')
+    expect(filtered).toContain('prefer_less_elevation')
+    expect(filtered.filter((id) => !isFreeRoutingToggle(id))).toHaveLength(2)
   })
 
   it('limits Free wind-alert routes and requires master switch', () => {
