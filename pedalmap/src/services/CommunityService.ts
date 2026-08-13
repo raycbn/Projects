@@ -96,17 +96,17 @@ export class CommunityService {
   }
 
   async listPublicProfiles(max = 24): Promise<PublicProfile[]> {
-    // Equality-only query — no composite index required. Sort client-side.
+    // Composite index: isPublic ASC + updatedAt DESC (firestore.indexes.json).
+    // Cap keeps the query cheap; Explore asks for a high max so the directory is complete.
+    const take = Math.min(Math.max(max, 1), 500)
     const q = query(
       collection(getDb(), 'publicProfiles'),
       where('isPublic', '==', true),
-      limit(Math.max(max * 2, 48)),
+      orderBy('updatedAt', 'desc'),
+      limit(take),
     )
     const snap = await getDocs(q)
-    return snap.docs
-      .map((d) => mapPublicProfile(d.id, d.data()))
-      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-      .slice(0, max)
+    return snap.docs.map((d) => mapPublicProfile(d.id, d.data()))
   }
 
   async follow(followerId: string, followeeId: string): Promise<void> {
@@ -331,7 +331,7 @@ export class CommunityService {
   async listNearYou(city: string, excludeUid?: string, max = 12): Promise<PublicProfile[]> {
     const needle = normalizeCityKey(city)
     if (!needle) return []
-    const all = await this.listPublicProfiles(48)
+    const all = await this.listPublicProfiles(200)
     const scored = all
       .filter((p) => p.uid !== excludeUid)
       .map((p) => {

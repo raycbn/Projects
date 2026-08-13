@@ -107,7 +107,7 @@ export function ExplorePage() {
             console.warn('[explore] routes', error)
             return [] as SavedRoute[]
           }),
-          communityService.listPublicProfiles(48).catch((error) => {
+          communityService.listPublicProfiles(200).catch((error) => {
             console.warn('[explore] profiles', error)
             throw error
           }),
