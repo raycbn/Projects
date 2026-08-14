@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { usePageMeta } from '@/hooks/usePageMeta'
@@ -30,12 +30,14 @@ const MapView = lazy(() =>
  */
 export function ActivityDetailPage() {
   const { activityId = '' } = useParams()
+  const navigate = useNavigate()
   const { user, profile, firebaseReady } = useAuth()
   const [activity, setActivity] = useState<Activity | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
   const [publishBusy, setPublishBusy] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
 
   usePageMeta({
@@ -194,6 +196,21 @@ export function ActivityDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!activity || !user || user.isAnonymous || activity.userId !== user.uid) return
+    if (!confirm('¿Eliminar esta salida? No se puede deshacer.')) return
+    setDeleteBusy(true)
+    try {
+      await activityRepository.remove(activity.id, user.uid)
+      track('activity_deleted', { source: activity.source ?? 'gps' })
+      navigate('/actividades', { replace: true })
+    } catch (err) {
+      console.error('[activity delete]', err)
+      setHint('No se pudo eliminar la salida.')
+      setDeleteBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
@@ -289,6 +306,16 @@ export function ActivityDetailPage() {
             }}
           >
             {activity.isPublic ? 'Hacer privada' : 'Hacer pública'}
+          </Button>
+        ) : null}
+        {user && !user.isAnonymous && activity.userId === user.uid ? (
+          <Button
+            variant="ghost"
+            className="!text-[var(--color-danger)]"
+            disabled={deleteBusy}
+            onClick={() => void handleDelete()}
+          >
+            {deleteBusy ? 'Eliminando…' : 'Eliminar'}
           </Button>
         ) : null}
         {user && !user.isAnonymous && geometry ? (

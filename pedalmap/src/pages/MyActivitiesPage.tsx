@@ -42,6 +42,7 @@ export function MyActivitiesPage() {
   const [cloudConnected, setCloudConnected] = useState(false)
   const [cloudBusy, setCloudBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null)
 
   async function reload() {
     if (!user || user.isAnonymous || !activityRepository.isConfigured()) return
@@ -350,6 +351,22 @@ export function MyActivitiesPage() {
     }
   }
 
+  async function handleDeleteActivity(activityId: string) {
+    if (!user || user.isAnonymous) return
+    if (!confirm('¿Eliminar esta salida? No se puede deshacer.')) return
+    setDeleteBusyId(activityId)
+    try {
+      await activityRepository.remove(activityId, user.uid)
+      setItems((prev) => prev.filter((row) => row.id !== activityId))
+      track('activity_deleted', { via: 'list' })
+    } catch (err) {
+      console.error('[activities] delete', err)
+      setMessage('No se pudo eliminar la salida.')
+    } finally {
+      setDeleteBusyId(null)
+    }
+  }
+
   const list: GpsProviderStatus[] =
     providers.length > 0
       ? providers
@@ -616,36 +633,46 @@ export function MyActivitiesPage() {
       ) : (
         <ul className="mt-6 space-y-3">
           {items.map((a) => (
-            <li key={a.id}>
-              <Link
-                to={`/actividades/${a.id}`}
-                className="block rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-[var(--color-fog)] transition hover:bg-[var(--color-mist)]/40"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="route-title-card">{a.title}</p>
-                    <p className="text-xs text-[var(--color-stone)]">
-                      {new Date(a.startedAt).toLocaleString('es-ES')}
-                      {a.source === 'strava' ? ' · importada' : a.source && a.source !== 'gps' ? ` · ${a.source}` : ''}
-                      {a.status !== 'finished' ? ` · ${a.status}` : ''}
+            <li
+              key={a.id}
+              className="rounded-2xl bg-white/80 ring-1 ring-[var(--color-fog)] transition hover:bg-[var(--color-mist)]/40"
+            >
+              <div className="flex items-start gap-2 px-4 py-3">
+                <Link to={`/actividades/${a.id}`} className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="route-title-card">{a.title}</p>
+                      <p className="text-xs text-[var(--color-stone)]">
+                        {new Date(a.startedAt).toLocaleString('es-ES')}
+                        {a.source === 'strava' ? ' · importada' : a.source && a.source !== 'gps' ? ` · ${a.source}` : ''}
+                        {a.status !== 'finished' ? ` · ${a.status}` : ''}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-[var(--color-forest)]">
+                      {formatDistance(a.stats.distanceMeters)}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold text-[var(--color-forest)]">
-                    {formatDistance(a.stats.distanceMeters)}
+                  <p className="mt-2 text-sm text-[var(--color-stone)]">
+                    {formatDuration(a.stats.movingTimeSeconds ?? a.stats.durationSeconds)} mov. ·{' '}
+                    {formatElevation(a.stats.elevationGainMeters)}
+                    {a.stats.averageSpeedMetersPerSecond !== undefined
+                      ? ` · ${formatSpeedKmh(a.stats.averageSpeedMetersPerSecond)}`
+                      : ''}
+                    {a.stats.estimatedPowerWatts !== undefined ||
+                    a.stats.averagePowerWatts !== undefined
+                      ? ` · ${a.stats.estimatedPowerWatts ?? a.stats.averagePowerWatts} W`
+                      : ''}
                   </p>
-                </div>
-                <p className="mt-2 text-sm text-[var(--color-stone)]">
-                  {formatDuration(a.stats.movingTimeSeconds ?? a.stats.durationSeconds)} mov. ·{' '}
-                  {formatElevation(a.stats.elevationGainMeters)}
-                  {a.stats.averageSpeedMetersPerSecond !== undefined
-                    ? ` · ${formatSpeedKmh(a.stats.averageSpeedMetersPerSecond)}`
-                    : ''}
-                  {a.stats.estimatedPowerWatts !== undefined ||
-                  a.stats.averagePowerWatts !== undefined
-                    ? ` · ${a.stats.estimatedPowerWatts ?? a.stats.averagePowerWatts} W`
-                    : ''}
-                </p>
-              </Link>
+                </Link>
+                <button
+                  type="button"
+                  className="shrink-0 pt-0.5 text-sm font-semibold text-[var(--color-danger)]"
+                  disabled={deleteBusyId === a.id}
+                  onClick={() => void handleDeleteActivity(a.id)}
+                >
+                  {deleteBusyId === a.id ? '…' : 'Eliminar'}
+                </button>
+              </div>
             </li>
           ))}
         </ul>

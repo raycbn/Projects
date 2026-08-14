@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -156,6 +157,15 @@ export class ActivityRepository {
 
   async setPublic(activityId: string, isPublic: boolean): Promise<void> {
     await setDoc(doc(getDb(), 'activities', activityId), { isPublic, updatedAt: serverTimestamp() }, { merge: true })
+  }
+
+  async remove(activityId: string, userId: string): Promise<void> {
+    const ref = doc(getDb(), 'activities', activityId)
+    const snap = await getDoc(ref)
+    if (!snap.exists() || snap.data().userId !== userId) {
+      throw new Error('No tienes permiso para eliminar esta salida')
+    }
+    await deleteDoc(ref)
   }
 
   async findByExternalId(userId: string, externalId: string): Promise<Activity | null> {
