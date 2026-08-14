@@ -48,21 +48,30 @@ const seoPagesBase: SeoPageContent[] = [
   {
     path: '/crear-ruta-bicicleta',
     kind: 'intent',
-    title: 'Crear ruta bicicleta online | PedalMap',
+    title: 'Hacer una ruta en bicicleta | Mapa y GPX | PedalMap',
     description:
-      'Crea una ruta en bicicleta online con mapa, desnivel, viento y superficie. Planificador ciclista gratuito en España — empieza en segundos.',
-    heading: 'Crear ruta en bicicleta',
+      'Haz una ruta en bici desde tu ubicación o de A a B. Mapa, desnivel, viento y GPX. Gratis para probar — planificador ciclista en España.',
+    heading: 'Hacer una ruta en bicicleta',
     body: [
-      'PedalMap es un planificador de rutas de bicicleta para crear salidas reales en España: eliges salida y destino (o un Objetivo circular), el tipo de bici y calculas un recorrido con distancia, tiempo, desnivel y composición de suelo.',
-      'A diferencia de un GPS genérico, el motor tiene en cuenta carretera, urbana, gravel, MTB o e-bike para priorizar vías más adecuadas. Verás un % de idoneidad y un perfil de elevación sincronizado con el mapa.',
-      'Flujo típico: 1) Abre el planificador. 2) Busca origen y destino o activa Objetivo. 3) Elige el perfil de bici. 4) Calcula y revisa viento relativo al sentido de la ruta. 5) Guarda, comparte o exporta GPX a Garmin, Wahoo, OsmAnd u Organic Maps.',
+      'Puedes hacer una ruta en bicicleta online sobre el mapa, partiendo desde tu ubicación o eligiendo origen y destino. Sirve igual para un rodaje corto que para personalizar una ruta de cicloturismo: tipo de bici, desnivel, superficie y viento antes de generar el track.',
+      'PedalMap calcula salidas reales en España: A→B, ida y vuelta, Objetivo circular o Trazar en el mapa. Eliges carretera, urbana, gravel, MTB o e-bike y ves distancia, tiempo, desnivel y composición de suelo.',
+      'A diferencia de un GPS genérico, el motor tiene en cuenta el perfil de bici para priorizar vías más adecuadas. Verás un % de idoneidad y un perfil de elevación sincronizado con el mapa.',
+      'Flujo típico: 1) Abre el planificador. 2) Usa tu ubicación o busca origen y destino. 3) Elige el perfil de bici. 4) Calcula y revisa viento relativo al sentido de la ruta. 5) Guarda, comparte o exporta GPX (track) a Garmin, Wahoo, OsmAnd u Organic Maps.',
       'Ejemplos habituales: rodaje urbano en Madrid Río / Casa de Campo, costa y Collserola en Barcelona, o una circular de entreno por kilómetros y desnivel sin destino fijo. El mismo producto cubre toda España.',
-      'No necesitas cuenta para probar. Cuando quieras guardar rutas, avisos de viento o sincronizar, crea una cuenta Free. Premium quita los límites de creaciones, GPX y Objetivo (el anual incluye 7 días de prueba).',
+      'No necesitas cuenta para probar ni para el primer GPX. Cuando quieras guardar la ruta o sincronizar, crea una cuenta Free. Premium quita los límites de creaciones, GPX y Objetivo (el anual incluye 7 días de prueba).',
     ],
     faqs: [
       {
+        q: '¿Puedo hacer una ruta en bici desde mi ubicación?',
+        a: 'Sí. En el planificador puedes usar tu posición como salida (A→B o Trazar), verla en el mapa y calcular. No hace falta cuenta para probar.',
+      },
+      {
         q: '¿Puedo crear una ruta de bicicleta gratis?',
         a: 'Sí. Puedes calcular rutas sin cuenta. Free incluye cupos mensuales de creaciones, 1 GPX/semana y 1 Objetivo/mes. Premium quita los techos.',
+      },
+      {
+        q: '¿Sirve para personalizar una ruta de cicloturismo?',
+        a: 'Sí. Eliges bici, puntos y preferencias (carril bici, menos desnivel, superficie) y obtienes un recorrido con metros, suelo y viento, no solo una línea en el mapa.',
       },
       {
         q: '¿Qué datos veo al crear la ruta?',
@@ -325,17 +334,22 @@ const seoPagesBase: SeoPageContent[] = [
   {
     path: '/rutas-bicicleta-madrid',
     kind: 'city',
-    title: 'Rutas bicicleta Madrid | PedalMap',
+    title: 'Ruta bici Madrid y sierra | PedalMap',
     description:
-      'Planifica rutas de bicicleta en Madrid y alrededores: Casa de Campo, sierra, desnivel y GPX con PedalMap.',
-    heading: 'Rutas de bicicleta en Madrid',
+      'Ruta bici en Madrid y la sierra: Casa de Campo, Navacerrada, desnivel y GPX. Planifica en el mapa desde tu zona.',
+    heading: 'Ruta bici en Madrid y la sierra',
     body: [
       'Madrid ofrece salidas muy distintas en poca distancia: Casa de Campo y Madrid Río para rodajes urbanos, Monte del Pardo y la sierra norte (Colmenar, Soto del Real, Manzanares) para más desnivel, o escapadas a la zona oeste hacia El Escorial.',
+      'Si buscas rutas de bicicleta por la sierra de Madrid —Navacerrada, Cercedilla, El Escorial, Manzanares El Real— traza la aproximación desde la ciudad, mira el desnivel real y exporta el track. El mismo mapa sirve para un rodaje urbano o para subir a puerto.',
       'Con PedalMap trazas el recorrido eligiendo tu bici (carretera, urbana, gravel o MTB), revisas el desnivel real y la superficie, y miras el viento relativo al sentido de la ruta antes de salir. Ideal para preparar el fin de semana sin improvisar en el asfalto.',
       'Clásicos a planificar: bucles por Casa de Campo, subidas hacia Navacerrada, conexiones gravel por pistas de sierra, o un Objetivo circular de entreno alrededor de tu barrio. Exporta GPX a Garmin/Wahoo o navega desde el móvil.',
       'Si buscas más técnico, mira también rutas MTB o gravel en Madrid. El mismo planificador sirve para los tres perfiles. Empieza Free; Premium cuando entrenes a menudo.',
     ],
     faqs: [
+      {
+        q: '¿Hay rutas de bicicleta por la sierra de Madrid?',
+        a: 'Sí. Puedes planificar salidas a Navacerrada, Cercedilla, El Escorial o Manzanares El Real, ver el desnivel y llevar GPX. Pon el origen en tu zona de Madrid y calcula.',
+      },
       {
         q: '¿Dónde planificar rutas fáciles en Madrid?',
         a: 'Casa de Campo y Madrid Río son buenos puntos de partida urbanos. Calcula con perfil urbana o carretera y revisa el desnivel.',
