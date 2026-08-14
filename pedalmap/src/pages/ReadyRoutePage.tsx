@@ -10,7 +10,14 @@ import { GpsExportPanel } from '@/components/gpx/GpsExportPanel'
 import { RideChooserSheet } from '@/components/route/RideChooserSheet'
 import { RouteOptionsPicker } from '@/components/route/RouteOptionsPicker'
 import { PremiumCard } from '@/components/premium/PremiumCard'
+import { AuthCaptureSheet } from '@/components/auth/AuthCaptureSheet'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { useResumePendingAuthAction } from '@/hooks/useResumePendingAuthAction'
+import {
+  clearPendingAuthAction,
+  setPendingAuthAction,
+  type PendingAuthKind,
+} from '@/lib/pendingAuthAction'
 import {
   peekReadyRoute,
   readyRouteEpoch,
@@ -87,7 +94,7 @@ export function ReadyRoutePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [params] = useSearchParams()
-  const { user, profile, firebaseReady } = useAuth()
+  const { user, profile, firebaseReady, loading: authLoading } = useAuth()
   const { draft: plannerDraft, showPaywall, paywallReason, clearPaywall } = usePlanner()
 
   const [packet, setPacket] = useState<ReadyRoutePacket | null>(() => peekReadyRoute())
@@ -103,6 +110,8 @@ export function ReadyRoutePage() {
   const [windWatchBusy, setWindWatchBusy] = useState(false)
   const [postSaveHint, setPostSaveHint] = useState<'wind' | 'explore' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [authSheetOpen, setAuthSheetOpen] = useState(false)
+  const [authSheetKind, setAuthSheetKind] = useState<PendingAuthKind>('save')
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
   const [bestLine, setBestLine] = useState<string | null>(null)
@@ -341,10 +350,18 @@ export function ReadyRoutePage() {
     }
   }
 
-  async function handleSave() {
+  function requestAccount(kind: PendingAuthKind) {
+    if (packet) stashReadyRoute(packet)
+    setPendingAuthAction({ kind, source: 'ready_route', returnPath: '/ruta' })
+    track('auth_prompt_shown', { reason: kind, via: 'ready_route' })
+    setAuthSheetKind(kind)
+    setAuthSheetOpen(true)
+  }
+
+  async function handleSave(opts?: { afterAuth?: boolean }) {
     if (!draft) return
     if (!user || user.isAnonymous) {
-      flashMessage('Inicia sesión para guardar esta ruta.')
+      requestAccount('save')
       return
     }
     const entitlement = canSaveRoute(profile)
@@ -398,7 +415,11 @@ export function ReadyRoutePage() {
         )
         setPostSaveHint('wind')
       }
-      track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'ready_route' })
+      track('route_saved', {
+        distance_m: draft.stats.distanceMeters,
+        via: 'ready_route',
+        after_auth: Boolean(opts?.afterAuth),
+      })
       void alertService.notifyRouteSaved({
         routeTitle: draft.title,
         distanceMeters: draft.stats.distanceMeters,
@@ -457,9 +478,13 @@ export function ReadyRoutePage() {
     return url
   }
 
-  async function handleShare() {
+  async function handleShare(opts?: { afterAuth?: boolean }) {
+    if (!user || user.isAnonymous) {
+      requestAccount('share')
+      return
+    }
     // Open WhatsApp tab in the same user-gesture turn (before await publish).
-    const waWindow = openWhatsAppPlaceholder()
+    const waWindow = opts?.afterAuth ? null : openWhatsAppPlaceholder()
     setShareBusy(true)
     flashMessage('Publicando ruta…')
     try {
@@ -483,6 +508,13 @@ export function ReadyRoutePage() {
       setShareBusy(false)
     }
   }
+
+  useResumePendingAuthAction({
+    source: 'ready_route',
+    ready: Boolean(draft) && !routeLoading && !authLoading,
+    onSave: () => handleSave({ afterAuth: true }),
+    onShare: () => handleShare({ afterAuth: true }),
+  })
 
   async function handlePublishExplore() {
     setPublishBusy(true)
@@ -719,12 +751,15 @@ export function ReadyRoutePage() {
               >
                 <p>{message}</p>
                 {message.includes('Inicia sesión') ? (
-                  <Link
+                  <button
+                    type="button"
                     className="mt-2 inline-block font-semibold text-[var(--color-trail)] underline"
-                    to="/login"
+                    onClick={() =>
+                      requestAccount(message.includes('publicar') ? 'share' : 'save')
+                    }
                   >
-                    Ir a login
-                  </Link>
+                    Crear cuenta / entrar
+                  </button>
                 ) : null}
               </div>
             ) : null}
@@ -902,6 +937,16 @@ export function ReadyRoutePage() {
             exportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }, 50)
         }}
+      />
+
+      <AuthCaptureSheet
+        open={authSheetOpen}
+        kind={authSheetKind}
+        onDismiss={() => {
+          setAuthSheetOpen(false)
+          clearPendingAuthAction()
+        }}
+        onAuthenticated={() => setAuthSheetOpen(false)}
       />
 
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}

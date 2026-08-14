@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/app/AuthContext'
 import { authErrorMessage } from '@/services/AuthService'
+import { clearPendingAuthAction, postLoginPath } from '@/lib/pendingAuthAction'
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -45,10 +46,10 @@ export function AuthForm({ mode }: AuthFormProps) {
     try {
       if (mode === 'login') {
         await signInEmail(email, password)
-        navigate('/my-routes', { replace: true })
+        navigate(postLoginPath(), { replace: true })
       } else if (mode === 'register') {
         await registerEmail(email, password, name)
-        navigate('/my-routes', { replace: true })
+        navigate(postLoginPath(), { replace: true })
       } else {
         await resetPassword(email)
         setMessage('Te hemos enviado un enlace para restablecer la contraseña.')
@@ -138,7 +139,10 @@ export function AuthForm({ mode }: AuthFormProps) {
               clearAuthError()
               setLoading(true)
               void signInGuest()
-                .then(() => navigate('/route-planner', { replace: true }))
+                .then(() => {
+                  clearPendingAuthAction()
+                  navigate('/route-planner', { replace: true })
+                })
                 .catch((err) => {
                   console.error(err)
                   setError(authErrorMessage(err, 'No se pudo entrar como invitado.'))

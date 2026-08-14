@@ -23,6 +23,7 @@ import { needsGoogleAuthBridge, startGoogleAuthBridge } from '@/lib/authBridge'
 import { requestGoogleAccessToken } from '@/lib/googleIdentity'
 import { withAuthLock } from '@/lib/authLock'
 import { track } from '@/lib/analytics'
+import { googleBridgeReturnUrl, pendingAuthTrackProps } from '@/lib/pendingAuthAction'
 import { communityService } from '@/services/CommunityService'
 import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
 import { isoWeekKey, utcMonthKey } from '@/lib/freemium'
@@ -31,6 +32,10 @@ const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 googleProvider.addScope('email')
 googleProvider.addScope('profile')
+
+function trackSignupCompleted(method: string) {
+  track('signup_completed', { method, ...pendingAuthTrackProps() })
+}
 
 /** Popup + COOP is unreliable on phones / in-app browsers. Prefer redirect there. */
 export function prefersGoogleRedirect(): boolean {
@@ -163,7 +168,7 @@ export class AuthService {
         const result = await getRedirectResult(getFirebaseAuth())
         if (!result?.user) return null
         await this.ensureProfile(result.user)
-        track('signup_completed', { method: 'google' })
+        trackSignupCompleted('google')
         return result.user
       })()
     }
@@ -174,7 +179,7 @@ export class AuthService {
   async completeCustomToken(customToken: string): Promise<User> {
     const result = await signInWithCustomToken(getFirebaseAuth(), customToken)
     await this.ensureProfile(result.user)
-    track('signup_completed', { method: 'google' })
+    trackSignupCompleted('google')
     return result.user
   }
 
@@ -188,7 +193,7 @@ export class AuthService {
       try {
         const linked = await linkWithCredential(current, credential)
         await this.ensureProfile(linked.user)
-        track('signup_completed', { method: 'google_link' })
+        trackSignupCompleted('google_link')
         return linked.user
       } catch (error) {
         const code =
@@ -207,7 +212,7 @@ export class AuthService {
     }
     const result = await signInWithCredential(auth, credential)
     await this.ensureProfile(result.user)
-    track('signup_completed', { method: 'google' })
+    trackSignupCompleted('google')
     return result.user
   }
 
@@ -223,7 +228,7 @@ export class AuthService {
       try {
         const linked = await linkWithPopup(current, googleProvider)
         await this.ensureProfile(linked.user)
-        track('signup_completed', { method: 'google_link' })
+        trackSignupCompleted('google_link')
         return linked.user
       } catch (error) {
         const code =
@@ -250,7 +255,7 @@ export class AuthService {
     try {
       const result = await signInWithPopup(auth, googleProvider)
       await this.ensureProfile(result.user)
-      track('signup_completed', { method: 'google' })
+      trackSignupCompleted('google')
       return result.user
     } catch (error) {
       const code =
@@ -269,10 +274,10 @@ export class AuthService {
   }
 
   async signInGoogle(): Promise<User | null> {
-    track('signup_started', { method: 'google' })
+    track('signup_started', { method: 'google', ...pendingAuthTrackProps() })
     // Emergency only: VITE_FORCE_GOOGLE_AUTH_BRIDGE=true hops via *.web.app.
     if (typeof window !== 'undefined' && needsGoogleAuthBridge()) {
-      startGoogleAuthBridge(`${window.location.origin}/login`)
+      startGoogleAuthBridge(googleBridgeReturnUrl(window.location.origin))
       return null
     }
 
@@ -337,7 +342,7 @@ export class AuthService {
         await updateProfile(result.user, { displayName })
       }
       await this.ensureProfile(result.user)
-      track('signup_completed', { method: 'email' })
+      trackSignupCompleted('email')
       return result.user
     })
   }

@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/app/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
 import { RideChooserSheet } from '@/components/route/RideChooserSheet'
+import { AuthCaptureSheet } from '@/components/auth/AuthCaptureSheet'
+import { useResumePendingAuthAction } from '@/hooks/useResumePendingAuthAction'
+import {
+  clearPendingAuthAction,
+  setPendingAuthAction,
+  type PendingAuthKind,
+} from '@/lib/pendingAuthAction'
 import {
   closeWhatsAppPlaceholder,
   openWhatsAppPlaceholder,
@@ -43,12 +50,14 @@ type Props = {
  */
 export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Props) {
   const navigate = useNavigate()
-  const { user, profile, firebaseReady } = useAuth()
+  const { user, profile, firebaseReady, loading: authLoading } = useAuth()
   const [rideOpen, setRideOpen] = useState(false)
   const [windOpen, setWindOpen] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [authSheetOpen, setAuthSheetOpen] = useState(false)
+  const [authSheetKind, setAuthSheetKind] = useState<PendingAuthKind>('save')
   const [savedRouteId, setSavedRouteId] = useState<string | null>(null)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
@@ -118,9 +127,17 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
     })
   }
 
-  async function handleSave() {
+  function requestAccount(kind: PendingAuthKind) {
+    stashReadyRoute({ draft, savedRouteId, source: 'calculate' })
+    setPendingAuthAction({ kind, source: 'trazar', returnPath: '/route-planner' })
+    track('auth_prompt_shown', { reason: kind, via: 'trazar' })
+    setAuthSheetKind(kind)
+    setAuthSheetOpen(true)
+  }
+
+  async function handleSave(opts?: { afterAuth?: boolean }) {
     if (!user || user.isAnonymous) {
-      setMessage('Inicia sesión para guardar esta ruta.')
+      requestAccount('save')
       return
     }
     const entitlement = canSaveRoute(profile)
@@ -169,7 +186,11 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
             : 'Ruta guardada en Mis rutas.',
         )
       }
-      track('route_saved', { distance_m: draft.stats.distanceMeters, via: 'trazar' })
+      track('route_saved', {
+        distance_m: draft.stats.distanceMeters,
+        via: 'trazar',
+        after_auth: Boolean(opts?.afterAuth),
+      })
       void alertService.notifyRouteSaved({
         routeTitle: draftToSave.title,
         distanceMeters: draftToSave.stats.distanceMeters,
@@ -188,13 +209,13 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
     }
   }
 
-  async function handleShare() {
-    const waWindow = openWhatsAppPlaceholder()
+  async function handleShare(opts?: { afterAuth?: boolean }) {
     if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
-      closeWhatsAppPlaceholder(waWindow)
-      setMessage('Inicia sesión con una cuenta real para publicar.')
+      if (!user || user.isAnonymous) requestAccount('share')
+      else setMessage('Inicia sesión con una cuenta real para publicar.')
       return
     }
+    const waWindow = opts?.afterAuth ? null : openWhatsAppPlaceholder()
     setShareBusy(true)
     setMessage('Publicando ruta…')
     try {
@@ -239,6 +260,13 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
     }
   }
 
+  useResumePendingAuthAction({
+    source: 'trazar',
+    ready: Boolean(draft.geometry?.coordinates?.length) && !authLoading,
+    onSave: () => handleSave({ afterAuth: true }),
+    onShare: () => handleShare({ afterAuth: true }),
+  })
+
   return (
     <div className="space-y-2">
       {bestLine ? (
@@ -270,9 +298,13 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
         >
           <p>{message}</p>
           {message.includes('Inicia sesión') ? (
-            <Link className="mt-2 inline-block font-semibold text-[var(--color-trail)] underline" to="/login">
-              Ir a login
-            </Link>
+            <button
+              type="button"
+              className="mt-2 inline-block font-semibold text-[var(--color-trail)] underline"
+              onClick={() => requestAccount(message.includes('publicar') ? 'share' : 'save')}
+            >
+              Crear cuenta / entrar
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -360,6 +392,15 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
           setRideOpen(false)
           navigate('/ruta')
         }}
+      />
+      <AuthCaptureSheet
+        open={authSheetOpen}
+        kind={authSheetKind}
+        onDismiss={() => {
+          setAuthSheetOpen(false)
+          clearPendingAuthAction()
+        }}
+        onAuthenticated={() => setAuthSheetOpen(false)}
       />
     </div>
   )

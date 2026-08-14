@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { AuthForm } from '@/components/auth/AuthForm'
 import { useAuth } from '@/app/AuthContext'
 import { usePageMeta } from '@/hooks/usePageMeta'
+import { postLoginPath } from '@/lib/pendingAuthAction'
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -13,7 +14,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     )
   }
   if (user && !user.isAnonymous) {
-    return <Navigate to="/my-routes" replace />
+    return <Navigate to={postLoginPath()} replace />
   }
   return <>{children}</>
 }
