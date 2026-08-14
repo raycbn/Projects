@@ -21,6 +21,17 @@ describe('pendingAuthAction', () => {
     vi.useRealTimers()
   })
 
+  it('stores a story intent for the Instagram card flow', () => {
+    const stored = setPendingAuthAction({
+      kind: 'story',
+      source: 'ready_route',
+      returnPath: '/ruta',
+    })
+    expect(stored?.kind).toBe('story')
+    expect(pendingAuthTrackProps()).toEqual({ from: 'story', via: 'ready_route' })
+    expect(consumePendingAuthAction('ready_route')?.kind).toBe('story')
+  })
+
   it('stores and peeks a save intent', () => {
     const stored = setPendingAuthAction({
       kind: 'save',

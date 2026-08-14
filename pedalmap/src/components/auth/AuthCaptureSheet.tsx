@@ -107,12 +107,18 @@ export function AuthCaptureSheet({ open, kind, onDismiss, onAuthenticated }: Pro
           Cuenta Free
         </p>
         <h2 id="auth-capture-title" className="mt-2 font-display text-2xl font-extrabold text-[var(--color-forest)]">
-          {kind === 'share' ? 'Comparte esta ruta con tu cuenta' : 'Guarda esta ruta en tu cuenta'}
+          {kind === 'share'
+            ? 'Comparte esta ruta con tu cuenta'
+            : kind === 'story'
+              ? 'Story de esta ruta con tu cuenta'
+              : 'Guarda esta ruta en tu cuenta'}
         </h2>
         <p className="mt-2 text-sm text-[var(--color-stone)]">
           {kind === 'share'
             ? 'La ruta se queda en esta pantalla. Al entrar, la publicamos para que puedas mandarla por WhatsApp.'
-            : 'La ruta se queda en esta pantalla. Al entrar con Google o email la guardamos al instante.'}{' '}
+            : kind === 'story'
+              ? 'La ruta se queda aquí. Al entrar, preparamos la imagen 9:16 con la silueta, los datos y el enlace. Tú pegas el enlace en la pegatina de Instagram.'
+              : 'La ruta se queda en esta pantalla. Al entrar con Google o email la guardamos al instante.'}{' '}
           Seguir calculando y exportar GPX no exige cuenta.
         </p>
 

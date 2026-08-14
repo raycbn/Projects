@@ -15,12 +15,15 @@ export function useResumePendingAuthAction(opts: {
   ready: boolean
   onSave: () => void | Promise<void>
   onShare: () => void | Promise<void>
+  onStory?: () => void | Promise<void>
 }): boolean {
   const { user, profile, loading } = useAuth()
   const onSaveRef = useRef(opts.onSave)
   const onShareRef = useRef(opts.onShare)
+  const onStoryRef = useRef(opts.onStory)
   onSaveRef.current = opts.onSave
   onShareRef.current = opts.onShare
+  onStoryRef.current = opts.onStory
 
   const pending = !loading && Boolean(peekPendingAuthAction()?.source === opts.source)
 
@@ -30,6 +33,10 @@ export function useResumePendingAuthAction(opts: {
     if (!profile || profile.uid !== user.uid) return
     const action = consumePendingAuthAction(opts.source)
     if (!action) return
+    if (action.kind === 'story') {
+      void (onStoryRef.current ?? onShareRef.current)()
+      return
+    }
     void (action.kind === 'share' ? onShareRef.current() : onSaveRef.current())
   }, [opts.ready, opts.source, user, profile, loading])
 

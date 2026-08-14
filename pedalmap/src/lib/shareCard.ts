@@ -73,11 +73,11 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
 }
 
 /** WhatsApp often drops `url` when files are attached — keep the link inside `text`. */
-export function withShareUtm(url: string): string {
+export function withShareUtm(url: string, medium = 'whatsapp'): string {
   try {
     const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'https://pedalmap.es')
     if (!u.searchParams.has('utm_source')) u.searchParams.set('utm_source', 'share')
-    if (!u.searchParams.has('utm_medium')) u.searchParams.set('utm_medium', 'whatsapp')
+    u.searchParams.set('utm_medium', medium)
     if (!u.searchParams.has('utm_campaign')) u.searchParams.set('utm_campaign', 'route_card')
     return u.toString()
   } catch {
@@ -227,6 +227,22 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`
 }
 
+function breakToken(ctx: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
+  const parts: string[] = []
+  let buf = ''
+  for (const ch of word) {
+    const test = buf + ch
+    if (buf && ctx.measureText(test).width > maxWidth) {
+      parts.push(buf)
+      buf = ch
+    } else {
+      buf = test
+    }
+  }
+  if (buf) parts.push(buf)
+  return parts.length ? parts : [word]
+}
+
 function wrapText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -238,17 +254,245 @@ function wrapText(
   const words = text.split(/\s+/)
   let line = ''
   let yy = y
+  const flushWord = (word: string) => {
+    if (ctx.measureText(word).width <= maxWidth) {
+      line = word
+      return
+    }
+    const parts = breakToken(ctx, word, maxWidth)
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      ctx.fillText(parts[i]!, x, yy)
+      yy += lineHeight
+    }
+    line = parts[parts.length - 1] ?? ''
+  }
   for (const word of words) {
     const test = line ? `${line} ${word}` : word
     if (ctx.measureText(test).width > maxWidth && line) {
       ctx.fillText(line, x, yy)
-      line = word
       yy += lineHeight
+      flushWord(word)
+    } else if (ctx.measureText(test).width > maxWidth) {
+      flushWord(word)
     } else {
       line = test
     }
   }
   if (line) ctx.fillText(line, x, yy)
+}
+
+export type LonLat = [number, number]
+
+/** Keep the first/last vertex; thin the rest so canvas stays snappy. */
+export function downsampleLonLat(coords: LonLat[], maxPoints = 360): LonLat[] {
+  if (coords.length <= maxPoints) return coords
+  const step = (coords.length - 1) / (maxPoints - 1)
+  const out: LonLat[] = []
+  for (let i = 0; i < maxPoints - 1; i += 1) {
+    out.push(coords[Math.round(i * step)]!)
+  }
+  out.push(coords[coords.length - 1]!)
+  return out
+}
+
+/**
+ * Project [lng, lat] into a pixel box without stretching (cos-lat correction).
+ * Y grows downward. Empty / invalid input → [].
+ */
+export function fitRouteSilhouette(
+  coords: LonLat[],
+  box: { x: number; y: number; w: number; h: number },
+): { x: number; y: number }[] {
+  const pts = downsampleLonLat(coords.filter((c) => Number.isFinite(c[0]) && Number.isFinite(c[1])))
+  if (pts.length < 2) return []
+  let minLon = pts[0]![0]
+  let maxLon = minLon
+  let minLat = pts[0]![1]
+  let maxLat = minLat
+  for (const [lon, lat] of pts) {
+    if (lon < minLon) minLon = lon
+    if (lon > maxLon) maxLon = lon
+    if (lat < minLat) minLat = lat
+    if (lat > maxLat) maxLat = lat
+  }
+  const midLat = ((minLat + maxLat) / 2) * (Math.PI / 180)
+  const lonScale = Math.max(Math.cos(midLat), 0.2)
+  const geoW = Math.max((maxLon - minLon) * lonScale, 1e-6)
+  const geoH = Math.max(maxLat - minLat, 1e-6)
+  const pad = 0.1
+  const innerW = box.w * (1 - pad * 2)
+  const innerH = box.h * (1 - pad * 2)
+  const scale = Math.min(innerW / geoW, innerH / geoH)
+  const drawW = geoW * scale
+  const drawH = geoH * scale
+  const ox = box.x + (box.w - drawW) / 2
+  const oy = box.y + (box.h - drawH) / 2
+  return pts.map(([lon, lat]) => ({
+    x: ox + (lon - minLon) * lonScale * scale,
+    y: oy + (maxLat - lat) * scale,
+  }))
+}
+
+/** Host + path only — UTM stays on the clipboard, not painted on the Story. */
+export function displayShareUrl(url: string): string {
+  try {
+    const u = new URL(url, 'https://pedalmap.es')
+    return `${u.host}${u.pathname}`.replace(/\/$/, '')
+  } catch {
+    return url.replace(/^https?:\/\//, '').split('?')[0] ?? url
+  }
+}
+
+/** 9:16 Instagram Story card: silhouette + stats + URL printed on the image. */
+export async function renderRouteStoryCard(draft: RouteDraft, shareUrl: string): Promise<Blob> {
+  const w = 1080
+  const h = 1920
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas no disponible')
+
+  const bg = ctx.createLinearGradient(0, 0, w, h)
+  bg.addColorStop(0, '#0b241c')
+  bg.addColorStop(0.55, '#0d3b2b')
+  bg.addColorStop(1, '#145c40')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  const glow = ctx.createRadialGradient(w * 0.5, 520, 40, w * 0.5, 720, 620)
+  glow.addColorStop(0, 'rgba(214,255,75,0.22)')
+  glow.addColorStop(1, 'rgba(214,255,75,0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, w, h)
+
+  ctx.fillStyle = '#d6ff4b'
+  ctx.font = '700 40px Syne, DM Sans, sans-serif'
+  ctx.fillText('PedalMap', 72, 140)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '800 56px Syne, DM Sans, sans-serif'
+  wrapText(ctx, truncate(draft.title || 'Mi ruta', 32), 72, 220, w - 144, 64)
+
+  const box = { x: 48, y: 340, w: w - 96, h: 780 }
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'
+  if (typeof ctx.roundRect === 'function') {
+    ctx.beginPath()
+    ctx.roundRect(box.x, box.y, box.w, box.h, 36)
+    ctx.fill()
+  } else {
+    ctx.fillRect(box.x, box.y, box.w, box.h)
+  }
+
+  const coords = (draft.geometry?.coordinates ?? []) as LonLat[]
+  const silhouette = fitRouteSilhouette(coords, box)
+  if (silhouette.length >= 2) {
+    ctx.strokeStyle = '#d6ff4b'
+    ctx.lineWidth = 10
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(silhouette[0]!.x, silhouette[0]!.y)
+    for (let i = 1; i < silhouette.length; i += 1) {
+      ctx.lineTo(silhouette[i]!.x, silhouette[i]!.y)
+    }
+    ctx.stroke()
+    const start = silhouette[0]!
+    const end = silhouette[silhouette.length - 1]!
+    ctx.fillStyle = '#d6ff4b'
+    ctx.beginPath()
+    ctx.arc(start.x, start.y, 14, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.arc(end.x, end.y, 14, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = '#0d3b2b'
+    ctx.lineWidth = 4
+    ctx.stroke()
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'
+    ctx.font = '600 28px DM Sans, sans-serif'
+    ctx.fillText('Silueta no disponible', box.x + 48, box.y + box.h / 2)
+  }
+
+  const stats = [
+    ['Distancia', formatDistance(draft.stats.distanceMeters)],
+    ['Desnivel +', formatElevation(draft.stats.elevationGainMeters)],
+    ['Tiempo', formatMinutes(draft.stats.estimatedDurationSeconds)],
+  ]
+  let sx = 72
+  const sy = 1220
+  for (const [label, value] of stats) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = '600 22px DM Sans, sans-serif'
+    ctx.fillText(label.toUpperCase(), sx, sy)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = '800 42px Syne, DM Sans, sans-serif'
+    ctx.fillText(value, sx, sy + 52)
+    sx += 330
+  }
+
+  ctx.fillStyle = '#d6ff4b'
+  ctx.font = '700 28px DM Sans, sans-serif'
+  ctx.fillText(bikeLabel(draft.bikeType), 72, 1360)
+
+  const printed = displayShareUrl(withShareUtm(shareUrl, 'instagram'))
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.font = '600 22px DM Sans, sans-serif'
+  ctx.fillText('ENLACE (pégalo en la pegatina)', 72, 1480)
+  ctx.fillStyle = '#d6ff4b'
+  ctx.font = '700 28px Syne, DM Sans, sans-serif'
+  wrapText(ctx, printed, 72, 1530, w - 144, 36)
+
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'
+  ctx.font = '500 22px DM Sans, sans-serif'
+  ctx.fillText('Hecha con PedalMap · pedalmap.es', 72, 1840)
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo generar la Story'))), 'image/png')
+  })
+}
+
+export async function shareRouteStory(
+  draft: RouteDraft,
+  url: string,
+): Promise<'shared' | 'downloaded'> {
+  if (!url.includes('/route/')) {
+    throw new Error('Se necesita un enlace público /route/… para la Story')
+  }
+  const shareUrl = withShareUtm(url, 'instagram')
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(shareUrl)
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const blob = await renderRouteStoryCard(draft, url)
+  const file = new File([blob], 'pedalmap-story.png', { type: 'image/png' })
+
+  try {
+    if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: draft.title || 'Ruta PedalMap',
+        text: shareUrl,
+      })
+      return 'shared'
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return 'downloaded'
+  }
+
+  await downloadShareCardPng(blob, 'pedalmap-story.png')
+  try {
+    window.open('https://www.instagram.com/', '_blank', 'noopener')
+  } catch {
+    /* ignore */
+  }
+  return 'downloaded'
 }
 
 export function suitabilityLine(stats: RouteStats): string | null {

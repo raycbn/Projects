@@ -30,6 +30,7 @@ import {
   closeWhatsAppPlaceholder,
   openWhatsAppPlaceholder,
   shareRouteCard,
+  shareRouteStory,
 } from '@/lib/shareCard'
 import { routeCameraKey } from '@/lib/mapCamera'
 import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
@@ -104,6 +105,7 @@ export function ReadyRoutePage() {
   const [exportOpen, setExportOpen] = useState(false)
   const [windOpen, setWindOpen] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
+  const [storyBusy, setStoryBusy] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
   const [publishBusy, setPublishBusy] = useState(false)
   const [optionsBusy, setOptionsBusy] = useState(false)
@@ -509,11 +511,53 @@ export function ReadyRoutePage() {
     }
   }
 
+  async function handleStory(opts?: { afterAuth?: boolean }) {
+    if (!draft) return
+    if (!user || user.isAnonymous) {
+      requestAccount('story')
+      return
+    }
+    setStoryBusy(true)
+    flashMessage('Preparando Story…')
+    try {
+      let url = packet?.shareSlug
+        ? `${window.location.origin}/route/${packet.shareSlug}`
+        : null
+      if (!url) {
+        url = await publishPublic(false)
+      }
+      if (!url) return
+      const result = await shareRouteStory(draft, url)
+      flashMessage(
+        result === 'shared'
+          ? 'Story lista · Instagram → tu historia. El enlace está copiado para la pegatina.'
+          : 'Imagen descargada · Instagram → tu historia y pega el enlace (ya está copiado).',
+      )
+      track('route_shared', {
+        via: 'instagram_story',
+        public: true,
+        after_auth: Boolean(opts?.afterAuth),
+      })
+    } catch (error) {
+      console.error('[ready-route] story', error)
+      const msg = error instanceof Error ? error.message : ''
+      if (msg.includes('save_limit')) {
+        showPaywall('save_limit')
+        flashMessage('Has alcanzado el límite de rutas guardadas en Free.')
+        return
+      }
+      flashMessage('No se pudo crear la Story.')
+    } finally {
+      setStoryBusy(false)
+    }
+  }
+
   useResumePendingAuthAction({
     source: 'ready_route',
     ready: Boolean(draft) && !routeLoading && !authLoading,
     onSave: () => handleSave({ afterAuth: true }),
     onShare: () => handleShare({ afterAuth: true }),
+    onStory: () => handleStory({ afterAuth: true }),
   })
 
   async function handlePublishExplore() {
@@ -735,12 +779,20 @@ export function ReadyRoutePage() {
           <Button className="w-full !py-3 text-base" onClick={() => setRideOpen(true)}>
             Salir a rodar
           </Button>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Button variant="secondary" disabled={shareBusy} onClick={() => void handleShare()}>
-              {shareBusy ? 'Publicando…' : 'Compartir'}
+              {shareBusy ? '…' : 'Compartir'}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={storyBusy}
+              aria-label="Story de Instagram"
+              onClick={() => void handleStory()}
+            >
+              {storyBusy ? '…' : 'Story'}
             </Button>
             <Button variant="ghost" disabled={saveBusy} onClick={() => void handleSave()}>
-              {saveBusy ? 'Guardando…' : packet?.savedRouteId ? 'Actualizar' : 'Guardar'}
+              {saveBusy ? '…' : packet?.savedRouteId ? 'Actualizar' : 'Guardar'}
             </Button>
           </div>
           <div ref={actionMsgRef}>

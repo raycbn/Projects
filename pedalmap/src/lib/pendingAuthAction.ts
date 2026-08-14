@@ -5,7 +5,7 @@
  * Paths are allowlisted to avoid open redirects.
  */
 
-export type PendingAuthKind = 'save' | 'share'
+export type PendingAuthKind = 'save' | 'share' | 'story'
 export type PendingAuthSource = 'ready_route' | 'trazar'
 
 export type PendingAuthAction = {
@@ -27,7 +27,7 @@ export function isAllowedAuthReturnPath(path: string | null | undefined): path i
 function parseAction(raw: unknown): PendingAuthAction | null {
   if (!raw || typeof raw !== 'object') return null
   const value = raw as Partial<PendingAuthAction>
-  if (value.kind !== 'save' && value.kind !== 'share') return null
+  if (value.kind !== 'save' && value.kind !== 'share' && value.kind !== 'story') return null
   if (value.source !== 'ready_route' && value.source !== 'trazar') return null
   if (!isAllowedAuthReturnPath(value.returnPath)) return null
   if (typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return null

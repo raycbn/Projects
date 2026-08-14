@@ -15,6 +15,7 @@ import {
   closeWhatsAppPlaceholder,
   openWhatsAppPlaceholder,
   shareRouteCard,
+  shareRouteStory,
 } from '@/lib/shareCard'
 import { buildInstructionAtMeters, stashGpsRoute } from '@/lib/gpsRouteHandoff'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
@@ -54,11 +55,13 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
   const [rideOpen, setRideOpen] = useState(false)
   const [windOpen, setWindOpen] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
+  const [storyBusy, setStoryBusy] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [authSheetOpen, setAuthSheetOpen] = useState(false)
   const [authSheetKind, setAuthSheetKind] = useState<PendingAuthKind>('save')
   const [savedRouteId, setSavedRouteId] = useState<string | null>(null)
+  const [shareSlug, setShareSlug] = useState<string | null>(null)
   const [selectedWindWindow, setSelectedWindWindow] = useState<RideWindowAdvice | null>(null)
   const [selectedWindHour, setSelectedWindHour] = useState<HourlyWeatherPoint | null>(null)
   const [showWindArrows, setShowWindArrows] = useState(true)
@@ -69,6 +72,7 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
   // New calculate / option → clear save id + action message for this draft.
   useEffect(() => {
     setSavedRouteId(null)
+    setShareSlug(null)
     setMessage(null)
   }, [draftKey])
 
@@ -223,6 +227,7 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
         routeId: savedRouteId,
       })
       setSavedRouteId(published.routeId)
+      setShareSlug(published.shareSlug)
       const url = `${window.location.origin}/route/${published.shareSlug}`
       stashReadyRoute({
         draft,
@@ -260,11 +265,68 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
     }
   }
 
+  async function handleStory(opts?: { afterAuth?: boolean }) {
+    if (!user || user.isAnonymous || !firebaseReady || !routeRepository.isConfigured()) {
+      if (!user || user.isAnonymous) requestAccount('story')
+      else setMessage('Inicia sesión con una cuenta real para publicar.')
+      return
+    }
+    setStoryBusy(true)
+    setMessage('Preparando Story…')
+    try {
+      let slug = shareSlug
+      if (!slug) {
+        const published = await routeRepository.publishForShare(user.uid, draft, {
+          routeId: savedRouteId,
+        })
+        slug = published.shareSlug
+        setSavedRouteId(published.routeId)
+        setShareSlug(published.shareSlug)
+        stashReadyRoute({
+          draft,
+          savedRouteId: published.routeId,
+          shareSlug: published.shareSlug,
+          source: 'calculate',
+        })
+      }
+      const url = `${window.location.origin}/route/${slug}`
+      const result = await shareRouteStory(draft, url)
+      setMessage(
+        result === 'shared'
+          ? 'Story lista · Instagram → tu historia. El enlace está copiado para la pegatina.'
+          : 'Imagen descargada · Instagram → tu historia y pega el enlace (ya está copiado).',
+      )
+      track('route_shared', {
+        via: 'instagram_story',
+        public: true,
+        after_auth: Boolean(opts?.afterAuth),
+      })
+      void alertService.notifyRouteSaved({
+        routeTitle: draft.title,
+        shareSlug: slug ?? undefined,
+        distanceMeters: draft.stats.distanceMeters,
+        elevationGainMeters: draft.stats.elevationGainMeters,
+      })
+    } catch (error) {
+      console.error('[trazar] story', error)
+      const msg = error instanceof Error ? error.message : ''
+      if (msg.includes('save_limit')) {
+        showPaywall('save_limit')
+        setMessage('Has alcanzado el límite de rutas guardadas en Free.')
+        return
+      }
+      setMessage('No se pudo crear la Story.')
+    } finally {
+      setStoryBusy(false)
+    }
+  }
+
   useResumePendingAuthAction({
     source: 'trazar',
     ready: Boolean(draft.geometry?.coordinates?.length) && !authLoading,
     onSave: () => handleSave({ afterAuth: true }),
     onShare: () => handleShare({ afterAuth: true }),
+    onStory: () => handleStory({ afterAuth: true }),
   })
 
   return (
@@ -282,12 +344,20 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
       <Button className="w-full !py-3 text-base" onClick={() => setRideOpen(true)}>
         Salir a rodar
       </Button>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <Button variant="secondary" disabled={shareBusy} onClick={() => void handleShare()}>
-          {shareBusy ? 'Publicando…' : 'Compartir'}
+          {shareBusy ? '…' : 'Compartir'}
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={storyBusy}
+          aria-label="Story de Instagram"
+          onClick={() => void handleStory()}
+        >
+          {storyBusy ? '…' : 'Story'}
         </Button>
         <Button variant="ghost" disabled={saveBusy} onClick={() => void handleSave()}>
-          {saveBusy ? 'Guardando…' : savedRouteId ? 'Actualizar' : 'Guardar'}
+          {saveBusy ? '…' : savedRouteId ? 'Actualizar' : 'Guardar'}
         </Button>
       </div>
 
