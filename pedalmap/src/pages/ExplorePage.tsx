@@ -19,6 +19,8 @@ import { CITY_CHALLENGES } from '@/content/growthContent'
 
 type Tab = 'rutas' | 'siguiendo' | 'ciclistas' | 'mas'
 
+const PEOPLE_PAGE_SIZE = 8
+
 export function ExplorePage() {
   usePageMeta({
     title: 'Explorar comunidad | PedalMap',
@@ -39,6 +41,7 @@ export function ExplorePage() {
   const [feedLoading, setFeedLoading] = useState(false)
   const [busyFollowId, setBusyFollowId] = useState<string | null>(null)
   const [peopleQuery, setPeopleQuery] = useState('')
+  const [peoplePage, setPeoplePage] = useState(0)
   const [cheers, setCheers] = useState<Record<string, { count: number; cheered: boolean }>>({})
   const [nearYou, setNearYou] = useState<PublicProfile[]>([])
   const [myCity, setMyCity] = useState<string | null>(null)
@@ -219,6 +222,22 @@ export function ExplorePage() {
         return name.includes(q) || bio.includes(q)
       })
   }, [people, user, peopleQuery])
+
+  const peoplePageCount = Math.max(1, Math.ceil(visiblePeople.length / PEOPLE_PAGE_SIZE))
+  const safePeoplePage = Math.min(peoplePage, peoplePageCount - 1)
+  const pagedPeople = visiblePeople.slice(
+    safePeoplePage * PEOPLE_PAGE_SIZE,
+    safePeoplePage * PEOPLE_PAGE_SIZE + PEOPLE_PAGE_SIZE,
+  )
+
+  useEffect(() => {
+    setPeoplePage(0)
+  }, [peopleQuery])
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(visiblePeople.length / PEOPLE_PAGE_SIZE) - 1)
+    setPeoplePage((page) => Math.min(page, maxPage))
+  }, [visiblePeople.length])
 
   async function handleCheers(routeId: string) {
     if (!signedIn || !user) {
@@ -575,7 +594,7 @@ export function ExplorePage() {
                   }
                 />
               ) : (
-                visiblePeople.map((person) => {
+                pagedPeople.map((person) => {
                   const isFollowing = followingIds.has(person.uid)
                   const busy = busyFollowId === person.uid
                   const name = person.displayName || 'Ciclista'
@@ -637,6 +656,31 @@ export function ExplorePage() {
                   )
                 })
               )}
+              {visiblePeople.length > PEOPLE_PAGE_SIZE ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <p className="text-xs text-[var(--color-stone)]">
+                    Página {safePeoplePage + 1} de {peoplePageCount}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={safePeoplePage <= 0}
+                      onClick={() => setPeoplePage((page) => Math.max(0, page - 1))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={safePeoplePage >= peoplePageCount - 1}
+                      onClick={() => setPeoplePage((page) => Math.min(peoplePageCount - 1, page + 1))}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
 
