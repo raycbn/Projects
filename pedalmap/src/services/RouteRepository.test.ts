@@ -75,6 +75,20 @@ describe('toPersistedDraft', () => {
     // Legacy alts omitted when ranked routeOptions are present.
     expect('alternatives' in payload).toBe(false)
     expect(stripUndefinedDeep({ a: 1, b: undefined })).toEqual({ a: 1 })
+    expect(
+      stripUndefinedDeep({
+        distanceMeters: 12000,
+        durationSeconds: 2400,
+        elevationGainMeters: 180,
+        averageHeartRateBpm: undefined,
+        averageCadenceRpm: undefined,
+        averagePowerWatts: undefined,
+      }),
+    ).toEqual({
+      distanceMeters: 12000,
+      durationSeconds: 2400,
+      elevationGainMeters: 180,
+    })
 
     const geometry = payload.geometry as { coordinates: unknown[] }
     expect(geometry.coordinates[0]).toEqual({ lng: -3.7, lat: 40.4 })

@@ -23,6 +23,7 @@ import type {
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 import { computeActivityStats as computeRichActivityStats } from '@/lib/activityStats'
 import { computeElevationStats, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
+import { stripUndefinedDeep } from '@/services/RouteRepository'
 
 function monthKeyNow(): string {
   const d = new Date()
@@ -211,15 +212,16 @@ export class ActivityRepository {
       const existing = await this.findByExternalId(userId, input.externalId)
       if (existing) return { activity: existing, created: false }
     }
-    const track = downsampleTrack(input.track, 3500)
+    const track = stripUndefinedDeep(downsampleTrack(input.track, 3500))
     const now = new Date().toISOString()
     const computed = computeRichActivityStats(track, input.startedAt, input.finishedAt)
-    const stats: Activity['stats'] = {
+    // GPX/FIT often have no HR/cadence/power — never write `undefined` (Firestore rejects it).
+    const stats = stripUndefinedDeep({
       ...computed,
       averageHeartRateBpm: computed.averageHeartRateBpm ?? input.stats.averageHeartRateBpm,
       averageCadenceRpm: computed.averageCadenceRpm ?? input.stats.averageCadenceRpm,
       averagePowerWatts: computed.averagePowerWatts ?? input.stats.averagePowerWatts,
-    }
+    } satisfies Activity['stats'])
     const payload: Record<string, unknown> = {
       userId,
       title: input.title,
@@ -227,15 +229,16 @@ export class ActivityRepository {
       source: input.source ?? 'strava',
       status: 'finished' as ActivityStatus,
       startedAt: input.startedAt,
-      finishedAt: input.finishedAt,
       track,
       stats,
       monthKey: monthKeyNow(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
+    if (input.finishedAt) payload.finishedAt = input.finishedAt
     if (input.routeId) payload.routeId = input.routeId
     if (input.externalId) payload.externalId = input.externalId
+    if (input.isPublic === true) payload.isPublic = true
 
     const ref = await addDoc(collection(getDb(), 'activities'), payload)
     return {
@@ -251,10 +254,10 @@ export class ActivityRepository {
     status: ActivityStatus,
     finishedAt?: string,
   ): Promise<void> {
-    const capped = downsampleTrack(track, 3500)
+    const capped = stripUndefinedDeep(downsampleTrack(track, 3500))
     await updateDoc(doc(getDb(), 'activities', activityId), {
       track: capped,
-      stats,
+      stats: stripUndefinedDeep(stats),
       status,
       ...(finishedAt ? { finishedAt } : {}),
       updatedAt: serverTimestamp(),

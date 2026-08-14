@@ -60,6 +60,13 @@ describe('computeActivityStats Free analytics', () => {
     expect(stats.durationSeconds).toBe(320)
     expect(stats.movingTimeSeconds ?? 0).toBeLessThan(stats.durationSeconds)
   })
+
+  it('leaves HR/cadence undefined when the GPX has no sensors', () => {
+    const track = [pt(40, -3.7, 0, 100, 5), pt(40.001, -3.7, 60, 108, 5)]
+    const stats = computeActivityStats(track, track[0].recordedAt, track[1].recordedAt)
+    expect(stats.averageHeartRateBpm).toBeUndefined()
+    expect(stats.averageCadenceRpm).toBeUndefined()
+  })
 })
 
 describe('estimateInstantPowerWatts', () => {
