@@ -77,11 +77,10 @@ export function RouteSummary({ stats, compact }: RouteSummaryProps) {
               ¿Por qué mi desnivel no coincide con Strava/Garmin?
             </summary>
             <p className="mt-2">
-              Este desnivel sale del modelo de elevación del mapa (DEM), no de un barómetro.
-              Filtramos el ruido con un umbral de 10 m — el mismo criterio que usa Strava cuando
-              no hay altímetro barométrico. Un ciclocomputador con barómetro (Garmin, Wahoo…)
-              suele dar una cifra distinta para el mismo recorrido: no es un fallo, son dos formas
-              distintas de medir lo mismo.
+              PedalMap cuenta el desnivel como un GPS con barómetro (subidas de unos 3 m), igual
+              al crear la ruta que al importar un GPX. El mapa no ve todos los lomos de 4–8 m, así
+              que Garmin o Wahoo pueden marcar un poco más en terreno rompepiernas — nunca
+              deberíamos quedarnos muy por debajo a propósito.
             </p>
           </details>
         )}

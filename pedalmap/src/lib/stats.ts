@@ -3,23 +3,37 @@ import type { Difficulty, ElevationPoint, LatLng, RouteStats } from '@/domain/ty
 const EARTH_RADIUS_M = 6371000
 
 /**
- * Threshold for counting climb toward cycling elevation gain (“desnivel positivo”).
- * ORS elevations are DEM-based (not barometric). Strava uses ~10 m for DEM / non-baro
- * sources and ~2–3 m for barometric. We use the DEM threshold here.
- *
- * Applies to EVERY PedalMap bike profile (road / mtb / gravel / urban / ebike)
- * and every ORS cycling-* profile — never MTB-only.
+ * Threshold for cycling elevation gain (“desnivel positivo”).
+ * Match a GPS barometer (~2–3 m), not a DEM-only 10 m cut. Same number for
+ * planned routes and imported/recorded rides so PedalMap never sandbags climb
+ * vs Garmin/Wahoo.
  */
-export const CYCLING_ELEVATION_THRESHOLD_M = 10
+export const CYCLING_ELEVATION_THRESHOLD_M = 3
 
 /** Moving-average window (samples) to damp DEM stair-steps before gain. */
 export const CYCLING_ELEVATION_SMOOTH_WINDOW = 5
+
+/**
+ * Dense GPS/GPX samples (few metres apart). Do not smooth these — averaging
+ * eats real 4–8 m rollers that a barometer counts.
+ */
+export const GPS_DENSE_SAMPLE_SPACING_M = 12
 
 /**
  * Max plausible jump between consecutive DEM samples before treating as glitch.
  * Shared by all cycling profiles (road DEM has the same artifacts as MTB).
  */
 export const CYCLING_ELEVATION_MAX_STEP_M = 80
+
+export function medianSampleSpacingMeters(profile: ElevationPoint[]): number {
+  if (profile.length < 2) return 0
+  const spacings: number[] = []
+  for (let i = 1; i < profile.length; i += 1) {
+    spacings.push(Math.abs(profile[i].distanceMeters - profile[i - 1].distanceMeters))
+  }
+  spacings.sort((a, b) => a - b)
+  return spacings[Math.floor(spacings.length / 2)] ?? 0
+}
 
 export function haversineMeters(a: LatLng, b: LatLng): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180
@@ -114,14 +128,11 @@ export function smoothElevationProfile(
   // Sparse profiles must not be averaged — it flattens real climbs between samples.
   if (profile.length < 20 || windowSize <= 1) return profile
 
-  const spacings: number[] = []
-  for (let i = 1; i < profile.length; i += 1) {
-    spacings.push(Math.abs(profile[i].distanceMeters - profile[i - 1].distanceMeters))
-  }
-  spacings.sort((a, b) => a - b)
-  const median = spacings[Math.floor(spacings.length / 2)] ?? 0
-  // Only smooth dense DEM (≤60 m between samples). Coarse profiles keep raw deltas.
+  const median = medianSampleSpacingMeters(profile)
+  // Coarse profiles keep raw deltas.
   if (median > 60) return profile
+  // Phone GPS / GPX (~4–10 m): keep rollers the barometer would count.
+  if (median > 0 && median <= GPS_DENSE_SAMPLE_SPACING_M) return profile
 
   const half = Math.floor(windowSize / 2)
   const values = profile.map((p) => p.elevationMeters)
@@ -145,9 +156,9 @@ export function normalizeCyclingElevationProfile(profile: ElevationPoint[]): Ele
 }
 
 /**
- * Cycling elevation gain/loss: cumulative positive/negative change after DEM
- * sanitize + smooth + noise threshold (Strava-like “desnivel positivo”).
- * Profile-agnostic: road / mtb / gravel / urban / ebike share this logic.
+ * Cycling elevation gain/loss: cumulative positive/negative change after
+ * sanitize + DEM-only smooth + barometer-like noise threshold.
+ * Same pipeline for planned routes and recorded/imported rides.
  *
  * Algorithm: move an anchor only when |Δ| from the last committed point
  * exceeds the threshold. Small DEM wiggles do not reset a climb in progress

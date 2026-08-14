@@ -31,8 +31,8 @@ function demGlitchProfile(): ElevationPoint[] {
 const ALL_BIKE_TYPES: BikeType[] = ['road', 'mtb', 'gravel', 'urban', 'ebike']
 
 describe('stats', () => {
-  it('uses DEM-like threshold for cycling elevation gain', () => {
-    expect(CYCLING_ELEVATION_THRESHOLD_M).toBe(10)
+  it('uses a GPS-barometer threshold for cycling elevation gain', () => {
+    expect(CYCLING_ELEVATION_THRESHOLD_M).toBe(3)
   })
 
   it('sanitizes isolated zero elevations that break cycling gain', () => {
@@ -73,10 +73,19 @@ describe('stats', () => {
     expect(smoothed[2].elevationMeters).toBe(100)
   })
 
-  it('computes cycling elevation gain with DEM threshold (desnivel positivo)', () => {
+  it('does not smooth dense GPS/GPX samples (would erase 4–8 m rollers)', () => {
+    const denseGps = Array.from({ length: 40 }, (_, i) => ({
+      distanceMeters: i * 4,
+      elevationMeters: i === 20 ? 108 : 100,
+    }))
+    const smoothed = smoothElevationProfile(denseGps, 5)
+    expect(smoothed[20].elevationMeters).toBe(108)
+  })
+
+  it('computes cycling elevation gain with a GPS-like threshold (desnivel positivo)', () => {
     const stats = computeElevationStats([
       { distanceMeters: 0, elevationMeters: 100 },
-      { distanceMeters: 100, elevationMeters: 105 }, // noise < 10m
+      { distanceMeters: 100, elevationMeters: 102 }, // noise < 3m
       { distanceMeters: 200, elevationMeters: 100 },
       { distanceMeters: 1000, elevationMeters: 200 },
       { distanceMeters: 2000, elevationMeters: 150 },
@@ -84,6 +93,28 @@ describe('stats', () => {
     expect(stats.gain).toBeGreaterThanOrEqual(90)
     expect(stats.loss).toBeGreaterThanOrEqual(40)
     expect(stats.lowest).toBe(100)
+  })
+
+  it('counts rolling 6 m bumps that a GPS would count and a 10 m cut would drop', () => {
+    const profile: ElevationPoint[] = [{ distanceMeters: 0, elevationMeters: 100 }]
+    let dist = 0
+    let elev = 100
+    for (let hill = 0; hill < 10; hill += 1) {
+      for (let s = 0; s < 6; s += 1) {
+        dist += 5
+        elev += 1
+        profile.push({ distanceMeters: dist, elevationMeters: elev })
+      }
+      for (let s = 0; s < 6; s += 1) {
+        dist += 5
+        elev -= 1
+        profile.push({ distanceMeters: dist, elevationMeters: elev })
+      }
+    }
+    const stats = computeElevationStats(profile)
+    // 10 hills × 6 m. GPS-like 3 m threshold should keep most of it.
+    expect(stats.gain).toBeGreaterThanOrEqual(50)
+    expect(stats.gain).toBeLessThanOrEqual(70)
   })
 
   it('rejects absurd provider ascent in favour of sanitized profile', () => {

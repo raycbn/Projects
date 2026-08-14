@@ -22,7 +22,7 @@ import type {
 } from '@/domain/types'
 import { getDb, isFirebaseConfigured } from '@/lib/firebase'
 import { computeActivityStats as computeRichActivityStats } from '@/lib/activityStats'
-import { computeElevationStats, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
+import { computeElevationStats, CYCLING_ELEVATION_THRESHOLD_M, normalizeCyclingElevationProfile, pathDistanceMeters } from '@/lib/stats'
 import { stripUndefinedDeep } from '@/services/RouteRepository'
 
 function monthKeyNow(): string {
@@ -58,7 +58,7 @@ export function computeActivityStats(
   options?: {
     /** Override wall-clock duration (e.g. exclude paused time). */
     durationSeconds?: number
-    /** Phone GPS altitude is noisier than DEM — default 3 m vs 10 m for routes. */
+    /** Defaults to the shared GPS-like cycling threshold. */
     elevationThresholdMeters?: number
   },
 ): Activity['stats'] {
@@ -87,7 +87,7 @@ export function computeActivityStats(
   )
   const elev = computeElevationStats(
     profile,
-    options?.elevationThresholdMeters ?? 3,
+    options?.elevationThresholdMeters ?? CYCLING_ELEVATION_THRESHOLD_M,
   )
   return {
     distanceMeters,
@@ -208,20 +208,32 @@ export class ActivityRepository {
     userId: string,
     input: Omit<Activity, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
   ): Promise<{ activity: Activity; created: boolean }> {
-    if (input.externalId) {
-      const existing = await this.findByExternalId(userId, input.externalId)
-      if (existing) return { activity: existing, created: false }
-    }
-    const track = stripUndefinedDeep(downsampleTrack(input.track, 3500))
-    const now = new Date().toISOString()
-    const computed = computeRichActivityStats(track, input.startedAt, input.finishedAt)
-    // GPX/FIT often have no HR/cadence/power — never write `undefined` (Firestore rejects it).
+    // Gain/loss from the full recording — downsample is only for Firestore size.
+    const computed = computeRichActivityStats(input.track, input.startedAt, input.finishedAt)
     const stats = stripUndefinedDeep({
       ...computed,
       averageHeartRateBpm: computed.averageHeartRateBpm ?? input.stats.averageHeartRateBpm,
       averageCadenceRpm: computed.averageCadenceRpm ?? input.stats.averageCadenceRpm,
       averagePowerWatts: computed.averagePowerWatts ?? input.stats.averagePowerWatts,
     } satisfies Activity['stats'])
+    const track = stripUndefinedDeep(downsampleTrack(input.track, 3500))
+    const now = new Date().toISOString()
+
+    if (input.externalId) {
+      const existing = await this.findByExternalId(userId, input.externalId)
+      if (existing) {
+        await updateDoc(doc(getDb(), 'activities', existing.id), {
+          track,
+          stats,
+          updatedAt: serverTimestamp(),
+        })
+        return {
+          activity: { ...existing, track, stats, updatedAt: now },
+          created: false,
+        }
+      }
+    }
+
     const payload: Record<string, unknown> = {
       userId,
       title: input.title,

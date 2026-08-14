@@ -339,7 +339,7 @@ export function MyActivitiesPage() {
       setMessage(
         created
           ? `Importada «${activity.title}» · ábrela abajo`
-          : `«${activity.title}» ya estaba importada`,
+          : `«${activity.title}» ya estaba · desnivel actualizado`,
       )
       track('gpx_imported', { distance_m: activity.stats.distanceMeters })
     } catch (err) {
