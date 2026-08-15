@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/app/AuthContext'
 import { authErrorMessage } from '@/services/AuthService'
 import { clearPendingAuthAction, postLoginPath } from '@/lib/pendingAuthAction'
+import { markSorteoSignup } from '@/lib/sorteoSignup'
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -24,12 +25,18 @@ export function AuthForm({ mode }: AuthFormProps) {
     clearAuthError,
   } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const fromSorteo = mode === 'register' && params.get('from') === 'sorteo'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (fromSorteo) markSorteoSignup()
+  }, [fromSorteo])
 
   const visibleError = error || authError
 
@@ -70,7 +77,9 @@ export function AuthForm({ mode }: AuthFormProps) {
         {mode === 'forgot' && 'Recuperar contraseña'}
       </h1>
       <p className="mt-2 text-sm text-[var(--color-stone)]">
-        Puedes planificar rutas sin cuenta. Regístrate cuando quieras guardar o sincronizar.
+        {fromSorteo
+          ? 'Cuenta nueva con email (Google o correo). El invitado no entra en el cupo Premium.'
+          : 'Puedes planificar rutas sin cuenta. Regístrate cuando quieras guardar o sincronizar.'}
       </p>
 
       <form className="mt-6 space-y-3" onSubmit={(e) => void onSubmit(e)}>
@@ -118,6 +127,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             onClick={() => {
               setError(null)
               clearAuthError()
+              if (fromSorteo) markSorteoSignup()
               setLoading(true)
               void signInGoogle()
                 .catch((err) => {
@@ -129,6 +139,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           >
             Continuar con Google
           </Button>
+          {fromSorteo ? null : (
           <Button
             type="button"
             variant="ghost"
@@ -152,6 +163,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           >
             Seguir como invitado
           </Button>
+          )}
         </div>
       )}
 
@@ -170,7 +182,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         )}
         {mode === 'register' && (
           <p>
-            ¿Ya tienes cuenta? <Link className="text-[var(--color-trail)] underline" to="/login">Entrar</Link>
+            ¿Ya tienes cuenta?{' '}
+            <Link className="text-[var(--color-trail)] underline" to="/login">
+              Entrar
+            </Link>
+            {fromSorteo ? ' · Esta promo es solo para cuentas nuevas.' : null}
           </p>
         )}
         {mode === 'forgot' && (

@@ -5,6 +5,8 @@
  * Paths are allowlisted to avoid open redirects.
  */
 
+import { isSorteoSignup } from '@/lib/sorteoSignup'
+
 export type PendingAuthKind = 'save' | 'share' | 'story'
 export type PendingAuthSource = 'ready_route' | 'trazar'
 
@@ -104,13 +106,17 @@ export function clearPendingAuthAction(): void {
 
 /** After /login or Google, go back to the route instead of Mis rutas. */
 export function postLoginPath(): string {
-  return peekPendingAuthAction()?.returnPath ?? '/my-routes'
+  const pending = peekPendingAuthAction()?.returnPath
+  if (pending) return pending
+  if (isSorteoSignup()) return '/sorteo?listo=1'
+  return '/my-routes'
 }
 
 /** Emergency Google auth-bridge return URL (same-origin path only). */
 export function googleBridgeReturnUrl(origin: string): string {
   const pending = peekPendingAuthAction()
   if (pending) return `${origin}${pending.returnPath}`
+  if (isSorteoSignup()) return `${origin}/register?from=sorteo`
   return `${origin}/login`
 }
 

@@ -8,6 +8,7 @@ import { RoutePlannerPage } from '@/pages/RoutePlannerPage'
 import { ReadyRoutePage } from '@/pages/ReadyRoutePage'
 import { MyRoutesPage } from '@/pages/MyRoutesPage'
 import { LoginPage, RegisterPage, ForgotPasswordPage } from '@/pages/AuthPages'
+import { SorteoPage } from '@/pages/SorteoPage'
 import { AuthBridgePage } from '@/pages/AuthBridgePage'
 import { PremiumPage } from '@/pages/PremiumPage'
 import { SharedRoutePage } from '@/pages/SharedRoutePage'
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="login" element={<LoginPage />} />
               <Route path="auth/bridge" element={<AuthBridgePage />} />
               <Route path="register" element={<RegisterPage />} />
+              <Route path="sorteo" element={<SorteoPage />} />
               <Route path="forgot-password" element={<ForgotPasswordPage />} />
               <Route path="route/:shareSlug" element={<SharedRoutePage />} />
               <Route path="privacidad" element={<PrivacyPage />} />

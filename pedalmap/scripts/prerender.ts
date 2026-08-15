@@ -334,6 +334,24 @@ const pages: PageSpec[] = [
       description: 'Términos de uso PedalMap',
     }),
   },
+  {
+    path: '/sorteo',
+    title: '50 Premium × 3 meses | PedalMap',
+    description:
+      'Los 50 primeros que creen una cuenta nueva en PedalMap se llevan Premium 3 meses. Hasta el 23 de agosto de 2026.',
+    heading: '50 Premium × 3 meses',
+    paragraphs: [
+      'Los 50 primeros que creen una cuenta nueva se llevan Premium 3 meses. Hasta el 23 de agosto de 2026, 23:59 (Madrid).',
+      'Sigue a PedalMap en Instagram y crea una cuenta con Google o email. El invitado no cuenta.',
+      'Un premio por persona. Sin obligación de compra. No está patrocinado por Instagram.',
+    ],
+    ctaHtml: '<p><a href="/register?from=sorteo">Crear cuenta</a> · <a href="/">Inicio</a></p>',
+    jsonLd: webPageJsonLd({
+      path: '/sorteo',
+      name: '50 Premium × 3 meses',
+      description: 'Promoción PedalMap: 50 cuentas Premium de 3 meses para los primeros registros.',
+    }),
+  },
 ]
 
 const template = readFileSync(templatePath, 'utf8')
