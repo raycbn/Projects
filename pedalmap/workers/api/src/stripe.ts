@@ -5,6 +5,8 @@ import {
   readSubscriptionCustomerId,
   upsertSubscriptionAndPlan,
   writeSubscriptionCustomerId,
+  claimWebhookEvent,
+  markWebhookEventProcessed,
 } from './firestore'
 
 async function stripeForm(
@@ -147,10 +149,25 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
   }
 
   const event = JSON.parse(payload) as {
+    id: string
     type: string
     data: { object: Record<string, unknown> }
   }
 
+  // Atomic idempotency with lease: claim event for processing
+  const claim = await claimWebhookEvent(env, event.id, event.type)
+
+  if (claim === 'duplicate') {
+    console.log(`[stripe] event ${event.id} already claimed or completed`)
+    return json({ received: true, duplicate: true })
+  }
+
+  if (claim === 'failed') {
+    console.error(`[stripe] failed to claim event ${event.id}, allowing retry`)
+    return json({ error: 'Failed to claim event for processing' }, 500)
+  }
+
+  // claim === 'claimed' (new claim or reclaimed expired lease): we own this event, process it
   try {
     if (
       event.type === 'checkout.session.completed' ||
@@ -220,8 +237,12 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
         })
       }
     }
+
+    // Mark event as successfully completed
+    await markWebhookEventProcessed(env, event.id)
   } catch (error) {
     console.error('[stripe webhook]', error)
+    // Event stays in 'processing' state, allowing Stripe to retry
     return json({ error: 'Webhook handler failed' }, 500)
   }
 

@@ -261,7 +261,7 @@ export class OpenRouteServiceProvider implements RoutingProvider {
     return Boolean(this.apiKey) || this.viaProxy || Boolean(resolveProxyUrl())
   }
 
-  async calculateRoute(request: RoutingRequest): Promise<RoutingResult> {
+  async calculateRoute(request: RoutingRequest, externalSignal?: AbortSignal): Promise<RoutingResult> {
     if (!this.isConfigured()) {
       throw new RoutingError(
         'Routing provider is not configured. Deploy the Cloudflare Worker proxy (VITE_PEDALMAP_API_URL) or set VITE_ALLOW_DIRECT_ORS=true for local emergency only.',
@@ -358,6 +358,19 @@ export class OpenRouteServiceProvider implements RoutingProvider {
 
             for (let bi = 0; bi < tryBodies.length; bi += 1) {
               let response: Response
+              // Timeout: 10 seconds per ORS attempt, combined with external signal
+              const controller = new AbortController()
+              const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+              const abortHandler = () => controller.abort()
+              if (externalSignal) {
+                if (externalSignal.aborted) {
+                  controller.abort()
+                } else {
+                  externalSignal.addEventListener('abort', abortHandler)
+                }
+              }
+
               try {
                 response = await fetch(url, {
                   method: 'POST',
@@ -371,8 +384,20 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                         ...(this.apiKey ? { Authorization: this.apiKey } : {}),
                       },
                   body: JSON.stringify(tryBodies[bi]),
+                  signal: controller.signal,
                 })
               } catch (fetchErr) {
+                clearTimeout(timeoutId)
+                if (externalSignal) {
+                  externalSignal.removeEventListener('abort', abortHandler)
+                }
+                if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+                  console.warn('[ORS] request timeout (10s)', profile)
+                  // Soft: try next profile/body before declaring hard network failure
+                  if (bi < tryBodies.length - 1) continue
+                  if (i < profiles.length - 1) continue profileLoop
+                  throw new RoutingError('ORS request timeout (10s)', 'network', fetchErr)
+                }
                 console.error('[ORS] fetch failed', profile, fetchErr)
                 // Soft: try next profile/body before declaring hard network failure
                 if (bi < tryBodies.length - 1) continue
@@ -382,6 +407,11 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                   'network',
                   fetchErr,
                 )
+              } finally {
+                clearTimeout(timeoutId)
+                if (externalSignal) {
+                  externalSignal.removeEventListener('abort', abortHandler)
+                }
               }
 
               if (response.status === 429) {

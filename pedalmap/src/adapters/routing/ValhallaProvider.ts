@@ -82,7 +82,7 @@ export class ValhallaProvider implements RoutingProvider {
     return Boolean(this.baseUrl)
   }
 
-  async calculateRoute(request: RoutingRequest): Promise<RoutingResult> {
+  async calculateRoute(request: RoutingRequest, externalSignal?: AbortSignal): Promise<RoutingResult> {
     if (!this.isConfigured()) {
       throw new RoutingError('Valhalla provider is not configured', 'not_configured')
     }
@@ -96,6 +96,19 @@ export class ValhallaProvider implements RoutingProvider {
       }
     } else if (request.waypoints.length < 2) {
       throw new RoutingError('At least two waypoints are required', 'invalid_request')
+    }
+
+    // Combine external signal (global timeout) with local 15s timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+    const abortHandler = () => controller.abort()
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort()
+      } else {
+        externalSignal.addEventListener('abort', abortHandler)
+      }
     }
 
     let response: Response
@@ -114,9 +127,18 @@ export class ValhallaProvider implements RoutingProvider {
           language: request.language ?? 'es',
           wantAlternatives: Boolean(request.wantAlternatives),
         }),
+        signal: controller.signal,
       })
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new RoutingError('Valhalla request timeout (15s)', 'network', error)
+      }
       throw new RoutingError('Network error talking to Valhalla', 'network', error)
+    } finally {
+      clearTimeout(timeoutId)
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', abortHandler)
+      }
     }
 
     const text = await response.text()

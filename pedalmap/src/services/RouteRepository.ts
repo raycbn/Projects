@@ -4,6 +4,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -44,12 +46,11 @@ export class RouteRepository {
     const q = query(
       collection(getDb(), 'routes'),
       where('isPublic', '==', true),
+      orderBy('updatedAt', 'desc'),
+      limit(max)
     )
     const snap = await getDocs(q)
-    return snap.docs
-      .map((d) => this.mapDoc(d.id, d.data()))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, max)
+    return snap.docs.map((d) => this.mapDoc(d.id, d.data()))
   }
 
   async getById(routeId: string): Promise<SavedRoute | null> {

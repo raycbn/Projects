@@ -33,24 +33,38 @@ export class CompositeRoutingProvider implements RoutingProvider {
       )
     }
 
-    if (this.valhalla.isConfigured()) {
-      try {
-        return await this.valhalla.calculateRoute(request)
-      } catch (error) {
-        console.warn('[routing] Valhalla failed; falling back to ORS', error)
-        if (!this.ors.isConfigured()) throw error
+    // Global timeout: 40 seconds for entire routing operation
+    const globalController = new AbortController()
+    const globalTimeout = setTimeout(() => globalController.abort(), 40000)
+
+    try {
+      if (this.valhalla.isConfigured()) {
+        try {
+          const result = await this.valhalla.calculateRoute(request, globalController.signal)
+          return result
+        } catch (error) {
+          // Check if global timeout was triggered
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new RoutingError('Routing operation timeout (40s)', 'network', error)
+          }
+          console.warn('[routing] Valhalla failed; falling back to ORS', error)
+          if (!this.ors.isConfigured()) throw error
+        }
       }
-    }
 
-    if (!this.ors.isConfigured()) {
-      throw new RoutingError('ORS fallback is not configured', 'not_configured')
-    }
+      if (!this.ors.isConfigured()) {
+        throw new RoutingError('ORS fallback is not configured', 'not_configured')
+      }
 
-    // Keep alternatives when the user asked for them; otherwise keep the slim failover.
-    return this.ors.calculateRoute({
-      ...request,
-      wantAlternatives: Boolean(request.wantAlternatives),
-      circularSeed: request.circularSeed ?? 0,
-    })
+      // Keep alternatives when the user asked for them; otherwise keep the slim failover.
+      const result = await this.ors.calculateRoute({
+        ...request,
+        wantAlternatives: Boolean(request.wantAlternatives),
+        circularSeed: request.circularSeed ?? 0,
+      }, globalController.signal)
+      return result
+    } finally {
+      clearTimeout(globalTimeout)
+    }
   }
 }
