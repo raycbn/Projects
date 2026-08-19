@@ -193,7 +193,7 @@ export function TracePlannerView({
 
       <div
         className={clsx(
-          'z-20 flex flex-col rounded-t-2xl border-t border-[var(--color-fog)] bg-white/95 backdrop-blur transition-[max-height] duration-200 ease-out safe-pb',
+          'z-20 flex flex-col rounded-t-2xl border-t border-[var(--color-fog)] bg-white/95 backdrop-blur transition-[max-height] duration-200 ease-out',
           traceSheetOpen
             ? activeDraft
               ? 'max-h-[62vh]'
@@ -298,7 +298,7 @@ export function TracePlannerView({
               checked={wantAlternatives}
               onChange={(e) => onWantAlternativesChange(e.target.checked)}
             />
-            Pedir varias opciones (hasta 3 · la 3.ª es Premium)
+            Pedir varias opciones (hasta 3 · la 3.�� es Premium)
           </label>
 
           {panelError && (
@@ -369,17 +369,17 @@ export function TracePlannerView({
             </div>
           )}
         </div>
-
-        <PlannerCtaBar
-          variant="sticky"
-          editing={editing}
-          ctaLabel={ctaLabel}
-          ctaDisabled={ctaDisabled}
-          onCreate={onCreate}
-          onSaveEdits={onSaveEdits}
-          onCancelEdits={onCancelEditing}
-        />
       </div>
+
+      <PlannerCtaBar
+        variant="sticky"
+        editing={editing}
+        ctaLabel={ctaLabel}
+        ctaDisabled={ctaDisabled}
+        onCreate={onCreate}
+        onSaveEdits={onSaveEdits}
+        onCancelEdits={onCancelEditing}
+      />
     </div>
   )
 }
