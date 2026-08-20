@@ -1601,3 +1601,165 @@ export async function writeImportedActivity(
 
   return activityId
 }
+
+/**
+ * Lease duration for webhook processing.
+ * If a worker claims an event but crashes before completing, another worker
+ * can reclaim it after this duration has elapsed.
+ * Chosen as 5 minutes: long enough for normal processing, short enough to not
+ * block retries excessively. Stripe retries webhooks with exponential backoff
+ * (typically 1m, 3m, 10m, etc.), so 5 minutes covers the first retry window.
+ */
+const WEBHOOK_LEASE_MS = 5 * 60 * 1000
+
+/**
+ * Atomically claim a Stripe webhook event for processing.
+ * Handles three cases:
+ * 1. Event doesn't exist → create with status=processing (claimed)
+ * 2. Event exists with status=completed → duplicate
+ * 3. Event exists with status=processing:
+ *    - claimedAt not expired → duplicate (another worker owns it)
+ *    - claimedAt expired → atomically update to reclaim (compare-and-set)
+ *
+ * @returns 'claimed' if this worker claimed it, 'duplicate' if already claimed/owned, 'failed' if error
+ */
+export async function claimWebhookEvent(
+  env: Env,
+  eventId: string,
+  eventType: string,
+): Promise<'claimed' | 'duplicate' | 'failed'> {
+  const sa = parseServiceAccount(env)
+  if (!sa) return 'failed'
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+
+  // 1. First attempt: create new document (only if doesn't exist)
+  const createUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/webhookEvents/${eventId}?currentDocument.exists=false`
+  const createRes = await fetch(createUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        eventId: { stringValue: eventId },
+        eventType: { stringValue: eventType },
+        claimedAt: { timestampValue: now },
+        status: { stringValue: 'processing' },
+      },
+    }),
+  })
+
+  if (createRes.status === 200 || createRes.status === 201) {
+    return 'claimed'
+  }
+
+  if (createRes.status !== 409 && createRes.status !== 412) {
+    const text = await createRes.text().catch(() => '')
+    console.error(`[firestore] claim webhook create failed: ${createRes.status} ${text.slice(0, 200)}`)
+    return 'failed'
+  }
+
+  // 2. Document exists - fetch it to check status and lease
+  const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/webhookEvents/${eventId}`
+  const docRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${token}` } })
+
+  if (!docRes.ok) {
+    const text = await docRes.text().catch(() => '')
+    console.error(`[firestore] fetch webhook event failed: ${docRes.status} ${text.slice(0, 200)}`)
+    return 'failed'
+  }
+
+  const doc = (await docRes.json()) as {
+    fields?: Record<string, { stringValue?: string; timestampValue?: string }>
+    updateTime?: string
+  }
+  const fields = doc.fields || {}
+  const status = fields.status?.stringValue
+  const claimedAtStr = fields.claimedAt?.timestampValue
+
+  if (status === 'completed') {
+    return 'duplicate'
+  }
+
+  if (status === 'processing' && claimedAtStr) {
+    const claimedAt = new Date(claimedAtStr).getTime()
+    const nowMs = Date.now()
+    if (nowMs - claimedAt < WEBHOOK_LEASE_MS) {
+      // Lease still valid - another worker is processing
+      return 'duplicate'
+    }
+    // Lease expired - try to atomically reclaim using compare-and-set on updateTime
+    // We use the document's updateTime as the precondition
+    const updateTime = doc.updateTime
+    if (updateTime) {
+      const reclaimUrl = `${docUrl}?currentDocument.updateTime=${encodeURIComponent(updateTime)}`
+      const reclaimRes = await fetch(reclaimUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fields: {
+            claimedAt: { timestampValue: now },
+            status: { stringValue: 'processing' },
+          },
+        }),
+      })
+      if (reclaimRes.status === 200) {
+        return 'claimed'
+      }
+      if (reclaimRes.status === 409 || reclaimRes.status === 412) {
+        // Another worker reclaimed it concurrently
+        return 'duplicate'
+      }
+      const text = await reclaimRes.text().catch(() => '')
+      console.error(`[firestore] reclaim webhook failed: ${reclaimRes.status} ${text.slice(0, 200)}`)
+      return 'failed'
+    }
+  }
+
+  // Any other state or missing claimedAt - treat as duplicate to be safe
+  return 'duplicate'
+}
+
+/**
+ * Mark a claimed webhook event as successfully processed.
+ * Should only be called after successful processing.
+ */
+export async function markWebhookEventProcessed(
+  env: Env,
+  eventId: string,
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT missing — webhook event not marked')
+    return
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const token = await getAccessToken(sa)
+  const now = new Date().toISOString()
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/webhookEvents/${eventId}?updateMask.fieldPaths=status&updateMask.fieldPaths=processedAt`
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        status: { stringValue: 'completed' },
+        processedAt: { timestampValue: now },
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`webhookEvents completion failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+}
