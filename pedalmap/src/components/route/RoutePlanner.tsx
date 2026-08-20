@@ -9,11 +9,12 @@ import { PremiumCard } from '@/components/premium/PremiumCard'
 import { track } from '@/lib/analytics'
 import { buildSurfaceRouteOverlay, summarizeUnpavedAlert } from '@/lib/surfaceRouteOverlay'
 import { formatDistance, formatElevation } from '@/lib/stats'
+import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
+import { recommendRide } from '@/domain/pedalScore'
 import {
   readCycleNetworkOverlayPreference,
   writeCycleNetworkOverlayPreference,
 } from '@/lib/mapOverlays'
-import { compareBikesForWaypoints, type BikeCompareRow } from '@/lib/bikeCompare'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 import { routeCameraKey } from '@/lib/mapCamera'
 import { getBikeModality } from '@/lib/bikeSurfaceProfile'
@@ -58,7 +59,7 @@ export function RoutePlanner() {
     setWantAlternatives,
     setDraftFromImport,
     handleMapTap,
-    useMyLocationAsStart,
+    useMyLocationAsStart: myLocationAsStart,
     canCalculate,
     clearRoute,
     adjustOnMap,
@@ -180,6 +181,34 @@ export function RoutePlanner() {
     navigate('/ruta')
   }
 
+  const rankedRide = useMemo(() => {
+    if (!activeDraft) return null
+    return recommendRide(activeDraft)
+  }, [activeDraft])
+
+  const rideRecommendations = rankedRide && rankedRide.ranked.length > 1 ? rankedRide.ranked : null
+
+  function handleSelectRide(optionId: string) {
+    if (!rideRecommendations) return
+    if (optionId === (activeDraft?.selectedOptionId ?? activeDraft?.routeOptions?.[0]?.id)) {
+      return
+    }
+    selectRouteOption(optionId)
+    track('planner_recommendation_selected', {
+      option_id: optionId,
+      ride_count: rideRecommendations.length,
+    })
+  }
+
+  useEffect(() => {
+    if (rankedRide && rankedRide.ranked.length > 1 && rankedRide.recommendedId) {
+      track('planner_recommendations_generated', {
+        ride_count: rankedRide.ranked.length,
+        recommended_id: rankedRide.recommendedId,
+      })
+    }
+  }, [rankedRide])
+
   async function handleCreate() {
     setGoingToReady(true)
     try {
@@ -201,7 +230,7 @@ export function RoutePlanner() {
   async function handleLocate() {
     setLocating(true)
     try {
-      await useMyLocationAsStart()
+      await myLocationAsStart()
     } finally {
       setLocating(false)
     }
@@ -335,6 +364,8 @@ export function RoutePlanner() {
           ctaDisabled={ctaDisabled}
           ctaLabel={ctaLabel}
           onCreate={() => void handleCreate()}
+          onSelectRide={handleSelectRide}
+          rideRecommendations={rideRecommendations ?? undefined}
         />
       ) : (
         <PlannerFormView
@@ -388,6 +419,8 @@ export function RoutePlanner() {
           ctaDisabled={ctaDisabled}
           ctaLabel={ctaLabel}
           onCreate={() => void handleCreate()}
+          onSelectRide={handleSelectRide}
+          rideRecommendations={rideRecommendations ?? undefined}
         />
       )}
     </>

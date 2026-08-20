@@ -162,6 +162,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /** Strava OAuth tokens — Worker Admin only. */
+    match /stravaConnections/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
     // Pack Grupeta — Admin/Worker only. Clients read via /grupeta/pack API.
     match /grupetaPacks/{ownerUid} {
       allow read: if isOwner(ownerUid);

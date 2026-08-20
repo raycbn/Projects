@@ -6,6 +6,7 @@ import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { RouteSummary } from '@/components/route/RouteSummary'
 import { RouteOptionsPicker } from '@/components/route/RouteOptionsPicker'
 import { TraceReadyPanel } from '@/components/route/TraceReadyPanel'
+import { RideComparisonPanel } from '@/components/route/RideComparisonPanel'
 import { PlannerCtaBar } from '@/components/route/PlannerCtaBar'
 import { Button } from '@/components/ui/Button'
 import type {
@@ -18,6 +19,7 @@ import type {
   UserProfile,
   Waypoint,
 } from '@/domain/types'
+import type { RankedRideOption } from '@/domain/pedalScore'
 
 const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
@@ -73,6 +75,8 @@ interface TracePlannerViewProps {
   ctaDisabled: boolean
   ctaLabel: string
   onCreate: () => void
+  onSelectRide?: (optionId: string) => void
+  rideRecommendations?: RankedRideOption[]
 }
 
 /**
@@ -124,6 +128,8 @@ export function TracePlannerView({
   ctaDisabled,
   ctaLabel,
   onCreate,
+  onSelectRide,
+  rideRecommendations,
 }: TracePlannerViewProps) {
   const editing = status === 'editing'
 
@@ -332,6 +338,14 @@ export function TracePlannerView({
               <RouteSummary stats={activeDraft.stats} />
               {surfaceAlert && (
                 <p className="rounded-2xl bg-[#fff8f0] px-3 py-2 text-xs text-[#9a4b00]">{surfaceAlert}</p>
+              )}
+
+              {rideRecommendations && onSelectRide && (
+                <RideComparisonPanel
+                  ranked={rideRecommendations}
+                  activeOptionId={activeDraft.selectedOptionId}
+                  onSelect={onSelectRide}
+                />
               )}
 
               {!editing ? (

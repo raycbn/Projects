@@ -7,5 +7,5 @@ import type { RoutingRequest, RoutingResult } from '@/domain/types'
 export interface RoutingProvider {
   readonly name: string
   isConfigured(): boolean
-  calculateRoute(request: RoutingRequest): Promise<RoutingResult>
+  calculateRoute(request: RoutingRequest, externalSignal?: AbortSignal): Promise<RoutingResult>
 }

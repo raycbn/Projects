@@ -5,11 +5,13 @@ import { BikeComparePanel } from '@/components/route/BikeComparePanel'
 import { RoutePreferencesPanel } from '@/components/route/RoutePreferences'
 import { RouteSummary } from '@/components/route/RouteSummary'
 import { RouteOptionsPicker } from '@/components/route/RouteOptionsPicker'
+import { RideComparisonPanel } from '@/components/route/RideComparisonPanel'
 import { PlannerCtaBar } from '@/components/route/PlannerCtaBar'
 import { Button } from '@/components/ui/Button'
 import { GPXImporter } from '@/components/gpx/GPXImporter'
 import { formatDistance } from '@/lib/stats'
 import type { BikeCompareRow } from '@/lib/bikeCompare'
+import type { RankedRideOption } from '@/domain/pedalScore'
 import type {
   BikeType,
   LatLng,
@@ -69,6 +71,8 @@ interface PlannerFormViewProps {
   onGpxImported: (d: RouteDraft) => void
   onSaveEdits: () => void
   onCancelEditing: () => void
+  onSelectRide?: (optionId: string) => void
+  rideRecommendations?: RankedRideOption[]
   ctaDisabled: boolean
   ctaLabel: string
   onCreate: () => void
@@ -127,6 +131,8 @@ export function PlannerFormView({
   onGpxImported,
   onSaveEdits,
   onCancelEditing,
+  onSelectRide,
+  rideRecommendations,
   ctaDisabled,
   ctaLabel,
   onCreate,
@@ -352,6 +358,14 @@ export function PlannerFormView({
                   ))}
                 </div>
               )}
+
+            {rideRecommendations && onSelectRide && (
+              <RideComparisonPanel
+                ranked={rideRecommendations}
+                activeOptionId={activeDraft.selectedOptionId}
+                onSelect={onSelectRide}
+              />
+            )}
 
             {routeType === 'circular' && (
               <Button

@@ -6,6 +6,8 @@ import {
   readSubscriptionRecord,
   upsertSubscriptionAndPlan,
   writeSubscriptionCustomerId,
+  claimWebhookEvent,
+  markWebhookEventProcessed,
 } from './firestore'
 import { activateGrupetaPack, deactivateGrupetaPack, GRUPETA_SEAT_LIMIT } from './grupetaPack'
 
@@ -336,8 +338,21 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
   }
 
   const event = JSON.parse(payload) as {
+    id: string
     type: string
     data: { object: Record<string, unknown> }
+  }
+
+  const claim = await claimWebhookEvent(env, event.id, event.type)
+
+  if (claim === 'duplicate') {
+    console.log(`[stripe] event ${event.id} already claimed or completed`)
+    return json({ received: true, duplicate: true })
+  }
+
+  if (claim === 'failed') {
+    console.error(`[stripe] failed to claim event ${event.id}, allowing retry`)
+    return json({ error: 'Failed to claim event for processing' }, 500)
   }
 
   try {
@@ -446,6 +461,8 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
         })
       }
     }
+    // Mark event as successfully completed
+    await markWebhookEventProcessed(env, event.id)
   } catch (error) {
     console.error('[stripe webhook]', error)
     return json({ error: 'Webhook handler failed' }, 500)

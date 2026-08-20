@@ -30,6 +30,9 @@ export type AnalyticsEvent =
   | 'community_follow'
   | 'consent_updated'
   | 'page_view'
+  | 'planner_recommendations_generated'
+  | 'planner_alternative_selected'
+  | 'planner_recommendation_selected'
 
 type Payload = Record<string, string | number | boolean | undefined>
 
