@@ -1,4 +1,5 @@
 import type { ElevationPoint, LatLng, RouteGeometry, RouteStats } from '@/domain/types'
+import type { RouteWeatherTimeline } from '@/domain/routeWeatherTimeline'
 
 /**
  * Future-facing enrichment attached to a calculated route.
@@ -26,7 +27,7 @@ export interface RoutePoi {
 export interface RouteEnrichment {
   waterPoints?: WaterPoint[]
   poi?: RoutePoi[]
-  weather?: unknown
+  weather?: RouteWeatherTimeline
   wind?: unknown
   safety?: unknown
   climbs?: unknown

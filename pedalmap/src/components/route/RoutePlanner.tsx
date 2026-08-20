@@ -14,11 +14,21 @@ import { recommendRide } from '@/domain/pedalScore'
 import {
   readCycleNetworkOverlayPreference,
   writeCycleNetworkOverlayPreference,
+  readWaterSourcesOverlayPreference,
+  writeWaterSourcesOverlayPreference,
 } from '@/lib/mapOverlays'
 import { stashReadyRoute } from '@/lib/readyRouteHandoff'
 import { routeCameraKey } from '@/lib/mapCamera'
 import { getBikeModality } from '@/lib/bikeSurfaceProfile'
 import { canCreateRoute, canUseAdvancedCircular } from '@/services/EntitlementService'
+import { waterSourceService } from '@/services/WaterSourceService'
+import { buildRouteWaterOverlay } from '@/lib/routeWaterOverlay'
+import { weatherService } from '@/services/WeatherService'
+import { buildWeatherTimeline } from '@/domain/routeWeatherTimeline'
+import { evaluateDepartureWindows } from '@/domain/routeBestDeparture'
+import type { RouteWeatherPoint, RouteWeatherTimeline } from '@/domain/routeWeatherTimeline'
+import type { BestDepartureResult, DepartureWindow } from '@/domain/routeBestDeparture'
+import type { WaterPoint } from '@/domain/routeEnricher'
 import type { FeatureCollection } from 'geojson'
 
 export function RoutePlanner() {
@@ -81,6 +91,19 @@ export function RoutePlanner() {
     loading: boolean
   }>({ overlay: null, caption: null, showArrows: true, loading: false })
   const [showCycleNetwork, setShowCycleNetwork] = useState(readCycleNetworkOverlayPreference)
+  const [showWaterSources, setShowWaterSources] = useState(readWaterSourcesOverlayPreference)
+  const [waterPoints, setWaterPoints] = useState<WaterPoint[] | undefined>(undefined)
+  const [waterLoading, setWaterLoading] = useState(false)
+  const [waterDegraded, setWaterDegraded] = useState(false)
+  const [waterReason, setWaterReason] = useState<string | undefined>(undefined)
+
+  function handleSelectWaterSource(source: WaterPoint) {
+    track('route_context_water_selected', { source_id: source.id })
+  }
+
+  function handleNavigateToWater(source: WaterPoint) {
+    track('route_context_water_navigation_started', { source_id: source.id })
+  }
 
   const isTrace = routeType === 'map_trace'
   const activeDraft = editDraft ?? draft
@@ -140,6 +163,180 @@ export function RoutePlanner() {
       unpavedM,
     )
   }, [activeDraft])
+
+  const waterOverlay = useMemo(() => {
+    if (!activeDraft?.geometry || !waterPoints?.length) return null
+    return buildRouteWaterOverlay(activeDraft.geometry, waterPoints)
+  }, [activeDraft?.geometry, waterPoints])
+
+  useEffect(() => {
+    if (!activeDraft?.geometry) {
+      setWaterPoints(undefined)
+      setWaterDegraded(false)
+      setWaterReason(undefined)
+      return
+    }
+
+    let cancelled = false
+    setWaterLoading(true)
+    setWaterDegraded(false)
+    setWaterReason(undefined)
+
+    waterSourceService
+      .fetchForRoute(activeDraft.geometry)
+      .then((result) => {
+        if (cancelled) return
+        setWaterPoints(result.waterPoints)
+        setWaterDegraded(result.degraded)
+        setWaterReason(result.reason)
+        setWaterLoading(false)
+
+        if (result.waterPoints.length > 0) {
+          track('route_context_water_loaded', {
+            count: result.waterPoints.length,
+            degraded: result.degraded,
+          })
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setWaterPoints([])
+        setWaterDegraded(true)
+        setWaterReason('network_error')
+        setWaterLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeDraft?.geometry])
+
+  const [weatherTimeline, setWeatherTimeline] = useState<RouteWeatherTimeline | undefined>(undefined)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherDegraded, setWeatherDegraded] = useState(false)
+  const [weatherReason, setWeatherReason] = useState<string | undefined>(undefined)
+
+  const [departureResult, setDepartureResult] = useState<BestDepartureResult | undefined>(undefined)
+  const [departureLoading, setDepartureLoading] = useState(false)
+  const [departureDegraded, setDepartureDegraded] = useState(false)
+  const [departureReason, setDepartureReason] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (!activeDraft?.geometry || !activeDraft?.stats || !(weatherTimeline?.hours?.length)) {
+      setDepartureResult(undefined)
+      setDepartureDegraded(false)
+      setDepartureReason(undefined)
+      return
+    }
+
+    if (weatherTimeline?.degraded || weatherDegraded) {
+      setDepartureResult(undefined)
+      setDepartureDegraded(true)
+      setDepartureReason('weather_degraded')
+      return
+    }
+
+    let cancelled = false
+    setDepartureLoading(true)
+    setDepartureDegraded(false)
+    setDepartureReason(undefined)
+
+    try {
+      const result = evaluateDepartureWindows(
+        activeDraft.geometry,
+        {
+          latitude: 0,
+          longitude: 0,
+          timezone: 'UTC',
+          routeBearingDeg: null,
+          routeBearingLabel: null,
+          hours: weatherTimeline.hours,
+          windows: [],
+          attribution: 'Open-Meteo',
+        },
+        activeDraft.stats,
+        {},
+        { now: new Date(), maxWindows: 3 },
+      )
+      if (!cancelled) {
+        setDepartureResult(result)
+        setDepartureLoading(false)
+        track('route_context_departure_loaded', {
+          windows: result.windows.length,
+          recommended: result.recommended?.label,
+        })
+      }
+    } catch (err) {
+      if (!cancelled) {
+        console.error('[departure]', err)
+        setDepartureResult(undefined)
+        setDepartureDegraded(true)
+        setDepartureReason('evaluation_error')
+        setDepartureLoading(false)
+      }
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeDraft?.geometry, activeDraft?.stats, weatherTimeline?.hours, weatherTimeline?.degraded, weatherDegraded])
+
+  function handleSelectDepartureWindow(window: DepartureWindow) {
+    track('route_context_departure_selected', {
+      label: window.label,
+      score: window.score,
+      state: window.state,
+    })
+  }
+
+  useEffect(() => {
+    if (!activeDraft?.geometry || !activeDraft?.stats) {
+      setWeatherTimeline(undefined)
+      setWeatherDegraded(false)
+      setWeatherReason(undefined)
+      return
+    }
+
+    let cancelled = false
+    setWeatherLoading(true)
+    setWeatherDegraded(false)
+    setWeatherReason(undefined)
+
+    weatherService
+      .forecastForRoute(activeDraft.geometry, { forecastDays: 3 })
+      .then((forecast) => {
+        if (cancelled) return
+        const timeline = buildWeatherTimeline(activeDraft!.geometry!, forecast, activeDraft!.stats)
+        setWeatherTimeline(timeline)
+        setWeatherDegraded(timeline.degraded)
+        setWeatherReason(timeline.reason)
+        setWeatherLoading(false)
+
+        track('route_context_weather_loaded', {
+          points: timeline.points.length,
+          degraded: timeline.degraded,
+        })
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('[weather]', err)
+        setWeatherTimeline(undefined)
+        setWeatherDegraded(true)
+        setWeatherReason('network_error')
+        setWeatherLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeDraft?.geometry, activeDraft?.stats])
+
+  function handleSelectWeatherPoint(point: RouteWeatherPoint) {
+    track('route_context_weather_point_selected', {
+      distance: point.distanceAlongRouteMeters,
+      temp: point.temperatureC,
+    })
+  }
 
   const objetivoFeedback = useMemo(() => {
     if (!activeDraft || activeDraft.type !== 'circular') return null
@@ -332,6 +529,26 @@ export function RoutePlanner() {
               return next
             })
           }
+          showWaterSources={showWaterSources}
+          onToggleWaterSources={() => {
+            const next = !showWaterSources
+            setShowWaterSources(next)
+            writeWaterSourcesOverlayPreference(next)
+            if (next && waterPoints && waterPoints.length > 0) {
+              track('route_context_water_opened', { count: waterPoints.length })
+            }
+          }}
+          waterOverlay={waterOverlay}
+          weatherTimeline={weatherTimeline}
+          weatherLoading={weatherLoading}
+          weatherDegraded={weatherDegraded}
+          weatherReason={weatherReason}
+          onSelectWeatherPoint={handleSelectWeatherPoint}
+          departureResult={departureResult}
+          departureLoading={departureLoading}
+          departureDegraded={departureDegraded}
+          departureReason={departureReason}
+          onSelectDepartureWindow={handleSelectDepartureWindow}
           fitKey={fitKey}
           onMapClick={handleMapTap}
           onWaypointDrag={(id, position) => updateWaypointPosition(id, position)}
@@ -407,6 +624,22 @@ export function RoutePlanner() {
           activeDraft={activeDraft}
           surfaceAlert={surfaceAlert}
           objetivoFeedback={objetivoFeedback}
+          waterPoints={waterPoints}
+          waterLoading={waterLoading}
+          waterDegraded={waterDegraded}
+          waterReason={waterReason}
+          onSelectWaterSource={handleSelectWaterSource}
+          onNavigateToWater={handleNavigateToWater}
+          weatherTimeline={weatherTimeline}
+          weatherLoading={weatherLoading}
+          weatherDegraded={weatherDegraded}
+          weatherReason={weatherReason}
+          onSelectWeatherPoint={handleSelectWeatherPoint}
+          departureResult={departureResult}
+          departureLoading={departureLoading}
+          departureDegraded={departureDegraded}
+          departureReason={departureReason}
+          onSelectDepartureWindow={handleSelectDepartureWindow}
           onSelectRouteOption={selectRouteOption}
           onPremiumRequired={() => showPaywall('route_option_premium')}
           onSelectAlternative={selectAlternative}

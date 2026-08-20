@@ -202,10 +202,25 @@ export class WeatherService {
     opts?: { forecastDays?: number; signal?: AbortSignal; now?: Date },
   ): Promise<RouteWeatherForecast> {
     const center = midpoint(geometry)
-    // Outbound bearing: for circular/ida-vuelta a full-loop average cancels and lies.
     const routeBearingDeg =
       outboundRouteBearing(geometry) ?? dominantRouteBearing(geometry)
     const days = Math.min(16, Math.max(1, opts?.forecastDays ?? 7))
+
+    const apiUrl = import.meta.env.VITE_PEDALMAP_API_URL?.replace(/\/+$/, '')
+    if (apiUrl) {
+      try {
+        const res = await fetch(
+          `${apiUrl}/osm/weather-forecast?lat=${center.lat}&lng=${center.lng}&forecast_days=${days}`,
+          { signal: opts?.signal, headers: { Accept: 'application/json' } },
+        )
+        if (res.ok) {
+          const data = (await res.json()) as { forecast?: RouteWeatherForecast }
+          if (data.forecast) return data.forecast
+        }
+      } catch {
+        // fallback to direct Open-Meteo
+      }
+    }
 
     const url = new URL(this.baseUrl)
     url.searchParams.set('latitude', String(center.lat))

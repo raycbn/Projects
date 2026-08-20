@@ -7,6 +7,9 @@ import { RouteSummary } from '@/components/route/RouteSummary'
 import { RouteOptionsPicker } from '@/components/route/RouteOptionsPicker'
 import { TraceReadyPanel } from '@/components/route/TraceReadyPanel'
 import { RideComparisonPanel } from '@/components/route/RideComparisonPanel'
+import { WaterContextPanel } from '@/components/route/WaterContextPanel'
+import { WeatherContextPanel } from '@/components/route/WeatherContextPanel'
+import { BestDeparturePanel } from '@/components/route/BestDeparturePanel'
 import { PlannerCtaBar } from '@/components/route/PlannerCtaBar'
 import { Button } from '@/components/ui/Button'
 import type {
@@ -20,6 +23,8 @@ import type {
   Waypoint,
 } from '@/domain/types'
 import type { RankedRideOption } from '@/domain/pedalScore'
+import type { RouteWeatherPoint, RouteWeatherTimeline } from '@/domain/routeWeatherTimeline'
+import type { BestDepartureResult, DepartureWindow } from '@/domain/routeBestDeparture'
 
 const MapView = lazy(() =>
   import('@/components/map/MapView').then((m) => ({ default: m.MapView })),
@@ -43,6 +48,14 @@ interface TracePlannerViewProps {
   traceWind: TraceWindState
   showCycleNetwork: boolean
   onToggleCycleNetwork: () => void
+  showWaterSources: boolean
+  onToggleWaterSources: () => void
+  waterOverlay: FeatureCollection | null
+  weatherTimeline: RouteWeatherTimeline | undefined
+  weatherLoading?: boolean
+  weatherDegraded?: boolean
+  weatherReason?: string | undefined
+  onSelectWeatherPoint?: (point: RouteWeatherPoint) => void
   fitKey: string
   onMapClick: (position: LatLng) => void
   onWaypointDrag: (id: string, position: LatLng) => void
@@ -77,6 +90,11 @@ interface TracePlannerViewProps {
   onCreate: () => void
   onSelectRide?: (optionId: string) => void
   rideRecommendations?: RankedRideOption[]
+  departureResult?: BestDepartureResult | undefined
+  departureLoading?: boolean
+  departureDegraded?: boolean
+  departureReason?: string | undefined
+  onSelectDepartureWindow?: (window: DepartureWindow) => void
 }
 
 /**
@@ -96,6 +114,9 @@ export function TracePlannerView({
   traceWind,
   showCycleNetwork,
   onToggleCycleNetwork,
+  showWaterSources,
+  onToggleWaterSources,
+  waterOverlay,
   fitKey,
   onMapClick,
   onWaypointDrag,
@@ -130,6 +151,16 @@ export function TracePlannerView({
   onCreate,
   onSelectRide,
   rideRecommendations,
+  weatherTimeline,
+  weatherLoading,
+  weatherDegraded,
+  weatherReason,
+  onSelectWeatherPoint,
+  departureResult,
+  departureLoading,
+  departureDegraded,
+  departureReason,
+  onSelectDepartureWindow,
 }: TracePlannerViewProps) {
   const editing = status === 'editing'
 
@@ -159,6 +190,8 @@ export function TracePlannerView({
             windCaption={traceWind.caption}
             showWindArrows={traceWind.showArrows}
             showCycleNetwork={showCycleNetwork}
+            showWaterSources={showWaterSources}
+            waterOverlay={waterOverlay}
             fitKey={fitKey}
             onMapClick={onMapClick}
             onWaypointDrag={onWaypointDrag}
@@ -181,6 +214,20 @@ export function TracePlannerView({
             onClick={onToggleCycleNetwork}
           >
             {showCycleNetwork ? 'Ocultar red ciclista' : 'Ver red ciclista'}
+          </button>
+          <button
+            type="button"
+            className={clsx(
+              'rounded-xl px-3 py-2 text-xs font-semibold shadow-sm ring-1 ring-[var(--color-fog)] transition',
+              showWaterSources
+                ? 'bg-[var(--color-signal)] text-white'
+                : 'bg-white/95 text-[var(--color-forest)]',
+            )}
+            aria-pressed={showWaterSources}
+            title="Fuentes de agua en la ruta — datos OSM"
+            onClick={onToggleWaterSources}
+          >
+            {showWaterSources ? 'Ocultar fuentes' : '💧 Fuentes agua'}
           </button>
         </div>
 
@@ -339,6 +386,28 @@ export function TracePlannerView({
               {surfaceAlert && (
                 <p className="rounded-2xl bg-[#fff8f0] px-3 py-2 text-xs text-[#9a4b00]">{surfaceAlert}</p>
               )}
+
+              <WaterContextPanel
+                waterPoints={[]}
+                loading={false}
+                degraded={false}
+              />
+
+              <WeatherContextPanel
+                timeline={weatherTimeline}
+                loading={weatherLoading}
+                degraded={weatherDegraded}
+                degradedReason={weatherReason}
+                onSelectPoint={onSelectWeatherPoint}
+              />
+
+              <BestDeparturePanel
+                result={departureResult}
+                loading={departureLoading}
+                degraded={departureDegraded}
+                degradedReason={departureReason}
+                onSelectWindow={onSelectDepartureWindow}
+              />
 
               {rideRecommendations && onSelectRide && (
                 <RideComparisonPanel

@@ -40,6 +40,8 @@ import {
   runScheduledSocialPost,
 } from './socialSchedule'
 import { runRetentionNudges } from './retentionCron'
+import { handleWaterSources } from './waterSources'
+import { handleWeatherForecast } from './weatherForecast'
 import {
   assertRoutingCreateAllowed,
   bumpRoutesCreatedThisMonth,
@@ -144,6 +146,32 @@ export default {
             health: '/health',
           }),
         )
+      }
+
+      if (path === '/osm/water-sources' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 30,
+          windowSec: 60,
+          prefix: 'osm-water',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleWaterSources(request, env))
+      }
+
+      if (path === '/osm/weather-forecast' && request.method === 'GET') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 30,
+          windowSec: 60,
+          prefix: 'osm-weather',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleWeatherForecast(request, env))
       }
 
       if (path === '/health' && request.method === 'GET') {

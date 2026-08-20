@@ -31,7 +31,7 @@ export const PEDAL_SCORE_WEIGHTS: Record<PedalScoreFactorId, number> = {
   bikeFit: 10,
   weather: 0,
   wind: 0,
-  water: 0,
+  water: 15,
   poi: 0,
   safety: 0,
   popularity: 0,

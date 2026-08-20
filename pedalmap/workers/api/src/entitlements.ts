@@ -7,16 +7,20 @@ import {
   FREE_GPX_PER_WEEK,
   isoWeekKey,
   readSeatIndex,
+  readSubscriptionCustomerId,
   readSubscriptionRecord,
   readUserEntitlements,
   revokePremiumUnlessProtected,
+  upsertSubscriptionAndPlan,
   writeUserPlan,
 } from './firestore'
+import { listCustomerSubscriptions } from './stripe'
 import {
   emailDocId,
   grantPremiumFromGrupetaSeat,
   packIsBillable,
 } from './grupetaPack'
+import { evaluatePlan, type EvaluatePlanInput } from './entitlementRules'
 
 const FREE_MAX_SAVED = 5
 
@@ -32,17 +36,47 @@ async function resolveEffectivePlan(
   }
 
   const sub = await readSubscriptionRecord(env, identity.uid)
-  const paying = (s?: string) =>
-    s === 'active' || s === 'trialing' || s === 'past_due'
-  const soloPay = paying(sub?.soloStatus)
-  const grupetaPay = paying(sub?.grupetaStatus)
-  const legacyPay =
-    paying(sub?.status) && !sub?.soloStatus && !sub?.grupetaStatus
-  if (soloPay || grupetaPay || legacyPay) {
-    if (sub?.plan !== 'premium') {
-      await writeUserPlan(env, identity.uid, 'premium')
+  const customerId = await readSubscriptionCustomerId(env, identity.uid)
+  let stripeSubs: Array<{ status: string; product: 'solo' | 'grupeta'; id: string; hasTrialed: boolean }> = []
+  if (customerId) {
+    try {
+      stripeSubs = await listCustomerSubscriptions(env, customerId)
+    } catch (error) {
+      console.warn('[plan] stripe fallback failed', error)
     }
-    return { plan: 'premium', allowlisted: false, grupetaSeat: false }
+  }
+
+  const input: EvaluatePlanInput = {
+    allowlisted: false,
+    sub: sub ?? null,
+    customerId,
+    stripeSubs,
+    email,
+    emailVerified: identity.emailVerified,
+    hasGrupetaSeat: false,
+    annualTrialUsed: sub?.annualTrialUsed,
+  }
+
+  const evaluated = evaluatePlan(input)
+
+  if (evaluated.shouldUpsert) {
+    await upsertSubscriptionAndPlan(env, {
+      uid: identity.uid,
+      plan: evaluated.plan,
+      status: evaluated.status,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: evaluated.stripeSubscriptionId,
+      product: evaluated.product,
+      soloSubscriptionId: evaluated.soloSubscriptionId,
+      soloStatus: evaluated.soloStatus,
+      grupetaSubscriptionId: evaluated.grupetaSubscriptionId,
+      grupetaStatus: evaluated.grupetaStatus,
+      annualTrialUsed: evaluated.annualTrialUsed,
+    })
+  }
+
+  if (evaluated.shouldWritePlan) {
+    await writeUserPlan(env, identity.uid, evaluated.plan)
   }
 
   // Seat grant requires verified email (blocks unverified register-to-steal).
@@ -75,7 +109,7 @@ async function resolveEffectivePlan(
     }
   }
 
-  return { plan: 'free', allowlisted: false, grupetaSeat: false }
+  return { plan: evaluated.plan, allowlisted: false, grupetaSeat }
 }
 
 export async function handleSyncPlan(

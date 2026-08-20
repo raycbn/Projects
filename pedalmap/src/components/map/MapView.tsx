@@ -63,6 +63,9 @@ interface MapViewProps {
   terrain3d?: boolean
   /** Free OSM signed cycle-network overlay (EuroVelo, Vías Verdes…) — opt-in, off by default. */
   showCycleNetwork?: boolean
+  /** Water sources overlay (discrete markers along the route). */
+  showWaterSources?: boolean
+  waterOverlay?: FeatureCollection | null
   interactive?: boolean
   onMapClick?: (position: LatLng) => void
   onWaypointDrag?: (id: string, position: LatLng) => void
@@ -175,6 +178,79 @@ function ensureCycleNetworkLayer(map: Map) {
 function setCycleNetworkVisible(map: Map, visible: boolean) {
   if (!map.getLayer('cycle-network-layer')) return
   map.setLayoutProperty('cycle-network-layer', 'visibility', visible ? 'visible' : 'none')
+}
+
+function ensureWaterLayers(map: Map) {
+  if (!map.getSource('water-sources')) {
+    map.addSource('water-sources', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
+  }
+
+  if (!map.getLayer('water-sources-circles')) {
+    map.addLayer({
+      id: 'water-sources-circles',
+      type: 'circle',
+      source: 'water-sources',
+      paint: {
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          10,
+          5,
+          14,
+          8,
+        ],
+        'circle-color': '#3b82f6',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 0.9,
+      },
+    })
+  }
+
+  if (!map.getLayer('water-sources-labels')) {
+    map.addLayer({
+      id: 'water-sources-labels',
+      type: 'symbol',
+      source: 'water-sources',
+      minzoom: 13,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-size': 10,
+        'text-offset': [0, 1.4],
+        'text-anchor': 'top',
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+        'text-optional': true,
+      },
+      paint: {
+        'text-color': '#0d3b2b',
+        'text-halo-color': 'rgba(255,255,255,0.9)',
+        'text-halo-width': 1.5,
+      },
+    })
+  }
+}
+
+function applyWaterOverlay(map: Map, overlay: FeatureCollection | null | undefined) {
+  if (!canPaintOverlays(map)) return false
+  ensureWaterLayers(map)
+  const source = map.getSource('water-sources') as maplibregl.GeoJSONSource | undefined
+  if (!source) return false
+  source.setData(overlay ?? { type: 'FeatureCollection', features: [] })
+  return true
+}
+
+function setWaterLayersVisible(map: Map, visible: boolean) {
+  const value = visible ? 'visible' : 'none'
+  for (const id of ['water-sources-circles', 'water-sources-labels']) {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, 'visibility', value)
+    }
+  }
 }
 
 function ensureSurfaceLayers(map: Map) {
@@ -784,6 +860,8 @@ export function MapView({
   showTerrainToggle = true,
   terrain3d: terrain3dProp,
   showCycleNetwork = false,
+  showWaterSources = false,
+  waterOverlay,
   interactive = true,
   onMapClick,
   onWaypointDrag,
@@ -800,6 +878,7 @@ export function MapView({
   const altsRef = useRef<RouteGeometry[] | null | undefined>(alternateGeometries)
   const windRef = useRef<FeatureCollection | null | undefined>(windOverlay)
   const surfaceRef = useRef<FeatureCollection | null | undefined>(surfaceOverlay)
+  const waterRef = useRef<FeatureCollection | null | undefined>(waterOverlay)
   const onMapClickRef = useRef(onMapClick)
   const showWindArrowsRef = useRef(showWindArrows)
   const fitKeyRef = useRef(fitKey)
@@ -815,6 +894,7 @@ export function MapView({
   altsRef.current = alternateGeometries
   windRef.current = windOverlay
   surfaceRef.current = surfaceOverlay
+  waterRef.current = waterOverlay
   onMapClickRef.current = onMapClick
   showWindArrowsRef.current = showWindArrows
   fitKeyRef.current = fitKey
@@ -926,7 +1006,9 @@ export function MapView({
           Boolean(surfaceRef.current?.features?.length) && !map.getLayer('route-surface-line')
         const needsCycleNetwork =
           showCycleNetworkRef.current && !map.getLayer('cycle-network-layer')
-        if (!needsRoute && !needsWind && !needsSurface && !needsCycleNetwork) return
+        const needsWater =
+          Boolean(waterRef.current?.features?.length) && !map.getLayer('water-sources-circles')
+        if (!needsRoute && !needsWind && !needsSurface && !needsCycleNetwork && !needsWater) return
         if (needsWind) rebuildWindLayers(map)
         paintFromRef(false)
         raiseRouteOverlayLayers(map)
@@ -1070,6 +1152,19 @@ export function MapView({
       })
     }
   }, [windOverlay, showWindArrows])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const ok = applyWaterOverlay(map, waterOverlay)
+    setWaterLayersVisible(map, showWaterSources)
+    if (!ok && waterOverlay?.features?.length) {
+      map.once('idle', () => {
+        applyWaterOverlay(map, waterRef.current)
+        setWaterLayersVisible(map, showWaterSources)
+      })
+    }
+  }, [waterOverlay, showWaterSources])
 
   useEffect(() => {
     const map = mapRef.current

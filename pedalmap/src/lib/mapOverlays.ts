@@ -33,3 +33,21 @@ export function writeCycleNetworkOverlayPreference(on: boolean): void {
     /* ignore (private mode / storage disabled) */
   }
 }
+
+const WATER_SOURCES_STORAGE_KEY = 'pedalmap_show_water_sources_overlay'
+
+export function readWaterSourcesOverlayPreference(): boolean {
+  try {
+    return localStorage.getItem(WATER_SOURCES_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeWaterSourcesOverlayPreference(on: boolean): void {
+  try {
+    localStorage.setItem(WATER_SOURCES_STORAGE_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore (private mode / storage disabled) */
+  }
+}

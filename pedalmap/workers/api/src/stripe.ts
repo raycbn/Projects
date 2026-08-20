@@ -58,7 +58,7 @@ function isPayingStatus(status: string): boolean {
   return status === 'active' || status === 'trialing' || status === 'past_due'
 }
 
-async function listCustomerSubscriptions(
+export async function listCustomerSubscriptions(
   env: Env,
   customerId: string,
 ): Promise<StripeSubSummary[]> {
@@ -304,7 +304,7 @@ async function resolveFirebaseUid(
   return { uid, customerId, subscriptionId, product, interval, ownerEmail, status, trialEnd }
 }
 
-function effectivePlanFromSides(soloStatus?: string, grupetaStatus?: string): {
+export function effectivePlanFromSides(soloStatus?: string, grupetaStatus?: string): {
   plan: 'free' | 'premium'
   status: string
   product: CheckoutProduct

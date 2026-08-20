@@ -33,6 +33,17 @@ export type AnalyticsEvent =
   | 'planner_recommendations_generated'
   | 'planner_alternative_selected'
   | 'planner_recommendation_selected'
+  | 'route_context_water_loaded'
+  | 'route_context_water_opened'
+  | 'route_context_water_selected'
+  | 'route_context_water_navigation_started'
+  | 'route_context_weather_loaded'
+  | 'route_context_weather_opened'
+  | 'route_context_weather_point_selected'
+  | 'route_context_departure_loaded'
+  | 'route_context_departure_opened'
+  | 'route_context_departure_selected'
+  | 'route_context_departure_constraint_changed'
 
 type Payload = Record<string, string | number | boolean | undefined>
 

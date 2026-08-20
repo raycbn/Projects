@@ -11,7 +11,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 5174',
     port: 5174,
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 180_000,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
