@@ -1,8 +1,11 @@
 import type { Env } from './types'
 import { json } from './types'
 
-const OVERPASS = 'https://overpass-api.de/api/interpreter'
-const OVERPASS_FALLBACK = 'https://overpass.kumi.systems/api/interpreter'
+const OVERPASS_UPSTREAMS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]
 const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap-79b3a.web.app; water sources)'
 
 function buildQuery(bbox: [number, number, number, number]): string {
@@ -16,7 +19,7 @@ function buildQuery(bbox: [number, number, number, number]): string {
   nwr["amenity"="fountain"]["drinking_water"="yes"](${s},${w},${n},${e});
   node["natural"="spring"](${s},${w},${n},${e});
 );
-out center;`
+out body tags center;`
 }
 
 async function fetchOverpass(url: string, query: string): Promise<Response> {
@@ -43,25 +46,33 @@ export async function handleWaterSources(request: Request, _env: Env): Promise<R
   }
   const [s, w, n, e] = parts as [number, number, number, number]
 
-  const cacheKey = `water:${bboxParam}`
+  const cacheKey = `https://pedalmap.es/__water-cache/${bboxParam}`
   const cached = await caches.default.match(cacheKey)
   if (cached) {
     return cached
   }
 
   const query = buildQuery([s, w, n, e])
-  let res = await fetchOverpass(OVERPASS, query)
-  if (!res.ok) {
-    res = await fetchOverpass(OVERPASS_FALLBACK, query)
+  let res: Response | null = null
+  for (const upstream of OVERPASS_UPSTREAMS) {
+    try {
+      res = await fetchOverpass(upstream, query)
+      if (res.ok) break
+    } catch {
+      // continue to next upstream
+    }
   }
 
-  if (!res.ok) {
-    const body = json({ sources: [], degraded: true, reason: 'upstream_unavailable' }, 200)
-    await caches.default.put(cacheKey, body.clone())
-    return body
+  if (!res || !res.ok) {
+    return json({ sources: [], degraded: true, reason: 'upstream_unavailable' }, 200)
   }
 
-  const data = await res.json() as { elements?: Array<Record<string, unknown>> }
+  let data: { elements?: Array<Record<string, unknown>> }
+  try {
+    data = await res.json()
+  } catch {
+    return json({ sources: [], degraded: true, reason: 'upstream_unavailable' }, 200)
+  }
   const elements = Array.isArray(data?.elements) ? data.elements : []
 
   const sources = elements
@@ -76,9 +87,27 @@ export async function handleWaterSources(request: Request, _env: Env): Promise<R
         lon,
         name: tags.name ?? null,
         type: tags.amenity || tags.man_made || tags.natural || tags.fountain || 'other',
+        address: tags['addr:street'] ?? null,
+        access: tags.access ?? null,
+        drinkingWater: tags.drinking_water ?? null,
+        description: tags.description ?? null,
+        website: tags.website ?? null,
+        phone: tags.phone ?? null,
       }
     })
-    .filter((s: unknown): s is { id: string; lat: number; lon: number; name: string | null; type: string } => Boolean(s))
+    .filter((s: unknown): s is {
+      id: string
+      lat: number
+      lon: number
+      name: string | null
+      type: string
+      address: string | null
+      access: string | null
+      drinkingWater: string | null
+      description: string | null
+      website: string | null
+      phone: string | null
+    } => Boolean(s))
 
   const body = json({ sources, attribution: '© OpenStreetMap contributors (ODbL)' }, 200)
   await caches.default.put(cacheKey, body.clone())

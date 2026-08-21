@@ -1,11 +1,17 @@
 import type { LatLng, RouteGeometry } from '@/domain/types'
 import type { WaterPoint } from '@/domain/routeEnricher'
-import { cumulativeDistances, distanceToSegment, deduplicateByProximity, sortAlongRoute, limitResults } from '@/lib/routeGeometry'
+import { cumulativeDistances, distanceToSegment, deduplicateByProximity, sortAlongRoute, limitResults, closestPointOnSegment, haversineMeters } from '@/lib/routeGeometry'
 
 export interface RawWaterSource {
   id: string
   position: LatLng
   name?: string | null
+  address?: string | null
+  access?: string | null
+  drinkingWater?: string | null
+  description?: string | null
+  website?: string | null
+  phone?: string | null
 }
 
 export interface BuildWaterPointsOptions {
@@ -37,6 +43,12 @@ export function buildWaterPointsAlongRoute(opts: BuildWaterPointsOptions): Water
         name: src.name ?? undefined,
         distanceAlongRouteMeters: proj.distanceAlongRouteMeters,
         detourMeters: proj.detourMeters,
+        address: src.address,
+        access: src.access,
+        drinkingWater: src.drinkingWater,
+        description: src.description,
+        website: src.website,
+        phone: src.phone,
       } as WaterPoint
     })
     .filter((wp): wp is WaterPoint => wp !== null && (wp.detourMeters ?? 0) <= (maxDetourMeters ?? DEFAULT_MAX_DETOUR))
@@ -54,10 +66,13 @@ function projectSource(
   let bestDist = Infinity
   let bestAlong = 0
   for (let i = 1; i < coords.length; i += 1) {
-    const d = distanceToSegment(poi, coords[i - 1], coords[i])
+    const a = coords[i - 1]
+    const b = coords[i]
+    const d = distanceToSegment(poi, a, b)
     if (d < bestDist) {
       bestDist = d
-      bestAlong = cum[i - 1]
+      const projected = closestPointOnSegment(poi, a, b)
+      bestAlong = cum[i - 1] + haversineMeters(a, projected)
     }
   }
   if (!Number.isFinite(bestDist) || bestDist > 500) return null

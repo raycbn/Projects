@@ -13,6 +13,12 @@ export interface WaterPoint {
   distanceAlongRouteMeters?: number
   /** Extra metres to leave the route and reach the point. */
   detourMeters?: number
+  address?: string | null
+  access?: string | null
+  drinkingWater?: string | null
+  description?: string | null
+  website?: string | null
+  phone?: string | null
 }
 
 export interface RoutePoi {

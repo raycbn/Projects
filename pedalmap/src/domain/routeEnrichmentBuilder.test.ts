@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RouteGeometry } from '@/domain/types'
 import { buildWaterPointsAlongRoute } from '@/domain/routeEnrichmentBuilder'
+import { cumulativeDistances, pointAtDistance } from '@/lib/routeGeometry'
 
 const straight: RouteGeometry = {
   type: 'LineString',
@@ -73,5 +74,37 @@ describe('buildWaterPointsAlongRoute', () => {
     ]
     const result = buildWaterPointsAlongRoute({ geometry: straight, sources, maxDetourMeters: 100 })
     expect(result).toEqual([])
+  })
+
+  it('assigns distanceAlongRouteMeters > 0 for source on first segment but not at start', () => {
+    const sources = [
+      { id: 'start', position: { lat: 40.4005, lng: -3.7005 } },
+    ]
+    const result = buildWaterPointsAlongRoute({ geometry: straight, sources })
+    expect(result).toHaveLength(1)
+    expect(result[0].distanceAlongRouteMeters).toBeGreaterThan(0)
+  })
+
+  it('does not assign 0m to two sources on different segments', () => {
+    const sources = [
+      { id: 'seg1', position: { lat: 40.4005, lng: -3.7005 } },
+      { id: 'seg2', position: { lat: 40.4105, lng: -3.6895 } },
+    ]
+    const result = buildWaterPointsAlongRoute({ geometry: straight, sources })
+    expect(result).toHaveLength(2)
+    const zeros = result.filter((wp) => (wp.distanceAlongRouteMeters ?? 0) === 0)
+    expect(zeros.length).toBeLessThan(2)
+  })
+
+  it('assigns distance near midpoint for source near route middle', () => {
+    const cum = cumulativeDistances(straight.coordinates.map(([lng, lat]) => ({ lat, lng })))
+    const total = cum[cum.length - 1] ?? 0
+    const mid = pointAtDistance(straight.coordinates.map(([lng, lat]) => ({ lat, lng })), cum, total / 2)
+    if (!mid) return
+    const sources = [{ id: 'mid', position: mid.position }]
+    const result = buildWaterPointsAlongRoute({ geometry: straight, sources })
+    expect(result).toHaveLength(1)
+    expect(result[0].distanceAlongRouteMeters).toBeGreaterThan(total * 0.25)
+    expect(result[0].distanceAlongRouteMeters).toBeLessThan(total * 0.75)
   })
 })

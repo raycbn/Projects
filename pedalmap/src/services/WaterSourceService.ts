@@ -1,5 +1,7 @@
 import type { RouteGeometry } from '@/domain/types'
 import type { WaterPoint } from '@/domain/routeEnricher'
+import { buildWaterPointsAlongRoute } from '@/domain/routeEnrichmentBuilder'
+import { routingAuthHeaders } from '@/lib/routingAuth'
 
 export interface RawWaterSource {
   id: string
@@ -7,6 +9,12 @@ export interface RawWaterSource {
   lon: number
   name: string | null
   type: string
+  address?: string | null
+  access?: string | null
+  drinkingWater?: string | null
+  description?: string | null
+  website?: string | null
+  phone?: string | null
 }
 
 export interface WaterEnrichmentResult {
@@ -32,7 +40,21 @@ export class WaterSourceService {
 
     const cached = this.cache.get(cacheKey)
     if (cached && Date.now() - cached.ts < this.TTL) {
-      return { waterPoints: hydrateWaterPoints(cached.data), degraded: false }
+      const waterPoints = buildWaterPointsAlongRoute({
+        geometry,
+        sources: cached.data.map((s) => ({
+          id: s.id,
+          position: { lat: s.lat, lng: s.lon },
+          name: s.name ?? undefined,
+          address: s.address,
+          access: s.access,
+          drinkingWater: s.drinkingWater,
+          description: s.description,
+          website: s.website,
+          phone: s.phone,
+        })),
+      })
+      return { waterPoints, degraded: false }
     }
 
     if (!API_URL) {
@@ -40,9 +62,10 @@ export class WaterSourceService {
     }
 
     try {
+      const headers = await routingAuthHeaders({ Accept: 'application/json' })
       const res = await fetch(
         `${API_URL}${WATER_SOURCES_PATH}?bbox=${bbox.s},${bbox.w},${bbox.n},${bbox.e}`,
-        { headers: { Accept: 'application/json' } },
+        { headers },
       )
 
       if (!res.ok) {
@@ -60,8 +83,23 @@ export class WaterSourceService {
         this.cache.set(cacheKey, { data: sources, ts: Date.now() })
       }
 
+      const waterPoints = buildWaterPointsAlongRoute({
+        geometry,
+        sources: sources.map((s) => ({
+          id: s.id,
+          position: { lat: s.lat, lng: s.lon },
+          name: s.name ?? undefined,
+          address: s.address,
+          access: s.access,
+          drinkingWater: s.drinkingWater,
+          description: s.description,
+          website: s.website,
+          phone: s.phone,
+        })),
+      })
+
       return {
-        waterPoints: hydrateWaterPoints(sources),
+        waterPoints,
         degraded: Boolean(json.degraded),
         reason: json.reason,
       }
@@ -86,14 +124,6 @@ function computeBbox(
   }
   const pad = 0.01
   return { s: minLat - pad, w: minLng - pad, n: maxLat + pad, e: maxLng + pad }
-}
-
-function hydrateWaterPoints(sources: RawWaterSource[]): WaterPoint[] {
-  return sources.map((s) => ({
-    id: s.id,
-    position: { lat: s.lat, lng: s.lon },
-    name: s.name ?? undefined,
-  }))
 }
 
 export const waterSourceService = new WaterSourceService()
