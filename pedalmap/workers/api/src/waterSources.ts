@@ -2,11 +2,12 @@ import type { Env } from './types'
 import { json } from './types'
 
 const OVERPASS_UPSTREAMS = [
-  'https://overpass-api.de/api/interpreter',
   'https://overpass.openstreetmap.fr/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
 ]
 const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap-79b3a.web.app; water sources)'
+
+const FETCH_TIMEOUT_MS = 10_000
 
 function buildQuery(bbox: [number, number, number, number]): string {
   const [s, w, n, e] = bbox
@@ -19,14 +20,14 @@ function buildQuery(bbox: [number, number, number, number]): string {
   nwr["amenity"="fountain"]["drinking_water"="yes"](${s},${w},${n},${e});
   node["natural"="spring"](${s},${w},${n},${e});
  );
- out body tags center qt=200;`
+   out body tags center;`
   // 200 is sufficient for typical cycling routes.
   // A 200 km route bbox rarely contains more than a few dozen water sources.
   // The client-side distribution algorithm only needs ~10 well-spaced candidates,
   // so 200 provides a large safety margin without bloating the response.
 }
 
-async function fetchOverpass(url: string, query: string): Promise<Response> {
+async function fetchOverpass(url: string, query: string, signal?: AbortSignal): Promise<Response> {
   return fetch(url, {
     method: 'POST',
     headers: {
@@ -34,6 +35,7 @@ async function fetchOverpass(url: string, query: string): Promise<Response> {
       'User-Agent': USER_AGENT,
     },
     body: 'data=' + encodeURIComponent(query),
+    signal,
   })
 }
 
@@ -59,10 +61,14 @@ export async function handleWaterSources(request: Request, _env: Env): Promise<R
   const query = buildQuery([s, w, n, e])
   let res: Response | null = null
   for (const upstream of OVERPASS_UPSTREAMS) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      res = await fetchOverpass(upstream, query)
+      res = await fetchOverpass(upstream, query, controller.signal)
+      clearTimeout(timeoutId)
       if (res.ok) break
     } catch {
+      clearTimeout(timeoutId)
       // continue to next upstream
     }
   }

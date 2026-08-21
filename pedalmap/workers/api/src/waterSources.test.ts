@@ -49,9 +49,12 @@ describe('handleWaterSources', () => {
     expect(body.sources).toHaveLength(1)
     expect(body.sources[0].name).toBe('Fuente A')
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://overpass-api.de/api/interpreter',
+      'https://overpass.openstreetmap.fr/api/interpreter',
       expect.any(Object),
     )
+    const callArgs = fetchMock.mock.calls[0]
+    const sentQuery = callArgs[1].body
+    expect(sentQuery).not.toContain('qt=200')
   })
 
   it('falls back to secondary when primary fails', async () => {
@@ -73,33 +76,10 @@ describe('handleWaterSources', () => {
     const body = await res.json()
     expect(body.sources).toHaveLength(1)
     expect(body.sources[0].name).toBe('Fuente B')
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://overpass.openstreetmap.fr/api/interpreter', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://overpass-api.de/api/interpreter', expect.any(Object))
   })
 
-  it('falls back to tertiary when primary and secondary fail', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('primary down'))
-      .mockRejectedValueOnce(new Error('secondary down'))
-      .mockResolvedValueOnce(
-        makeRes(200, {
-          elements: [
-            { type: 'node', id: 3, lat: 50.72, lon: 7.12, tags: { name: 'Fuente C', amenity: 'drinking_water' } },
-          ],
-        }),
-      )
-    vi.stubGlobal('fetch', fetchMock)
-
-    const req = new Request('http://localhost/osm/water-sources?bbox=50.0,7.0,51.0,8.0', { method: 'GET' })
-    const res = await handleWaterSources(req, {} as any)
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body.sources).toHaveLength(1)
-    expect(body.sources[0].name).toBe('Fuente C')
-    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://overpass.kumi.systems/api/interpreter', expect.any(Object))
-  })
-
-  it('returns degraded when all upstreams fail', async () => {
+  it('returns degraded when both upstreams fail', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('all down'))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -110,7 +90,7 @@ describe('handleWaterSources', () => {
     expect(body.sources).toEqual([])
     expect(body.degraded).toBe(true)
     expect(body.reason).toBe('upstream_unavailable')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('returns degraded when upstream returns non-ok', async () => {
@@ -156,5 +136,30 @@ describe('handleWaterSources', () => {
     const body = await res.json()
     expect(body.sources).toHaveLength(1)
     expect(body.sources[0].name).toBe('Con coords')
+  })
+
+  it('does not wait indefinitely when upstream hangs', async () => {
+    const timeoutError = new Error('Aborted')
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => new Promise((_, reject) => setTimeout(() => reject(timeoutError), 1000)))
+      .mockResolvedValueOnce(
+        makeRes(200, {
+          elements: [
+            { type: 'node', id: 3, lat: 50.72, lon: 7.12, tags: { name: 'Fuente C', amenity: 'drinking_water' } },
+          ],
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const req = new Request('http://localhost/osm/water-sources?bbox=50.0,7.0,51.0,8.0', { method: 'GET' })
+    const start = Date.now()
+    const res = await handleWaterSources(req, {} as any)
+    const elapsedMs = Date.now() - start
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.sources).toHaveLength(1)
+    expect(body.sources[0].name).toBe('Fuente C')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(elapsedMs).toBeLessThan(1500)
   })
 })

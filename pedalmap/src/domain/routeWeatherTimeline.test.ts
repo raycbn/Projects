@@ -101,4 +101,12 @@ describe('buildWeatherTimeline', () => {
     const first = result.points[0]
     expect(first.timestamp).toContain('2026-08-20T08:')
   })
+
+  it('produces increasing timestamps along the route', () => {
+    const result = buildWeatherTimeline(geometry, makeForecast(), stats, { sampleIntervalMeters: 5000 })
+    const times = result.points.map((p) => new Date(p.timestamp).getTime())
+    for (let i = 1; i < times.length; i += 1) {
+      expect(times[i]).toBeGreaterThan(times[i - 1])
+    }
+  })
 })

@@ -138,7 +138,7 @@ export function buildWeatherTimeline(
       }
     }
     return {
-      timestamp: hour.time,
+      timestamp: arrival.toISOString(),
       distanceAlongRouteMeters: Math.round(sample.distanceMeters),
       estimatedArrivalMinutes: estimatedArrivalMinutes(sample.distanceMeters, stats.distanceMeters, stats.estimatedDurationSeconds),
       temperatureC: hour.temperatureC,
