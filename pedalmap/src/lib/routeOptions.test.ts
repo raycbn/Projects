@@ -95,6 +95,120 @@ describe('rankRouteOptions', () => {
     expect(next.routeOptions).toHaveLength(2)
     expect(next.title).toContain('Opción 2')
   })
+
+  it('preserves within_tolerance over closest for objective routes', () => {
+    const bundle = rankRouteOptions([
+      { ...candidate(58000, 95, 0), objectiveMatch: 'closest' },
+      { ...candidate(55000, 70, 0.01), objectiveMatch: 'within_tolerance' },
+    ])
+    expect(bundle.routeOptions[0].stats.distanceMeters).toBe(55000)
+    expect(bundle.routeOptions[0].objectiveMatch).toBe('within_tolerance')
+    expect(bundle.routeOptions[1].objectiveMatch).toBe('closest')
+  })
+
+  it('ranks two within_tolerance candidates by existing surface/cycle logic', () => {
+    const bundle = rankRouteOptions([
+      { ...candidate(55000, 60, 0), objectiveMatch: 'within_tolerance' },
+      { ...candidate(54000, 90, 0.01), objectiveMatch: 'within_tolerance' },
+    ])
+    expect(bundle.routeOptions[0].stats.surfaceStats?.suitability?.score).toBe(90)
+    expect(bundle.routeOptions[0].objectiveMatch).toBe('within_tolerance')
+    expect(bundle.routeOptions[1].objectiveMatch).toBe('within_tolerance')
+  })
+
+  it('ranks two closest candidates by existing surface/cycle logic', () => {
+    const bundle = rankRouteOptions([
+      { ...candidate(58000, 60, 0), objectiveMatch: 'closest' },
+      { ...candidate(57000, 90, 0.01), objectiveMatch: 'closest' },
+    ])
+    expect(bundle.routeOptions[0].stats.surfaceStats?.suitability?.score).toBe(90)
+    expect(bundle.routeOptions[0].objectiveMatch).toBe('closest')
+    expect(bundle.routeOptions[1].objectiveMatch).toBe('closest')
+  })
+
+  it('falls back to existing ranking when no objective tags are present', () => {
+    const bundle = rankRouteOptions([
+      candidate(12000, 55, 0),
+      candidate(11000, 90, 0.01),
+      candidate(13000, 70, 0.02),
+    ])
+    expect(bundle.routeOptions.map((o) => o.id)).toEqual(['opt-1', 'opt-2', 'opt-3'])
+    expect(bundle.routeOptions[0].stats.surfaceStats?.suitability?.score).toBe(90)
+  })
+})
+
+describe('applySelectedOption', () => {
+  it('copies objective metadata from selected option to draft', () => {
+    const bundle = rankRouteOptions([
+      { ...candidate(58000, 95, 0), objectiveMatch: 'closest' as const, objectiveDistanceError: 0.08, objectiveElevationError: 0.45, objectiveElevationGainMeters: 420 },
+      { ...candidate(55000, 70, 0.01), objectiveMatch: 'within_tolerance' as const, objectiveDistanceError: 0.04, objectiveElevationError: 0.24, objectiveElevationGainMeters: 380 },
+    ])
+    const draft = {
+      title: 'Circular',
+      geometry: bundle.routeOptions[0].geometry,
+      elevationProfile: [],
+      stats: bundle.routeOptions[0].stats,
+      instructions: [],
+      routeOptions: bundle.routeOptions,
+      selectedOptionId: bundle.selectedOptionId,
+      objectiveMatch: undefined,
+      objectiveDistanceError: undefined,
+      objectiveElevationError: undefined,
+      objectiveElevationGainMeters: undefined,
+    }
+    const next = applySelectedOption(draft, 'opt-1')
+    expect(next.objectiveMatch).toBe('within_tolerance')
+    expect(next.objectiveDistanceError).toBeCloseTo(0.04)
+    expect(next.objectiveElevationError).toBeCloseTo(0.24)
+    expect(next.objectiveElevationGainMeters).toBe(380)
+  })
+
+  it('switches objective metadata when selecting a different option', () => {
+    const bundle = rankRouteOptions([
+      { ...candidate(58000, 95, 0), objectiveMatch: 'closest' as const, objectiveDistanceError: 0.08, objectiveElevationError: 0.45, objectiveElevationGainMeters: 420 },
+      { ...candidate(55000, 70, 0.01), objectiveMatch: 'within_tolerance' as const, objectiveDistanceError: 0.04, objectiveElevationError: 0.24, objectiveElevationGainMeters: 380 },
+    ])
+    const draft = {
+      title: 'Circular',
+      geometry: bundle.routeOptions[0].geometry,
+      elevationProfile: [],
+      stats: bundle.routeOptions[0].stats,
+      instructions: [],
+      routeOptions: bundle.routeOptions,
+      selectedOptionId: bundle.selectedOptionId,
+      objectiveMatch: 'within_tolerance' as const,
+      objectiveDistanceError: 0.04,
+      objectiveElevationError: 0.24,
+      objectiveElevationGainMeters: 380,
+    }
+    const next = applySelectedOption(draft, 'opt-2')
+    expect(next.objectiveMatch).toBe('closest')
+    expect(next.objectiveDistanceError).toBeCloseTo(0.08)
+    expect(next.objectiveElevationError).toBeCloseTo(0.45)
+    expect(next.objectiveElevationGainMeters).toBe(420)
+  })
+
+  it('leaves objective fields undefined when option has none', () => {
+    const bundle = rankRouteOptions([candidate(10000, 50), candidate(9000, 80)])
+    const draft = {
+      title: 'A → B',
+      geometry: bundle.active.geometry,
+      elevationProfile: bundle.active.elevationProfile,
+      stats: bundle.active.stats,
+      instructions: bundle.active.instructions,
+      routeOptions: bundle.routeOptions,
+      selectedOptionId: bundle.selectedOptionId,
+      objectiveMatch: undefined,
+      objectiveDistanceError: undefined,
+      objectiveElevationError: undefined,
+      objectiveElevationGainMeters: undefined,
+    }
+    const next = applySelectedOption(draft, 'opt-2')
+    expect(next.objectiveMatch).toBeUndefined()
+    expect(next.objectiveDistanceError).toBeUndefined()
+    expect(next.objectiveElevationError).toBeUndefined()
+    expect(next.objectiveElevationGainMeters).toBeUndefined()
+  })
 })
 
 describe('ensureRouteOptions', () => {

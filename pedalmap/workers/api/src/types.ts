@@ -45,6 +45,8 @@ export interface Env {
   INSTAGRAM_GRAPH_HOST?: string
   /** Shared secret for ops publish endpoint (header X-PedalMap-Ops-Token). */
   INSTAGRAM_OPS_TOKEN?: string
+  /** Shared secret for reconcile endpoint (header X-PedalMap-Ops-Token). */
+  RECONCILE_OPS_TOKEN?: string
   /** UTC start date YYYY-MM-DD for the 90-day SEO social campaign. */
   SOCIAL_CAMPAIGN_START?: string
 }

@@ -9,15 +9,9 @@ import { RideComparisonPanel } from '@/components/route/RideComparisonPanel'
 import { PlannerCtaBar } from '@/components/route/PlannerCtaBar'
 import { Button } from '@/components/ui/Button'
 import { GPXImporter } from '@/components/gpx/GPXImporter'
-import { WaterContextPanel } from '@/components/route/WaterContextPanel'
-import { WeatherContextPanel } from '@/components/route/WeatherContextPanel'
-import { BestDeparturePanel } from '@/components/route/BestDeparturePanel'
-import { formatDistance } from '@/lib/stats'
+import { formatDistance, formatElevation } from '@/lib/stats'
 import type { BikeCompareRow } from '@/lib/bikeCompare'
 import type { RankedRideOption } from '@/domain/pedalScore'
-import type { WaterPoint } from '@/domain/routeEnricher'
-import type { RouteWeatherPoint, RouteWeatherTimeline } from '@/domain/routeWeatherTimeline'
-import type { BestDepartureResult, DepartureWindow } from '@/domain/routeBestDeparture'
 import type {
   BikeType,
   LatLng,
@@ -67,23 +61,7 @@ interface PlannerFormViewProps {
   panelError: string | null
   activeDraft: RouteDraft | null
   surfaceAlert: string | null
-  objetivoFeedback: string | null
-  waterPoints?: WaterPoint[] | undefined
-  waterLoading?: boolean
-  waterDegraded?: boolean
-  waterReason?: string | undefined
-  onSelectWaterSource?: (source: WaterPoint) => void
-  onNavigateToWater?: (source: WaterPoint) => void
-  weatherTimeline?: RouteWeatherTimeline | undefined
-  weatherLoading?: boolean
-  weatherDegraded?: boolean
-  weatherReason?: string | undefined
-  onSelectWeatherPoint?: (point: RouteWeatherPoint) => void
-  departureResult?: BestDepartureResult | undefined
-  departureLoading?: boolean
-  departureDegraded?: boolean
-  departureReason?: string | undefined
-  onSelectDepartureWindow?: (window: DepartureWindow) => void
+  objetivoFeedback: { status: string; actual: string } | null
   onSelectRouteOption: (optionId: string) => void
   onPremiumRequired: () => void
   onSelectAlternative: (index: number) => void
@@ -144,22 +122,6 @@ export function PlannerFormView({
   activeDraft,
   surfaceAlert,
   objetivoFeedback,
-  waterPoints,
-  waterLoading,
-  waterDegraded,
-  waterReason,
-  onSelectWaterSource,
-  onNavigateToWater,
-  weatherTimeline,
-  weatherLoading,
-  weatherDegraded,
-  weatherReason,
-  onSelectWeatherPoint,
-  departureResult,
-  departureLoading,
-  departureDegraded,
-  departureReason,
-  onSelectDepartureWindow,
   onSelectRouteOption,
   onPremiumRequired,
   onSelectAlternative,
@@ -358,35 +320,19 @@ export function PlannerFormView({
               </p>
             )}
 
-            <WaterContextPanel
-              waterPoints={waterPoints}
-              loading={waterLoading}
-              degraded={waterDegraded}
-              degradedReason={waterReason}
-              onSelectSource={onSelectWaterSource}
-              onNavigate={onNavigateToWater}
-            />
-
-            <WeatherContextPanel
-              timeline={weatherTimeline}
-              loading={weatherLoading}
-              degraded={weatherDegraded}
-              degradedReason={weatherReason}
-              onSelectPoint={onSelectWeatherPoint}
-            />
-
-            <BestDeparturePanel
-              result={departureResult}
-              loading={departureLoading}
-              degraded={departureDegraded}
-              degradedReason={departureReason}
-              onSelectWindow={onSelectDepartureWindow}
-            />
-
             {objetivoFeedback && (
-              <p className="rounded-xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-forest)]">
-                Objetivo · {objetivoFeedback}
-              </p>
+              <div className="rounded-xl bg-[var(--color-mist)] px-3 py-2 text-xs text-[var(--color-forest)]">
+                <p className="font-semibold">{objetivoFeedback.status}</p>
+                <p className="mt-0.5 text-[var(--color-stone)]">
+                  {objetivoFeedback.actual}
+                  {activeDraft.circularDistanceMeters && activeDraft.circularDistanceMeters > 0 && (
+                    <> · objetivo {formatDistance(activeDraft.circularDistanceMeters)}</>
+                  )}
+                  {activeDraft.targetElevationGainMeters && activeDraft.targetElevationGainMeters > 0 && (
+                    <> · +{formatElevation(activeDraft.targetElevationGainMeters)}</>
+                  )}
+                </p>
+              </div>
             )}
 
             {(activeDraft.routeOptions?.length ?? 0) > 1 && (

@@ -4,10 +4,12 @@ import {
   cumulativeDistances,
   deduplicateByProximity,
   distanceToSegment,
+  haversineMeters,
   limitResults,
   pointAtDistance,
   projectPoiAlongRoute,
   sortAlongRoute,
+  closestPointOnSegment,
 } from '@/lib/routeGeometry'
 
 describe('routeGeometry', () => {
@@ -89,6 +91,27 @@ describe('routeGeometry', () => {
       expect(result).not.toBeNull()
       expect(typeof result!.distanceAlongRouteMeters).toBe('number')
       expect(result!.detourMeters).toBeGreaterThanOrEqual(0)
+    })
+  })
+
+  describe('closestPointOnSegment', () => {
+    it('returns a point on the segment', () => {
+      const a = { lat: 40.4, lng: -3.7 }
+      const b = { lat: 40.41, lng: -3.69 }
+      const p = { lat: 40.405, lng: -3.695 }
+      const projected = closestPointOnSegment(p, a, b)
+      expect(projected.lat).toBeGreaterThanOrEqual(Math.min(a.lat, b.lat))
+      expect(projected.lat).toBeLessThanOrEqual(Math.max(a.lat, b.lat))
+      expect(projected.lng).toBeGreaterThanOrEqual(Math.min(a.lng, b.lng))
+      expect(projected.lng).toBeLessThanOrEqual(Math.max(a.lng, b.lng))
+    })
+
+    it('clamps to endpoints for far points', () => {
+      const a = { lat: 40.4, lng: -3.7 }
+      const b = { lat: 40.41, lng: -3.69 }
+      const p = { lat: 40.39, lng: -3.71 }
+      const projected = closestPointOnSegment(p, a, b)
+      expect(haversineMeters(projected, a)).toBeLessThan(haversineMeters(projected, b))
     })
   })
 

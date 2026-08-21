@@ -15,6 +15,7 @@ import { verifyFirebaseIdToken, type FirebaseIdentity } from './firebaseAuth'
 import { handleMintCustomToken } from './customToken'
 import { handleEntitlements, handleClaimGpx, handleSyncPlan } from './entitlements'
 import { handleGetGrupetaPack, handleSetGrupetaSeats } from './grupetaPack'
+import { handleReconcile } from './reconcile'
 import {
   handleStravaDisconnect,
   handleStravaImportActivity,
@@ -567,6 +568,10 @@ export default {
       }
       if (path === '/ops/instagram/schedule/run' && request.method === 'POST') {
         return withCors(env, request, await handleInstagramScheduleRun(request, env))
+      }
+
+      if (path === '/ops/reconcile' && request.method === 'POST') {
+        return withCors(env, request, await handleReconcile(request, env))
       }
 
       return withCors(env, request, json({ error: 'Not found', path }, 404))

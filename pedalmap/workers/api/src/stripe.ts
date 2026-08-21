@@ -83,6 +83,21 @@ export async function listCustomerSubscriptions(
   }))
 }
 
+export async function findCustomerByFirebaseUid(
+  env: Env,
+  uid: string,
+): Promise<string | undefined> {
+  const res = await stripeGet(
+    env,
+    `customers/search?query=metadata['firebaseUid']:'${encodeURIComponent(uid)}'`,
+  )
+  const json = (await res.json()) as {
+    data?: Array<{ id: string }>
+  }
+  if (!res.ok || !Array.isArray(json.data) || json.data.length === 0) return undefined
+  return String(json.data[0].id)
+}
+
 export async function handleCheckout(request: Request, env: Env): Promise<Response> {
   if (!env.STRIPE_SECRET_KEY) return json({ error: 'Stripe secret missing' }, 500)
   const identity = await verifyFirebaseIdToken(env, request.headers.get('Authorization'))
@@ -239,7 +254,7 @@ export async function verifyStripeSignature(
   return candidates.some((sig) => timingSafeEqual(sig, digest))
 }
 
-async function resolveFirebaseUid(
+export async function resolveFirebaseUid(
   env: Env,
   obj: Record<string, unknown>,
   eventType: string,
@@ -356,66 +371,120 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
   }
 
   try {
-    if (
+    const isSubscriptionEvent =
       event.type === 'checkout.session.completed' ||
       event.type === 'customer.subscription.created' ||
       event.type === 'customer.subscription.updated'
-    ) {
-      const obj = event.data.object
-      const resolved = await resolveFirebaseUid(env, obj, event.type)
-      const { uid, customerId, subscriptionId, product, interval, ownerEmail, trialEnd } = resolved
+    const isInvoiceEvent =
+      event.type === 'invoice.paid' || event.type === 'invoice.payment_succeeded'
 
-      if (!uid) {
-        console.warn('[stripe] missing firebaseUid', event.type)
-        return json({ received: true, warning: 'missing firebaseUid' })
+    if (!isSubscriptionEvent && !isInvoiceEvent) {
+      return json({ received: true, ignored: true })
+    }
+
+    const obj = event.data.object
+    const resolved = await resolveFirebaseUid(env, obj, event.type)
+    const { uid, customerId, subscriptionId, product, interval, ownerEmail, trialEnd } = resolved
+
+    if (!uid) {
+      console.warn('[stripe] missing firebaseUid', event.type, { customerId, subscriptionId })
+      return json({ error: 'missing firebaseUid' }, 400)
+    }
+
+    // Prefer real Stripe subscription status (trialing vs active). Never force active on checkout.
+    let status = resolved.status || 'active'
+    if (event.type === 'checkout.session.completed' && subscriptionId) {
+      const subRes = await stripeGet(env, `subscriptions/${subscriptionId}`)
+      const sub = (await subRes.json()) as { status?: string }
+      if (sub.status) status = sub.status
+    }
+
+    const prev = await readSubscriptionRecord(env, uid)
+    const nextSoloId = product === 'solo' ? subscriptionId : prev?.soloSubscriptionId
+    const nextSoloStatus = product === 'solo' ? status : prev?.soloStatus
+    const nextGrupetaId = product === 'grupeta' ? subscriptionId : prev?.grupetaSubscriptionId
+    const nextGrupetaStatus = product === 'grupeta' ? status : prev?.grupetaStatus
+    const eff = effectivePlanFromSides(nextSoloStatus, nextGrupetaStatus)
+
+    await upsertSubscriptionAndPlan(env, {
+      uid,
+      plan: eff.plan,
+      status: eff.status,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId:
+        eff.product === 'grupeta'
+          ? nextGrupetaId || subscriptionId
+          : nextSoloId || subscriptionId,
+      product: eff.product,
+      soloSubscriptionId: nextSoloId,
+      soloStatus: nextSoloStatus,
+      grupetaSubscriptionId: nextGrupetaId,
+      grupetaStatus: nextGrupetaStatus,
+      annualTrialUsed: Boolean(prev?.annualTrialUsed) || Boolean(trialEnd) || status === 'trialing',
+    })
+
+    if (product === 'grupeta') {
+      if (eff.plan === 'premium' && nextGrupetaStatus && isPayingStatus(nextGrupetaStatus)) {
+        await activateGrupetaPack(env, {
+          ownerUid: uid,
+          ownerEmail: ownerEmail || null,
+          status: nextGrupetaStatus,
+          interval,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: nextGrupetaId || subscriptionId,
+        })
+      } else {
+        await deactivateGrupetaPack(env, uid, nextGrupetaStatus || status)
+      }
+    }
+
+    if (isInvoiceEvent) {
+      const deletedId = subscriptionId || (typeof obj.id === 'string' ? obj.id : undefined)
+      let nextSoloId = prev?.soloSubscriptionId
+      let nextSoloStatus = prev?.soloStatus
+      let nextGrupetaId = prev?.grupetaSubscriptionId
+      let nextGrupetaStatus = prev?.grupetaStatus
+
+      if (product === 'grupeta' || deletedId === prev?.grupetaSubscriptionId) {
+        nextGrupetaStatus = status
+        if (deletedId) nextGrupetaId = deletedId
+        if (isPayingStatus(status)) {
+          await activateGrupetaPack(env, {
+            ownerUid: uid,
+            ownerEmail: ownerEmail || null,
+            status,
+            interval,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: nextGrupetaId || subscriptionId,
+          })
+        } else {
+          await deactivateGrupetaPack(env, uid, status)
+        }
+      }
+      if (product === 'solo' || deletedId === prev?.soloSubscriptionId) {
+        nextSoloStatus = status
+        if (deletedId) nextSoloId = deletedId
       }
 
-      // Prefer real Stripe subscription status (trialing vs active). Never force active on checkout.
-      let status = resolved.status || 'active'
-      if (event.type === 'checkout.session.completed' && subscriptionId) {
-        const subRes = await stripeGet(env, `subscriptions/${subscriptionId}`)
-        const sub = (await subRes.json()) as { status?: string }
-        if (sub.status) status = sub.status
-      }
-
-      const prev = await readSubscriptionRecord(env, uid)
-      const nextSoloId = product === 'solo' ? subscriptionId : prev?.soloSubscriptionId
-      const nextSoloStatus = product === 'solo' ? status : prev?.soloStatus
-      const nextGrupetaId = product === 'grupeta' ? subscriptionId : prev?.grupetaSubscriptionId
-      const nextGrupetaStatus = product === 'grupeta' ? status : prev?.grupetaStatus
-      const eff = effectivePlanFromSides(nextSoloStatus, nextGrupetaStatus)
-
+      const invEff = effectivePlanFromSides(nextSoloStatus, nextGrupetaStatus)
       await upsertSubscriptionAndPlan(env, {
         uid,
-        plan: eff.plan,
-        status: eff.status,
+        plan: invEff.plan,
+        status: invEff.status,
         stripeCustomerId: customerId,
         stripeSubscriptionId:
-          eff.product === 'grupeta'
-            ? nextGrupetaId || subscriptionId
-            : nextSoloId || subscriptionId,
-        product: eff.product,
+          invEff.plan === 'premium'
+            ? invEff.product === 'grupeta'
+              ? nextGrupetaId
+              : nextSoloId
+            : deletedId,
+        product: invEff.product,
         soloSubscriptionId: nextSoloId,
         soloStatus: nextSoloStatus,
         grupetaSubscriptionId: nextGrupetaId,
         grupetaStatus: nextGrupetaStatus,
         annualTrialUsed: Boolean(prev?.annualTrialUsed) || Boolean(trialEnd) || status === 'trialing',
       })
-
-      if (product === 'grupeta') {
-        if (eff.plan === 'premium' && nextGrupetaStatus && isPayingStatus(nextGrupetaStatus)) {
-          await activateGrupetaPack(env, {
-            ownerUid: uid,
-            ownerEmail: ownerEmail || null,
-            status: nextGrupetaStatus,
-            interval,
-            stripeCustomerId: customerId,
-            stripeSubscriptionId: nextGrupetaId || subscriptionId,
-          })
-        } else {
-          await deactivateGrupetaPack(env, uid, nextGrupetaStatus || status)
-        }
-      }
     }
 
     if (event.type === 'customer.subscription.deleted') {

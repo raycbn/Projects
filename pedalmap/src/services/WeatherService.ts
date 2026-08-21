@@ -9,6 +9,7 @@ import {
   windRelativeLabel,
 } from '@/lib/wind'
 import { isMeteoStampUpcoming, normalizeMeteoStamp } from '@/lib/weatherFormat'
+import { routingAuthHeaders } from '@/lib/routingAuth'
 
 export interface HourlyWeatherPoint {
   time: string // ISO local-ish from Open-Meteo
@@ -209,9 +210,10 @@ export class WeatherService {
     const apiUrl = import.meta.env.VITE_PEDALMAP_API_URL?.replace(/\/+$/, '')
     if (apiUrl) {
       try {
+        const headers = await routingAuthHeaders({ Accept: 'application/json' })
         const res = await fetch(
           `${apiUrl}/osm/weather-forecast?lat=${center.lat}&lng=${center.lng}&forecast_days=${days}`,
-          { signal: opts?.signal, headers: { Accept: 'application/json' } },
+          { signal: opts?.signal, headers },
         )
         if (res.ok) {
           const data = (await res.json()) as { forecast?: RouteWeatherForecast }

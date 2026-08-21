@@ -46,3 +46,6 @@ workers/**/.wrangler
 workers/**/node_modules
 workers/**/.secrets
 pedalmap/docs/social-assets/videos/
+.kilo/
+
+workers/api/tsconfig.tsbuildinfo

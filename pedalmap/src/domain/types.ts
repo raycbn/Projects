@@ -84,6 +84,10 @@ export interface RouteAlternative {
     cycle_lane?: string
     bicycle_network?: number
   }>
+  objectiveMatch?: 'within_tolerance' | 'closest'
+  objectiveDistanceError?: number
+  objectiveElevationError?: number
+  objectiveElevationGainMeters?: number
 }
 
 export interface RouteGeometry {
@@ -146,6 +150,10 @@ export interface RouteDraft {
     label: string
     caption: string
   }
+  objectiveMatch?: 'within_tolerance' | 'closest'
+  objectiveDistanceError?: number
+  objectiveElevationError?: number
+  objectiveElevationGainMeters?: number
 }
 
 export interface SavedRoute extends RouteDraft {
@@ -315,7 +323,15 @@ export interface RoutingResult {
     stats: RouteStats
     rawInstructions?: string[]
     surfaceEdges?: RoutingResult['surfaceEdges']
+    objectiveMatch?: 'within_tolerance' | 'closest'
+    objectiveDistanceError?: number
+    objectiveElevationError?: number
+    objectiveElevationGainMeters?: number
   }>
+  objectiveMatch?: 'within_tolerance' | 'closest'
+  objectiveDistanceError?: number
+  objectiveElevationError?: number
+  objectiveElevationGainMeters?: number
 }
 
 export class RoutingError extends Error {

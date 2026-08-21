@@ -1,5 +1,7 @@
 import type { RouteGeometry } from '@/domain/types'
 import type { WaterPoint } from '@/domain/routeEnricher'
+import { buildWaterPointsAlongRoute } from '@/domain/routeEnrichmentBuilder'
+import { routingAuthHeaders } from '@/lib/routingAuth'
 
 export interface RawWaterSource {
   id: string
@@ -7,10 +9,17 @@ export interface RawWaterSource {
   lon: number
   name: string | null
   type: string
+  address?: string | null
+  access?: string | null
+  drinkingWater?: string | null
+  description?: string | null
+  website?: string | null
+  phone?: string | null
 }
 
 export interface WaterEnrichmentResult {
-  waterPoints: WaterPoint[]
+  recommendedWaterPoints: WaterPoint[]
+  allWaterPoints: WaterPoint[]
   degraded: boolean
   reason?: string
 }
@@ -24,7 +33,7 @@ export class WaterSourceService {
 
   async fetchForRoute(geometry: RouteGeometry): Promise<WaterEnrichmentResult> {
     if (!geometry.coordinates.length) {
-      return { waterPoints: [], degraded: false }
+      return { recommendedWaterPoints: [], allWaterPoints: [], degraded: false }
     }
 
     const bbox = computeBbox(geometry.coordinates)
@@ -32,21 +41,36 @@ export class WaterSourceService {
 
     const cached = this.cache.get(cacheKey)
     if (cached && Date.now() - cached.ts < this.TTL) {
-      return { waterPoints: hydrateWaterPoints(cached.data), degraded: false }
+      const { recommended, all } = buildWaterPointsAlongRoute({
+        geometry,
+        sources: cached.data.map((s) => ({
+          id: s.id,
+          position: { lat: s.lat, lng: s.lon },
+          name: s.name ?? undefined,
+          address: s.address,
+          access: s.access,
+          drinkingWater: s.drinkingWater,
+          description: s.description,
+          website: s.website,
+          phone: s.phone,
+        })),
+      })
+      return { recommendedWaterPoints: recommended, allWaterPoints: all, degraded: false }
     }
 
     if (!API_URL) {
-      return { waterPoints: [], degraded: true, reason: 'no_api_url' }
+      return { recommendedWaterPoints: [], allWaterPoints: [], degraded: true, reason: 'no_api_url' }
     }
 
     try {
+      const headers = await routingAuthHeaders({ Accept: 'application/json' })
       const res = await fetch(
         `${API_URL}${WATER_SOURCES_PATH}?bbox=${bbox.s},${bbox.w},${bbox.n},${bbox.e}`,
-        { headers: { Accept: 'application/json' } },
+        { headers },
       )
 
       if (!res.ok) {
-        return { waterPoints: [], degraded: true, reason: `upstream_${res.status}` }
+        return { recommendedWaterPoints: [], allWaterPoints: [], degraded: true, reason: `upstream_${res.status}` }
       }
 
       const json = (await res.json()) as {
@@ -60,13 +84,29 @@ export class WaterSourceService {
         this.cache.set(cacheKey, { data: sources, ts: Date.now() })
       }
 
+      const { recommended, all } = buildWaterPointsAlongRoute({
+        geometry,
+        sources: sources.map((s) => ({
+          id: s.id,
+          position: { lat: s.lat, lng: s.lon },
+          name: s.name ?? undefined,
+          address: s.address,
+          access: s.access,
+          drinkingWater: s.drinkingWater,
+          description: s.description,
+          website: s.website,
+          phone: s.phone,
+        })),
+      })
+
       return {
-        waterPoints: hydrateWaterPoints(sources),
+        recommendedWaterPoints: recommended,
+        allWaterPoints: all,
         degraded: Boolean(json.degraded),
         reason: json.reason,
       }
     } catch {
-      return { waterPoints: [], degraded: true, reason: 'network_error' }
+      return { recommendedWaterPoints: [], allWaterPoints: [], degraded: true, reason: 'network_error' }
     }
   }
 }
@@ -86,14 +126,6 @@ function computeBbox(
   }
   const pad = 0.01
   return { s: minLat - pad, w: minLng - pad, n: maxLat + pad, e: maxLng + pad }
-}
-
-function hydrateWaterPoints(sources: RawWaterSource[]): WaterPoint[] {
-  return sources.map((s) => ({
-    id: s.id,
-    position: { lat: s.lat, lng: s.lon },
-    name: s.name ?? undefined,
-  }))
 }
 
 export const waterSourceService = new WaterSourceService()

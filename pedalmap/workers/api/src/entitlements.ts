@@ -14,7 +14,7 @@ import {
   upsertSubscriptionAndPlan,
   writeUserPlan,
 } from './firestore'
-import { listCustomerSubscriptions } from './stripe'
+import { listCustomerSubscriptions, findCustomerByFirebaseUid } from './stripe'
 import {
   emailDocId,
   grantPremiumFromGrupetaSeat,
@@ -24,7 +24,7 @@ import { evaluatePlan, type EvaluatePlanInput } from './entitlementRules'
 
 const FREE_MAX_SAVED = 5
 
-async function resolveEffectivePlan(
+export async function resolveEffectivePlan(
   env: Env,
   identity: FirebaseIdentity,
 ): Promise<{ plan: 'free' | 'premium'; allowlisted: boolean; grupetaSeat: boolean }> {
@@ -36,8 +36,15 @@ async function resolveEffectivePlan(
   }
 
   const sub = await readSubscriptionRecord(env, identity.uid)
-  const customerId = await readSubscriptionCustomerId(env, identity.uid)
+  let customerId = await readSubscriptionCustomerId(env, identity.uid)
   let stripeSubs: Array<{ status: string; product: 'solo' | 'grupeta'; id: string; hasTrialed: boolean }> = []
+  if (!customerId) {
+    try {
+      customerId = await findCustomerByFirebaseUid(env, identity.uid)
+    } catch (error) {
+      console.warn('[plan] stripe uid lookup failed', error)
+    }
+  }
   if (customerId) {
     try {
       stripeSubs = await listCustomerSubscriptions(env, customerId)

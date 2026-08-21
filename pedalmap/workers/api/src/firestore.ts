@@ -26,7 +26,7 @@ function base64url(data: ArrayBuffer | string): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-async function getAccessToken(sa: ServiceAccount): Promise<string> {
+export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
   const header = { alg: 'RS256', typ: 'JWT' }
   const claim = {
@@ -66,7 +66,7 @@ async function getAccessToken(sa: ServiceAccount): Promise<string> {
   return json.access_token
 }
 
-function parseServiceAccount(env: Env): ServiceAccount | null {
+export function parseServiceAccount(env: Env): ServiceAccount | null {
   if (!env.FIREBASE_SERVICE_ACCOUNT) return null
   try {
     return JSON.parse(env.FIREBASE_SERVICE_ACCOUNT) as ServiceAccount
@@ -1290,7 +1290,7 @@ function firestoreSafeGeometry(geometry: unknown): {
   return { type: 'LineString', coordinates }
 }
 
-async function adminGetDocument(
+export async function adminGetDocument(
   projectId: string,
   token: string,
   path: string,
@@ -1305,7 +1305,7 @@ async function adminGetDocument(
   return (await res.json()) as Record<string, unknown>
 }
 
-function fieldString(doc: Record<string, unknown> | null, key: string): string | null {
+export function fieldString(doc: Record<string, unknown> | null, key: string): string | null {
   const fields = doc?.fields as Record<string, { stringValue?: string }> | undefined
   return fields?.[key]?.stringValue ?? null
 }

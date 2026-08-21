@@ -1,9 +1,13 @@
 import type { Env } from './types'
 import { json } from './types'
 
-const OVERPASS = 'https://overpass-api.de/api/interpreter'
-const OVERPASS_FALLBACK = 'https://overpass.kumi.systems/api/interpreter'
+const OVERPASS_UPSTREAMS = [
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+]
 const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap-79b3a.web.app; water sources)'
+
+const FETCH_TIMEOUT_MS = 10_000
 
 function buildQuery(bbox: [number, number, number, number]): string {
   const [s, w, n, e] = bbox
@@ -15,11 +19,15 @@ function buildQuery(bbox: [number, number, number, number]): string {
   nwr["fountain"="drinking"](${s},${w},${n},${e});
   nwr["amenity"="fountain"]["drinking_water"="yes"](${s},${w},${n},${e});
   node["natural"="spring"](${s},${w},${n},${e});
-);
-out center;`
+ );
+   out body tags center;`
+  // 200 is sufficient for typical cycling routes.
+  // A 200 km route bbox rarely contains more than a few dozen water sources.
+  // The client-side distribution algorithm only needs ~10 well-spaced candidates,
+  // so 200 provides a large safety margin without bloating the response.
 }
 
-async function fetchOverpass(url: string, query: string): Promise<Response> {
+async function fetchOverpass(url: string, query: string, signal?: AbortSignal): Promise<Response> {
   return fetch(url, {
     method: 'POST',
     headers: {
@@ -27,6 +35,7 @@ async function fetchOverpass(url: string, query: string): Promise<Response> {
       'User-Agent': USER_AGENT,
     },
     body: 'data=' + encodeURIComponent(query),
+    signal,
   })
 }
 
@@ -43,25 +52,37 @@ export async function handleWaterSources(request: Request, _env: Env): Promise<R
   }
   const [s, w, n, e] = parts as [number, number, number, number]
 
-  const cacheKey = `water:${bboxParam}`
+  const cacheKey = `https://pedalmap.es/__water-cache/${bboxParam}`
   const cached = await caches.default.match(cacheKey)
   if (cached) {
     return cached
   }
 
   const query = buildQuery([s, w, n, e])
-  let res = await fetchOverpass(OVERPASS, query)
-  if (!res.ok) {
-    res = await fetchOverpass(OVERPASS_FALLBACK, query)
+  let res: Response | null = null
+  for (const upstream of OVERPASS_UPSTREAMS) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    try {
+      res = await fetchOverpass(upstream, query, controller.signal)
+      clearTimeout(timeoutId)
+      if (res.ok) break
+    } catch {
+      clearTimeout(timeoutId)
+      // continue to next upstream
+    }
   }
 
-  if (!res.ok) {
-    const body = json({ sources: [], degraded: true, reason: 'upstream_unavailable' }, 200)
-    await caches.default.put(cacheKey, body.clone())
-    return body
+  if (!res || !res.ok) {
+    return json({ sources: [], degraded: true, reason: 'upstream_unavailable' }, 200)
   }
 
-  const data = await res.json() as { elements?: Array<Record<string, unknown>> }
+  let data: { elements?: Array<Record<string, unknown>> }
+  try {
+    data = await res.json()
+  } catch {
+    return json({ sources: [], degraded: true, reason: 'upstream_unavailable' }, 200)
+  }
   const elements = Array.isArray(data?.elements) ? data.elements : []
 
   const sources = elements
@@ -76,9 +97,27 @@ export async function handleWaterSources(request: Request, _env: Env): Promise<R
         lon,
         name: tags.name ?? null,
         type: tags.amenity || tags.man_made || tags.natural || tags.fountain || 'other',
+        address: tags['addr:street'] ?? null,
+        access: tags.access ?? null,
+        drinkingWater: tags.drinking_water ?? null,
+        description: tags.description ?? null,
+        website: tags.website ?? null,
+        phone: tags.phone ?? null,
       }
     })
-    .filter((s: unknown): s is { id: string; lat: number; lon: number; name: string | null; type: string } => Boolean(s))
+    .filter((s: unknown): s is {
+      id: string
+      lat: number
+      lon: number
+      name: string | null
+      type: string
+      address: string | null
+      access: string | null
+      drinkingWater: string | null
+      description: string | null
+      website: string | null
+      phone: string | null
+    } => Boolean(s))
 
   const body = json({ sources, attribution: '© OpenStreetMap contributors (ODbL)' }, 200)
   await caches.default.put(cacheKey, body.clone())

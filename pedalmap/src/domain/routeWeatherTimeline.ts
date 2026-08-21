@@ -37,6 +37,27 @@ export interface BuildWeatherTimelineOptions {
   sampleIntervalMeters?: number
 }
 
+export type WeatherTimelineReferenceSource = 'manual' | 'best_departure' | 'fallback'
+
+export interface WeatherTimelineReference {
+  startTime: Date
+  source: WeatherTimelineReferenceSource
+}
+
+export function getWeatherTimelineReference(opts: {
+  manualTime?: Date | null
+  departureResult?: { recommended?: { startTime?: Date } | null } | null
+}): WeatherTimelineReference {
+  if (opts.manualTime) {
+    return { startTime: opts.manualTime, source: 'manual' }
+  }
+  const recommendedStart = opts.departureResult?.recommended?.startTime
+  if (recommendedStart) {
+    return { startTime: recommendedStart, source: 'best_departure' }
+  }
+  return { startTime: new Date(), source: 'fallback' }
+}
+
 const DEFAULT_SAMPLE_INTERVAL_METERS = 5000
 
 function windRelative(routeBearingDeg: number | null, windDirectionDeg: number): 'cara' | 'lateral' | 'cola' {
@@ -117,7 +138,7 @@ export function buildWeatherTimeline(
       }
     }
     return {
-      timestamp: hour.time,
+      timestamp: arrival.toISOString(),
       distanceAlongRouteMeters: Math.round(sample.distanceMeters),
       estimatedArrivalMinutes: estimatedArrivalMinutes(sample.distanceMeters, stats.distanceMeters, stats.estimatedDurationSeconds),
       temperatureC: hour.temperatureC,

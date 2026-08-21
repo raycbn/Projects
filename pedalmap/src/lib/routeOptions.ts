@@ -8,6 +8,10 @@ export type RouteOptionCandidate = {
   stats: RouteStats
   instructions?: string[]
   surfaceEdges?: SurfaceEdges
+  objectiveMatch?: 'within_tolerance' | 'closest'
+  objectiveDistanceError?: number
+  objectiveElevationError?: number
+  objectiveElevationGainMeters?: number
 }
 
 export type RankedRouteBundle = {
@@ -39,12 +43,33 @@ function cycleFitOf(stats: RouteStats): number {
  * Active geometry is the best surface fit; among near-ties, prefer more
  * cycle infrastructure; final tie-break is the shortest distance.
  */
+function objectiveRank(c: RouteOptionCandidate): number {
+  if (c.objectiveMatch === 'within_tolerance') return 0
+  if (c.objectiveMatch === 'closest') return 1
+  return 2
+}
+
+/**
+ * Build a stable, ranked list of route options (Opción 1..N).
+ * Active geometry is the best surface fit; among near-ties, prefer more
+ * cycle infrastructure; final tie-break is the shortest distance.
+ *
+ * For objective/circular routes the worker tags candidates with
+ * `objectiveMatch`. Those tags take precedence over surface fit so a
+ * within-tolerance match is never demoted by a closer-but-wrong alternative.
+ */
 export function rankRouteOptions(candidates: RouteOptionCandidate[]): RankedRouteBundle {
   if (!candidates.length) {
     throw new Error('rankRouteOptions requires at least one candidate')
   }
 
+  const hasObjective = candidates.some((c) => c.objectiveMatch != null)
+
   const sorted = [...candidates].sort((a, b) => {
+    if (hasObjective) {
+      const objDiff = objectiveRank(a) - objectiveRank(b)
+      if (objDiff !== 0) return objDiff
+    }
     const scoreDiff = scoreOf(b.stats) - scoreOf(a.stats)
     if (Math.abs(scoreDiff) > 0.5) return scoreDiff
     const cycleDiff = cycleFitOf(b.stats) - cycleFitOf(a.stats)
@@ -61,6 +86,10 @@ export function rankRouteOptions(candidates: RouteOptionCandidate[]): RankedRout
     stats: c.stats,
     instructions: c.instructions?.filter(Boolean).slice(0, 40),
     surfaceEdges: c.surfaceEdges,
+    objectiveMatch: c.objectiveMatch,
+    objectiveDistanceError: c.objectiveDistanceError,
+    objectiveElevationError: c.objectiveElevationError,
+    objectiveElevationGainMeters: c.objectiveElevationGainMeters,
   }))
 
   const selected = routeOptions[0]
@@ -88,6 +117,10 @@ export function applySelectedOption<
     routeOptions?: RouteAlternative[]
     selectedOptionId?: string
     title: string
+    objectiveMatch?: 'within_tolerance' | 'closest'
+    objectiveDistanceError?: number
+    objectiveElevationError?: number
+    objectiveElevationGainMeters?: number
   },
 >(draft: T, optionId: string): T {
   const options = draft.routeOptions
@@ -102,6 +135,10 @@ export function applySelectedOption<
     stats: selected.stats,
     instructions: selected.instructions ?? draft.instructions,
     surfaceEdges: selected.surfaceEdges ?? draft.surfaceEdges,
+    objectiveMatch: selected.objectiveMatch,
+    objectiveDistanceError: selected.objectiveDistanceError,
+    objectiveElevationError: selected.objectiveElevationError,
+    objectiveElevationGainMeters: selected.objectiveElevationGainMeters,
     selectedOptionId: selected.id,
     title: `${baseTitle} · ${selected.label}`,
   }
