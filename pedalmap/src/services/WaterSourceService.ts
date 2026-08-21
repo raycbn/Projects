@@ -18,7 +18,8 @@ export interface RawWaterSource {
 }
 
 export interface WaterEnrichmentResult {
-  waterPoints: WaterPoint[]
+  recommendedWaterPoints: WaterPoint[]
+  allWaterPoints: WaterPoint[]
   degraded: boolean
   reason?: string
 }
@@ -32,7 +33,7 @@ export class WaterSourceService {
 
   async fetchForRoute(geometry: RouteGeometry): Promise<WaterEnrichmentResult> {
     if (!geometry.coordinates.length) {
-      return { waterPoints: [], degraded: false }
+      return { recommendedWaterPoints: [], allWaterPoints: [], degraded: false }
     }
 
     const bbox = computeBbox(geometry.coordinates)
@@ -40,7 +41,7 @@ export class WaterSourceService {
 
     const cached = this.cache.get(cacheKey)
     if (cached && Date.now() - cached.ts < this.TTL) {
-      const waterPoints = buildWaterPointsAlongRoute({
+      const { recommended, all } = buildWaterPointsAlongRoute({
         geometry,
         sources: cached.data.map((s) => ({
           id: s.id,
@@ -54,11 +55,11 @@ export class WaterSourceService {
           phone: s.phone,
         })),
       })
-      return { waterPoints, degraded: false }
+      return { recommendedWaterPoints: recommended, allWaterPoints: all, degraded: false }
     }
 
     if (!API_URL) {
-      return { waterPoints: [], degraded: true, reason: 'no_api_url' }
+      return { recommendedWaterPoints: [], allWaterPoints: [], degraded: true, reason: 'no_api_url' }
     }
 
     try {
@@ -69,7 +70,7 @@ export class WaterSourceService {
       )
 
       if (!res.ok) {
-        return { waterPoints: [], degraded: true, reason: `upstream_${res.status}` }
+        return { recommendedWaterPoints: [], allWaterPoints: [], degraded: true, reason: `upstream_${res.status}` }
       }
 
       const json = (await res.json()) as {
@@ -83,7 +84,7 @@ export class WaterSourceService {
         this.cache.set(cacheKey, { data: sources, ts: Date.now() })
       }
 
-      const waterPoints = buildWaterPointsAlongRoute({
+      const { recommended, all } = buildWaterPointsAlongRoute({
         geometry,
         sources: sources.map((s) => ({
           id: s.id,
@@ -99,12 +100,13 @@ export class WaterSourceService {
       })
 
       return {
-        waterPoints,
+        recommendedWaterPoints: recommended,
+        allWaterPoints: all,
         degraded: Boolean(json.degraded),
         reason: json.reason,
       }
     } catch {
-      return { waterPoints: [], degraded: true, reason: 'network_error' }
+      return { recommendedWaterPoints: [], allWaterPoints: [], degraded: true, reason: 'network_error' }
     }
   }
 }

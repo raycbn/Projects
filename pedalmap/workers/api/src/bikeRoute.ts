@@ -294,6 +294,7 @@ type TripJson = {
 }
 
 const ROUTE_ELEVATION_INTERVAL_M = 30
+const CYCLING_ELEVATION_THRESHOLD_M = 3
 
 /**
  * Build a continuous elevation profile from Valhalla leg.elevation arrays.
@@ -521,6 +522,12 @@ async function routeLocations(
   return { ...primary, alternatives }
 }
 
+let routeLocationsImpl: typeof routeLocations = routeLocations
+
+export function __setRouteLocationsForTests(impl: typeof routeLocations) {
+  routeLocationsImpl = impl
+}
+
 type EnrichedRoute = Awaited<ReturnType<typeof enrichTrip>>
 
 function routeFingerprint(route: EnrichedRoute): string {
@@ -624,7 +631,7 @@ async function topUpWithCostingVariants(
   const variants: Array<'roads' | 'mixed' | 'hills'> = ['roads', 'mixed', 'hills']
   if (parallel) {
     const settled = await Promise.allSettled(
-      variants.map((v) => routeLocations(env, locations, costingVariant(costing, v), language)),
+      variants.map((v) => routeLocationsImpl(env, locations, costingVariant(costing, v), language)),
     )
     const extras: EnrichedRoute[] = []
     for (const r of settled) {
@@ -637,7 +644,7 @@ async function topUpWithCostingVariants(
   for (const variant of variants) {
     if (unique.length >= 3) break
     try {
-      const extra = await routeLocations(env, locations, costingVariant(costing, variant), language)
+      const extra = await routeLocationsImpl(env, locations, costingVariant(costing, variant), language)
       unique = mergeUniqueRoutes([...unique, extra], 3)
     } catch (err) {
       console.warn('[bike-route] costing top-up failed', variant, err)
@@ -690,7 +697,7 @@ async function topUpWithDetours(
         { lat: via.lat, lon: via.lng, type: 'through' },
         locations[locations.length - 1],
       ]
-      const extra = await routeLocations(env, withVia, costing, language, {
+      const extra = await routeLocationsImpl(env, withVia, costing, language, {
         elevationIntervalM: 50,
       })
       unique = mergeUniqueRoutes([...unique, extra], 3)
@@ -712,7 +719,7 @@ async function routeLocationsWithOptions(
   language: string,
   _mode: 'a_to_b' | 'out_and_back' = 'a_to_b',
 ): Promise<EnrichedRoute & { alternatives: EnrichedRoute[] }> {
-  const main = await routeLocations(env, locations, costing, language, { alternates: 2 })
+  const main = await routeLocationsImpl(env, locations, costing, language, { alternates: 2 })
   let unique = mergeUniqueRoutes([main, ...(main.alternatives ?? [])], 3)
 
   // Native alternates often enough — stop early to save CPU.
@@ -740,7 +747,9 @@ async function routeLocationsWithOptions(
  * Single round-trip from the browser: Valhalla route + surface + elevation.
  * Supports A→B, out-and-back, and Objetivo circular loops.
  */
-export async function handleBikeRoute(request: Request, env: Env): Promise<Response> {
+export async function handleBikeRoute(request: Request, env: Env, deps?: {
+  routeLocations?: typeof routeLocations
+}): Promise<Response> {
   let body: BikeRouteRequest
   try {
     body = (await request.json()) as BikeRouteRequest
@@ -765,87 +774,205 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
   }
 
   const costing = bicycleCosting(bikeType, preferences)
+  const resolveRouteLocations = deps?.routeLocations ?? routeLocations
 
   try {
     if (routeType === 'circular') {
       if (!circularDistanceMeters || circularDistanceMeters < 1000) {
         return json({ error: 'circularDistanceMeters required (>=1000)' }, 400)
       }
+      const distance = circularDistanceMeters
       const start = waypoints[0]
       const wantElev = Boolean(targetElevationGainMeters && targetElevationGainMeters > 0)
       const seed = circularSeed || 0
-      // More bearings + leg scales → better distance/elev match; "Otra variante" rotates seed.
-      const attempts: Array<{
+
+      const DISTANCE_TOLERANCE = 0.15
+      const ELEVATION_TOLERANCE = 0.5
+      const MAX_CANDIDATES = 10
+
+      function buildCohorts(): Array<{
         bearing: number
         legFactor: number
         costing: Record<string, number | string>
-      }> = [
-        { bearing: (seed * 47) % 360, legFactor: 5.0, costing },
-        { bearing: (seed * 47 + 90) % 360, legFactor: 4.2, costing },
-        { bearing: (seed * 47 + 180) % 360, legFactor: 4.6, costing },
-        { bearing: (seed * 47 + 270) % 360, legFactor: 3.8, costing },
-      ]
-      if (wantElev) {
+      }> {
+        const base: Array<{
+          bearing: number
+          legFactor: number
+          costing: Record<string, number | string>
+        }> = [
+          { bearing: (seed * 47) % 360, legFactor: 5.0, costing },
+          { bearing: (seed * 47 + 90) % 360, legFactor: 4.2, costing },
+          { bearing: (seed * 47 + 180) % 360, legFactor: 4.6, costing },
+          { bearing: (seed * 47 + 270) % 360, legFactor: 3.8, costing },
+        ]
+
+        if (!wantElev || !targetElevationGainMeters) return base
+
+        const elevPerKm = targetElevationGainMeters / (distance / 1000)
         const hills = costingVariant(costing, 'hills')
-        attempts.push(
-          { bearing: (seed * 47 + 35) % 360, legFactor: 4.5, costing: hills },
-          { bearing: (seed * 47 + 215) % 360, legFactor: 4.0, costing: hills },
-        )
+        const flat = costingVariant(costing, 'roads')
+
+        if (elevPerKm < 8) {
+          base.push(
+            { bearing: (seed * 47 + 35) % 360, legFactor: 5.5, costing: flat },
+            { bearing: (seed * 47 + 215) % 360, legFactor: 5.8, costing: flat },
+          )
+        } else if (elevPerKm > 18) {
+          base.push(
+            { bearing: (seed * 47 + 35) % 360, legFactor: 3.5, costing: hills },
+            { bearing: (seed * 47 + 215) % 360, legFactor: 3.2, costing: hills },
+          )
+        } else {
+          base.push(
+            { bearing: (seed * 47 + 35) % 360, legFactor: 4.5, costing: hills },
+            { bearing: (seed * 47 + 215) % 360, legFactor: 4.0, costing: hills },
+          )
+        }
+
+        return base
       }
 
-      const settled = await Promise.all(
-        (env.STADIA_API_KEY ? attempts : attempts.slice(0, 4)).map(
-          async ({ bearing, legFactor, costing: attemptCosting }, i) => {
-          const leg = circularDistanceMeters / legFactor
-          const via1 = offsetLatLng(start, bearing, leg)
-          const via2 = offsetLatLng(start, bearing + 120, leg)
-          try {
-            const candidate = await routeLocations(
-              env,
-              [
-                { lat: start.lat, lon: start.lng, type: 'break' },
-                { lat: via1.lat, lon: via1.lng, type: 'break' },
-                { lat: via2.lat, lon: via2.lng, type: 'break' },
-                { lat: start.lat, lon: start.lng, type: 'break' },
-              ],
-              attemptCosting,
-              language,
-            )
-            const distErr =
-              Math.abs(candidate.distanceMeters - circularDistanceMeters) /
-              Math.max(1, circularDistanceMeters)
-            let elevErr = 0
-            if (wantElev && targetElevationGainMeters) {
-              let gain = 0
-              for (let p = 1; p < candidate.elevationProfile.length; p += 1) {
-                const d =
-                  candidate.elevationProfile[p].elevationMeters -
-                  candidate.elevationProfile[p - 1].elevationMeters
-                if (d > 2.5) gain += d
-              }
-              elevErr =
-                Math.abs(gain - targetElevationGainMeters) /
-                Math.max(40, targetElevationGainMeters)
+      async function evaluateAttempt(
+        bearing: number,
+        legFactor: number,
+        attemptCosting: Record<string, number | string>,
+      ): Promise<{
+        candidate: EnrichedRoute & { alternatives?: EnrichedRoute[] }
+        score: number
+        withinTolerance: boolean
+        distErr: number
+        elevErr: number
+        elevationGainMeters: number
+      } | null> {
+        const leg = distance / legFactor
+        const via1 = offsetLatLng(start, bearing, leg)
+        const via2 = offsetLatLng(start, bearing + 120, leg)
+        try {
+          const candidate = await resolveRouteLocations(
+            env,
+            [
+              { lat: start.lat, lon: start.lng, type: 'break' },
+              { lat: via1.lat, lon: via1.lng, type: 'break' },
+              { lat: via2.lat, lon: via2.lng, type: 'break' },
+              { lat: start.lat, lon: start.lng, type: 'break' },
+            ],
+            attemptCosting,
+            language,
+          )
+          const distErr =
+            Math.abs(candidate.distanceMeters - distance) /
+            Math.max(1, distance)
+          let elevErr = 0
+          let elevationGainMeters = 0
+          if (wantElev && targetElevationGainMeters) {
+            let gain = 0
+            for (let p = 1; p < candidate.elevationProfile.length; p += 1) {
+              const d =
+                candidate.elevationProfile[p].elevationMeters -
+                candidate.elevationProfile[p - 1].elevationMeters
+              if (d >= CYCLING_ELEVATION_THRESHOLD_M) gain += d
             }
-            // Prefer closer distance; elev weighs more when user set a target.
-            const score = distErr * 100 + elevErr * (wantElev ? 55 : 0)
-            return { candidate, score, i }
-          } catch (err) {
-            console.warn('[bike-route] circular attempt failed', i, err)
-            return null
+            elevationGainMeters = gain
+            elevErr =
+              Math.abs(gain - targetElevationGainMeters) /
+              Math.max(1, targetElevationGainMeters)
           }
-        }),
+          const withinTolerance =
+            distErr <= DISTANCE_TOLERANCE &&
+            (!wantElev || elevErr <= ELEVATION_TOLERANCE)
+          const score = distErr + elevErr
+          return { candidate, score, withinTolerance, distErr, elevErr, elevationGainMeters }
+        } catch (err) {
+          console.warn('[bike-route] circular attempt failed', bearing, legFactor, err)
+          return null
+        }
+      }
+
+      async function buildAdaptiveCohorts(
+        best: {
+          withinTolerance: boolean
+          elevErr: number
+          elevationGainMeters: number
+          distErr: number
+        },
+      ): Promise<Array<{
+        bearing: number
+        legFactor: number
+        costing: Record<string, number | string>
+      }>> {
+        if (!wantElev || best.withinTolerance) return []
+        if (best.elevErr <= ELEVATION_TOLERANCE) return []
+
+        const needLessElev = best.elevationGainMeters > targetElevationGainMeters!
+        const extra: Array<{
+          bearing: number
+          legFactor: number
+          costing: Record<string, number | string>
+        }> = []
+
+        if (needLessElev) {
+          const flat = costingVariant(costing, 'roads')
+          extra.push(
+            { bearing: (seed * 47 + 45) % 360, legFactor: 6.0, costing: flat },
+            { bearing: (seed * 47 + 135) % 360, legFactor: 6.5, costing: flat },
+            { bearing: (seed * 47 + 225) % 360, legFactor: 7.0, costing: flat },
+          )
+        } else {
+          const hills = costingVariant(costing, 'hills')
+          extra.push(
+            { bearing: (seed * 47 + 45) % 360, legFactor: 3.0, costing: hills },
+            { bearing: (seed * 47 + 135) % 360, legFactor: 2.8, costing: hills },
+          )
+        }
+
+        return extra.slice(0, MAX_CANDIDATES - buildCohorts().length)
+      }
+
+      const cohorts = buildCohorts()
+      const initial = await Promise.all(
+        (env.STADIA_API_KEY ? cohorts : cohorts.slice(0, 4)).map(
+          async ({ bearing, legFactor, costing: attemptCosting }) =>
+            evaluateAttempt(bearing, legFactor, attemptCosting),
+        ),
       )
 
-      const ranked = settled
+      let settled = initial
         .filter((row): row is NonNullable<typeof row> => Boolean(row))
-        .sort((a, b) => a.score - b.score)
+        .sort((a, b) => {
+          if (a.withinTolerance && !b.withinTolerance) return -1
+          if (!a.withinTolerance && b.withinTolerance) return 1
+          return a.score - b.score
+        })
 
-      if (!ranked.length) return json({ error: 'No circular route found' }, 404)
-      const best = ranked[0].candidate
-      const { alternatives: _alts, ...primary } = best
-      // Expose up to 2 runners-up so the client can offer "Otra variante" without re-hit.
-      const alternatives = ranked.slice(1, 3).map((row, idx) => {
+      if (wantElev && targetElevationGainMeters && settled.length > 0 && !settled[0].withinTolerance) {
+        const adaptive = await buildAdaptiveCohorts(settled[0])
+        if (adaptive.length > 0) {
+          const extra = await Promise.all(
+            adaptive.map(({ bearing, legFactor, costing: attemptCosting }) =>
+              evaluateAttempt(bearing, legFactor, attemptCosting),
+            ),
+          )
+          const extraSettled = extra
+            .filter((row): row is NonNullable<typeof row> => Boolean(row))
+            .sort((a, b) => {
+              if (a.withinTolerance && !b.withinTolerance) return -1
+              if (!a.withinTolerance && b.withinTolerance) return 1
+              return a.score - b.score
+            })
+          settled = [...settled, ...extraSettled]
+            .sort((a, b) => {
+              if (a.withinTolerance && !b.withinTolerance) return -1
+              if (!a.withinTolerance && b.withinTolerance) return 1
+              return a.score - b.score
+            })
+            .slice(0, MAX_CANDIDATES)
+        }
+      }
+
+      if (!settled.length) return json({ error: 'No circular route found' }, 404)
+      const best = settled[0]
+      const { alternatives: _alts, ...primary } = best.candidate
+      const alternatives = settled.slice(1, 3).map((row, idx) => {
         const { alternatives: _a, ...rest } = row.candidate
         return { ...rest, label: `Variante ${idx + 2}` }
       })
@@ -854,6 +981,10 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
         provider: 'valhalla',
         bikeType,
         routeType,
+        objectiveMatch: best.withinTolerance ? 'within_tolerance' : 'closest',
+        objectiveDistanceError: best.distErr,
+        objectiveElevationError: best.elevErr,
+        objectiveElevationGainMeters: best.elevationGainMeters,
         ...primary,
         alternatives,
       })
@@ -885,7 +1016,7 @@ export async function handleBikeRoute(request: Request, env: Env): Promise<Respo
             language,
             routeType === 'out_and_back' ? 'out_and_back' : 'a_to_b',
           )
-        : await routeLocations(env, locations, costing, language, {
+        : await resolveRouteLocations(env, locations, costing, language, {
             elevationIntervalM: routeType === 'out_and_back' || longSpan ? 45 : ROUTE_ELEVATION_INTERVAL_M,
             ...(wantsOptions && !longSpan ? { alternates: 2 } : {}),
           })

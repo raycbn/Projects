@@ -79,6 +79,10 @@ export class RouteService {
         stats: result.stats,
         instructions: result.rawInstructions,
         surfaceEdges: result.surfaceEdges,
+        objectiveMatch: result.objectiveMatch,
+        objectiveDistanceError: result.objectiveDistanceError,
+        objectiveElevationError: result.objectiveElevationError,
+        objectiveElevationGainMeters: result.objectiveElevationGainMeters,
       },
       ...(result.alternatives ?? []).map((alt) => ({
         geometry: alt.geometry,
@@ -86,6 +90,10 @@ export class RouteService {
         stats: alt.stats,
         instructions: alt.rawInstructions ?? result.rawInstructions,
         surfaceEdges: alt.surfaceEdges ?? result.surfaceEdges,
+        objectiveMatch: alt.objectiveMatch,
+        objectiveDistanceError: alt.objectiveDistanceError,
+        objectiveElevationError: alt.objectiveElevationError,
+        objectiveElevationGainMeters: alt.objectiveElevationGainMeters,
       })),
     ]
 
@@ -110,6 +118,10 @@ export class RouteService {
       selectedOptionId: ranked.routeOptions.length > 1 ? ranked.selectedOptionId : undefined,
       // Legacy field: non-selected options only (older UI).
       alternatives: extras.length ? extras : undefined,
+      objectiveMatch: result.objectiveMatch,
+      objectiveDistanceError: result.objectiveDistanceError,
+      objectiveElevationError: result.objectiveElevationError,
+      objectiveElevationGainMeters: result.objectiveElevationGainMeters,
     }
   }
 }

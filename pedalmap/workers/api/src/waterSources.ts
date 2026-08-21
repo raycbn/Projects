@@ -18,8 +18,12 @@ function buildQuery(bbox: [number, number, number, number]): string {
   nwr["fountain"="drinking"](${s},${w},${n},${e});
   nwr["amenity"="fountain"]["drinking_water"="yes"](${s},${w},${n},${e});
   node["natural"="spring"](${s},${w},${n},${e});
-);
-out body tags center;`
+ );
+ out body tags center qt=200;`
+  // 200 is sufficient for typical cycling routes.
+  // A 200 km route bbox rarely contains more than a few dozen water sources.
+  // The client-side distribution algorithm only needs ~10 well-spaced candidates,
+  // so 200 provides a large safety margin without bloating the response.
 }
 
 async function fetchOverpass(url: string, query: string): Promise<Response> {

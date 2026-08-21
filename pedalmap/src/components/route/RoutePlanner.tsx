@@ -92,12 +92,12 @@ export function RoutePlanner() {
   const activeDraft = editDraft ?? draft
   const bikeModality = getBikeModality(bikeType)
 
-  const [waterPoints, setWaterPoints] = useState<WaterPoint[] | undefined>(undefined)
+  const [allWaterPoints, setAllWaterPoints] = useState<WaterPoint[]>([])
 
   const waterOverlay = useMemo(() => {
-    if (!activeDraft?.geometry || !waterPoints?.length) return null
-    return buildRouteWaterOverlay(activeDraft.geometry, waterPoints)
-  }, [activeDraft?.geometry, waterPoints])
+    if (!activeDraft?.geometry || !allWaterPoints.length) return null
+    return buildRouteWaterOverlay(activeDraft.geometry, allWaterPoints)
+  }, [activeDraft?.geometry, allWaterPoints])
 
   // Trazar = mapa protagonista; al salir del modo, colapsar.
   useEffect(() => {
@@ -112,7 +112,7 @@ export function RoutePlanner() {
 
   useEffect(() => {
     if (!activeDraft?.geometry) {
-      setWaterPoints(undefined)
+      setAllWaterPoints([])
       return
     }
 
@@ -122,11 +122,11 @@ export function RoutePlanner() {
       .fetchForRoute(activeDraft.geometry)
       .then((result) => {
         if (cancelled) return
-        setWaterPoints(result.waterPoints)
+        setAllWaterPoints(result.allWaterPoints)
       })
       .catch(() => {
         if (cancelled) return
-        setWaterPoints([])
+        setAllWaterPoints([])
       })
 
     return () => {
@@ -182,20 +182,20 @@ export function RoutePlanner() {
     if (!activeDraft || activeDraft.type !== 'circular') return null
     const targetD = activeDraft.circularDistanceMeters
     const targetE = activeDraft.targetElevationGainMeters
-    const parts: string[] = []
-    if (targetD && targetD > 0) {
-      const err = ((activeDraft.stats.distanceMeters - targetD) / targetD) * 100
-      parts.push(
-        `Distancia ${formatDistance(activeDraft.stats.distanceMeters)} (objetivo ${formatDistance(targetD)}, ${err >= 0 ? '+' : ''}${err.toFixed(0)}%)`,
-      )
+    const actualD = activeDraft.stats.distanceMeters
+    const actualE = activeDraft.stats.elevationGainMeters
+    const match = activeDraft.objectiveMatch
+
+    const distErr = targetD && targetD > 0 ? Math.abs(actualD - targetD) / targetD : 0
+    const elevErr = targetE && targetE > 0 ? Math.abs(actualE - targetE) / targetE : 0
+
+    if (match === 'within_tolerance' || (distErr <= 0.15 && elevErr <= 0.5)) {
+      return { status: 'Objetivo conseguido', actual: `${formatDistance(actualD)} · +${formatElevation(actualE)}` }
     }
-    if (targetE && targetE > 0) {
-      const err = ((activeDraft.stats.elevationGainMeters - targetE) / targetE) * 100
-      parts.push(
-        `Desnivel ${formatElevation(activeDraft.stats.elevationGainMeters)} (objetivo ${targetE} m, ${err >= 0 ? '+' : ''}${err.toFixed(0)}%)`,
-      )
+    if (distErr <= 0.25 && elevErr <= 0.8) {
+      return { status: 'Objetivo aproximado', actual: `${formatDistance(actualD)} · +${formatElevation(actualE)}` }
     }
-    return parts.length ? parts.join(' · ') : null
+    return { status: 'Alternativa más cercana', actual: `${formatDistance(actualD)} · +${formatElevation(actualE)}` }
   }, [activeDraft])
 
   const tapHint = useMemo(() => {

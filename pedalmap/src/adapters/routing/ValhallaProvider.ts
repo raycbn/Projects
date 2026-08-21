@@ -19,6 +19,10 @@ type BikeRoutePayload = {
   distanceMeters?: number
   durationSeconds?: number
   instructions?: string[]
+  objectiveMatch?: 'within_tolerance' | 'closest'
+  objectiveDistanceError?: number
+  objectiveElevationError?: number
+  objectiveElevationGainMeters?: number
 }
 
 type BikeRouteResponse = BikeRoutePayload & {
@@ -63,6 +67,10 @@ function payloadToPartial(
       cycle_lane: e.cycle_lane,
       bicycle_network: e.bicycle_network,
     })),
+    objectiveMatch: data.objectiveMatch,
+    objectiveDistanceError: data.objectiveDistanceError,
+    objectiveElevationError: data.objectiveElevationError,
+    objectiveElevationGainMeters: data.objectiveElevationGainMeters,
   }
 }
 
@@ -181,6 +189,10 @@ export class ValhallaProvider implements RoutingProvider {
           stats: partial.stats,
           rawInstructions: partial.rawInstructions,
           surfaceEdges: partial.surfaceEdges,
+          objectiveMatch: partial.objectiveMatch,
+          objectiveDistanceError: partial.objectiveDistanceError,
+          objectiveElevationError: partial.objectiveElevationError,
+          objectiveElevationGainMeters: partial.objectiveElevationGainMeters,
         }
       })
 

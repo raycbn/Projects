@@ -26,9 +26,14 @@ const DEFAULT_MAX_VISIBLE = 10
 const DEFAULT_MAX_DETOUR = 500
 const DEFAULT_MIN_SEPARATION = 80
 
-export function buildWaterPointsAlongRoute(opts: BuildWaterPointsOptions): WaterPoint[] {
+export function buildWaterPointsAlongRoute(opts: BuildWaterPointsOptions): {
+  recommended: WaterPoint[]
+  all: WaterPoint[]
+} {
   const { geometry, sources, maxVisible, maxDetourMeters, minSeparationMeters } = opts
-  if (!geometry.coordinates.length || !sources.length) return []
+  if (!geometry.coordinates.length || !sources.length) {
+    return { recommended: [], all: [] }
+  }
 
   const coords = geometry.coordinates.map(([lng, lat]) => ({ lat, lng }))
   const cum = cumulativeDistances(coords)
@@ -55,7 +60,44 @@ export function buildWaterPointsAlongRoute(opts: BuildWaterPointsOptions): Water
 
   const deduped = deduplicateByProximity(projected, minSeparationMeters ?? DEFAULT_MIN_SEPARATION, (wp) => wp.position)
   const sorted = sortAlongRoute(deduped)
-  return limitResults(sorted, maxVisible ?? DEFAULT_MAX_VISIBLE)
+  const all = limitResults(sorted, 200)
+  const recommended = selectDistributedWaterPoints(all, maxVisible ?? DEFAULT_MAX_VISIBLE)
+
+  return { recommended, all }
+}
+
+export function selectDistributedWaterPoints(candidates: WaterPoint[], maxVisible: number): WaterPoint[] {
+  if (!candidates.length || maxVisible <= 0) return []
+  if (candidates.length <= maxVisible) return candidates
+
+  const routeLength = candidates[candidates.length - 1].distanceAlongRouteMeters ?? 0
+  if (routeLength <= 0) return limitResults(candidates, maxVisible)
+
+  const binCount = Math.min(maxVisible, Math.max(1, Math.floor(routeLength / 5000)))
+  const binSize = routeLength / binCount
+  const bins: WaterPoint[][] = Array.from({ length: binCount }, () => [])
+
+  for (const pt of candidates) {
+    const dist = pt.distanceAlongRouteMeters ?? 0
+    const binIndex = Math.min(binCount - 1, Math.floor(dist / binSize))
+    bins[binIndex].push(pt)
+  }
+
+  const selected: WaterPoint[] = []
+  for (const bin of bins) {
+    if (bin.length === 0) continue
+    const best = bin.reduce((a, b) => (a.detourMeters ?? Infinity) <= (b.detourMeters ?? Infinity) ? a : b)
+    selected.push(best)
+  }
+
+  if (selected.length < maxVisible) {
+    const used = new Set(selected.map((s) => s.id))
+    const remaining = candidates.filter((c) => !used.has(c.id))
+    const filler = limitResults(remaining, maxVisible - selected.length)
+    selected.push(...filler)
+  }
+
+  return limitResults(selected, maxVisible)
 }
 
 function projectSource(

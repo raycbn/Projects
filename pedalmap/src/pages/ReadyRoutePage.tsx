@@ -56,7 +56,7 @@ import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import { routeService } from '@/services/RouteService'
 import { waterSourceService } from '@/services/WaterSourceService'
 import { weatherService } from '@/services/WeatherService'
-import { buildWeatherTimeline } from '@/domain/routeWeatherTimeline'
+import { buildWeatherTimeline, getWeatherTimelineReference } from '@/domain/routeWeatherTimeline'
 import { evaluateDepartureWindows } from '@/domain/routeBestDeparture'
 import type { RouteDraft } from '@/domain/types'
 import type { HourlyWeatherPoint, RideWindowAdvice } from '@/services/WeatherService'
@@ -130,7 +130,8 @@ export function ReadyRoutePage() {
   const [showWindArrows, setShowWindArrows] = useState(true)
   const [windLoading, setWindLoading] = useState(false)
 
-  const [waterPoints, setWaterPoints] = useState<WaterPoint[]>([])
+  const [recommendedWaterPoints, setRecommendedWaterPoints] = useState<WaterPoint[]>([])
+  const [allWaterPoints, setAllWaterPoints] = useState<WaterPoint[]>([])
   const [waterLoading, setWaterLoading] = useState(false)
   const [waterDegraded, setWaterDegraded] = useState(false)
   const [waterReason, setWaterReason] = useState<string | undefined>(undefined)
@@ -139,6 +140,7 @@ export function ReadyRoutePage() {
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherDegraded, setWeatherDegraded] = useState(false)
   const [weatherReason, setWeatherReason] = useState<string | undefined>(undefined)
+  const [weatherManualTime, setWeatherManualTime] = useState<Date | null>(null)
 
   const [departureResult, setDepartureResult] = useState<BestDepartureResult | undefined>(undefined)
   const [departureLoading, setDepartureLoading] = useState(false)
@@ -268,6 +270,13 @@ export function ReadyRoutePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeIdParam, location.key, plannerDraft])
 
+  // Reset manual weather selection when a brand-new route calculation arrives.
+  useEffect(() => {
+    if (packet?.source === 'calculate') {
+      setWeatherManualTime(null)
+    }
+  }, [packet])
+
   const fitKey = useMemo(
     () => routeCameraKey(draft?.geometry, packet?.fitNonce ?? packet?.source ?? 'ready'),
     [draft, packet?.fitNonce, packet?.source],
@@ -337,7 +346,8 @@ export function ReadyRoutePage() {
 
   useEffect(() => {
     if (!draft?.geometry) {
-      setWaterPoints([])
+      setRecommendedWaterPoints([])
+      setAllWaterPoints([])
       setWaterDegraded(false)
       setWaterReason(undefined)
       return
@@ -352,14 +362,16 @@ export function ReadyRoutePage() {
       .fetchForRoute(draft.geometry)
       .then((result) => {
         if (cancelled) return
-        setWaterPoints(result.waterPoints)
+        setRecommendedWaterPoints(result.recommendedWaterPoints)
+        setAllWaterPoints(result.allWaterPoints)
         setWaterDegraded(result.degraded)
         setWaterReason(result.reason)
         setWaterLoading(false)
       })
       .catch(() => {
         if (cancelled) return
-        setWaterPoints([])
+        setRecommendedWaterPoints([])
+        setAllWaterPoints([])
         setWaterDegraded(true)
         setWaterReason('network_error')
         setWaterLoading(false)
@@ -383,11 +395,18 @@ export function ReadyRoutePage() {
     setWeatherDegraded(false)
     setWeatherReason(undefined)
 
+    const reference = getWeatherTimelineReference({
+      manualTime: weatherManualTime,
+      departureResult,
+    })
+
     weatherService
       .forecastForRoute(draft.geometry, { forecastDays: 3 })
       .then((forecast) => {
         if (cancelled) return
-        const timeline = buildWeatherTimeline(draft.geometry, forecast, draft.stats)
+        const timeline = buildWeatherTimeline(draft.geometry, forecast, draft.stats, {
+          startTime: reference.startTime,
+        })
         setWeatherTimeline(timeline)
         setWeatherDegraded(timeline.degraded)
         setWeatherReason(timeline.reason)
@@ -404,7 +423,7 @@ export function ReadyRoutePage() {
     return () => {
       cancelled = true
     }
-  }, [draft?.geometry, draft?.stats])
+  }, [draft?.geometry, draft?.stats, weatherManualTime, departureResult?.recommended?.startTime])
 
   useEffect(() => {
     if (!draft?.geometry || !draft?.stats || !weatherTimeline?.hours?.length) {
@@ -1067,10 +1086,15 @@ export function ReadyRoutePage() {
           loading={departureLoading}
           degraded={departureDegraded}
           degradedReason={departureReason}
+          onSelectWindow={(w) => {
+            if (!w) return
+            setWeatherManualTime(w.startTime)
+          }}
         />
 
         <WaterContextPanel
-          waterPoints={waterPoints}
+          recommendedPoints={recommendedWaterPoints}
+          allPoints={allWaterPoints}
           loading={waterLoading}
           degraded={waterDegraded}
           degradedReason={waterReason}
@@ -1111,9 +1135,11 @@ export function ReadyRoutePage() {
               }}
               onSelectWindow={(w) => {
                 setSelectedWindWindow(w)
+                setWeatherManualTime(w ? new Date(w.startHour) : null)
               }}
               onSelectHour={(h) => {
                 setSelectedWindHour(h)
+                setWeatherManualTime(h ? new Date(h.time) : null)
               }}
             />
           </div>

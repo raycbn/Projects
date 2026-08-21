@@ -44,6 +44,7 @@ export function RoutePreferencesPanel({
   const limit = maxActivePreferences(profile)
   const unlimited = !Number.isFinite(limit)
   const countedCount = value.filter((id) => !isFreeRoutingToggle(id)).length
+  const activeCount = value.length
 
   function toggle(id: RoutePreference) {
     if (!ORS_SUPPORTED_PREFERENCES.includes(id)) return
@@ -56,56 +57,66 @@ export function RoutePreferencesPanel({
   }
 
   return (
-    <fieldset>
-      <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-stone)]">
-        Preferencias avanzadas
-      </legend>
-      <p className="mb-2 text-[11px] text-[var(--color-stone)]">
-        Puedes combinar varios filtros a la vez
-        {unlimited
-          ? ' (Premium: sin límite).'
-          : ` (Free: hasta ${FREE_LIMITS.maxActivePreferences} · ${countedCount}/${limit}).`}
-        {' '}
-        <span title="Estos filtros son ajustes directos del motor de rutas — siempre gratis, no cuentan en tu límite.">
-          Carril bici y menor desnivel son gratis siempre.
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-[var(--color-forest)] hover:bg-white/70">
+        <span className="flex items-center gap-2">
+          Preferencias avanzadas
+          {activeCount > 0 && (
+            <span className="rounded-full bg-[var(--color-signal)]/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-forest)]">
+              {activeCount} activa{activeCount === 1 ? '' : 's'}
+            </span>
+          )}
         </span>
-      </p>
-      <div className="flex flex-col gap-1.5">
-        {OPTIONS.map((opt) => {
-          const checked = value.includes(opt.id)
-          const free = isFreeRoutingToggle(opt.id)
-          const atLimit = !checked && !unlimited && !free && countedCount >= limit
-          return (
-            <label
-              key={opt.id}
-              className={clsx(
-                'flex items-start gap-2 rounded-xl px-2 py-1.5 text-sm',
-                atLimit ? 'cursor-pointer opacity-70' : 'cursor-pointer',
-                checked ? 'bg-[var(--color-mist)]' : 'hover:bg-white/70',
-              )}
-              title={atLimit ? 'Límite Free alcanzado — pasa a Premium o desactiva otro filtro' : opt.hint}
-            >
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-[var(--color-trail)]"
-                checked={checked}
-                onChange={() => toggle(opt.id)}
-              />
-              <span>
-                {opt.label}
-                {free && (
-                  <span className="ml-1.5 rounded-full bg-[var(--color-signal)]/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-forest)]">
-                    Gratis
-                  </span>
+        <span className="text-[var(--color-stone)] transition-transform group-open:rotate-180">▼</span>
+      </summary>
+      <div className="mt-2 space-y-1">
+        <p className="mb-2 text-[11px] text-[var(--color-stone)]">
+          Puedes combinar varios filtros a la vez
+          {unlimited
+            ? ' (Premium: sin límite).'
+            : ` (Free: hasta ${FREE_LIMITS.maxActivePreferences} · ${countedCount}/${limit}).`}
+          {' '}
+          <span title="Estos filtros son ajustes directos del motor de rutas — siempre gratis, no cuentan en tu límite.">
+            Carril bici y menor desnivel son gratis siempre.
+          </span>
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {OPTIONS.map((opt) => {
+            const checked = value.includes(opt.id)
+            const free = isFreeRoutingToggle(opt.id)
+            const atLimit = !checked && !unlimited && !free && countedCount >= limit
+            return (
+              <label
+                key={opt.id}
+                className={clsx(
+                  'flex items-start gap-2 rounded-xl px-2 py-1.5 text-sm',
+                  atLimit ? 'cursor-pointer opacity-70' : 'cursor-pointer',
+                  checked ? 'bg-[var(--color-mist)]' : 'hover:bg-white/70',
                 )}
-                {opt.hint && (
-                  <span className="mt-0.5 block text-[11px] text-[var(--color-stone)]">{opt.hint}</span>
-                )}
-              </span>
-            </label>
-          )
-        })}
+                title={atLimit ? 'Límite Free alcanzado — pasa a Premium o desactiva otro filtro' : opt.hint}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-[var(--color-trail)]"
+                  checked={checked}
+                  onChange={() => toggle(opt.id)}
+                />
+                <span>
+                  {opt.label}
+                  {free && (
+                    <span className="ml-1.5 rounded-full bg-[var(--color-signal)]/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-forest)]">
+                      Gratis
+                    </span>
+                  )}
+                  {opt.hint && (
+                    <span className="mt-0.5 block text-[11px] text-[var(--color-stone)]">{opt.hint}</span>
+                  )}
+                </span>
+              </label>
+            )
+          })}
+        </div>
       </div>
-    </fieldset>
+    </details>
   )
 }

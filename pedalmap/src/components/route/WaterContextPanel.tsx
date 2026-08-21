@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button'
 import type { WaterPoint } from '@/domain/routeEnricher'
 
 interface WaterContextPanelProps {
-  waterPoints: WaterPoint[] | undefined
+  recommendedPoints: WaterPoint[]
+  allPoints: WaterPoint[]
   loading?: boolean
   degraded?: boolean
   degradedReason?: string
@@ -14,8 +15,15 @@ interface WaterContextPanelProps {
   className?: string
 }
 
+interface PaginationState {
+  mode: 'recommended' | 'all'
+  allPage: number
+  allPageSize: number
+}
+
 export function WaterContextPanel({
-  waterPoints,
+  recommendedPoints,
+  allPoints,
   loading = false,
   degraded = false,
   degradedReason,
@@ -23,7 +31,23 @@ export function WaterContextPanel({
   onFocusMap,
   className,
 }: WaterContextPanelProps) {
+  const [pagination, setPagination] = React.useState<PaginationState>({
+    mode: 'recommended',
+    allPage: 0,
+    allPageSize: 10,
+  })
   const [selected, setSelected] = React.useState<WaterPoint | null>(null)
+
+  const allTotalPages = Math.max(1, Math.ceil(allPoints.length / pagination.allPageSize))
+  const safeAllPage = Math.min(pagination.allPage, allTotalPages - 1)
+
+  const visiblePoints =
+    pagination.mode === 'recommended'
+      ? recommendedPoints
+      : allPoints.slice(
+          safeAllPage * pagination.allPageSize,
+          (safeAllPage + 1) * pagination.allPageSize,
+        )
 
   if (loading) {
     return (
@@ -44,7 +68,7 @@ export function WaterContextPanel({
     )
   }
 
-  if (!waterPoints?.length) {
+  if (!allPoints.length) {
     return (
       <section className={clsx('rounded-2xl bg-[var(--color-mist)]/60 px-3 py-3 ring-1 ring-[var(--color-fog)]', className)}>
         <p className="text-xs text-[var(--color-stone)]">
@@ -54,7 +78,10 @@ export function WaterContextPanel({
     )
   }
 
-  const next = waterPoints[0]
+  const next = visiblePoints[0]
+  const showAll = pagination.mode === 'all'
+  const allStart = safeAllPage * pagination.allPageSize + 1
+  const allEnd = Math.min((safeAllPage + 1) * pagination.allPageSize, allPoints.length)
 
   return (
     <section className={clsx('rounded-2xl bg-[var(--color-mist)]/60 px-3 py-3 ring-1 ring-[var(--color-fog)]', className)}>
@@ -63,19 +90,64 @@ export function WaterContextPanel({
           💧 Fuentes en ruta
         </h2>
         <span className="text-[11px] text-[var(--color-stone)]">
-          {waterPoints.length} {waterPoints.length === 1 ? 'fuente' : 'fuentes'}
+          {showAll
+            ? `${allPoints.length} encontradas`
+            : `${recommendedPoints.length} recomendadas`}
         </span>
       </div>
 
-      {next && (
+      {next && !showAll && (
         <p className="mt-1 text-xs text-[var(--color-stone)]">
           Próxima fuente a {formatDistance(next.distanceAlongRouteMeters ?? 0)}
           {next.name ? ` · ${next.name}` : ''}
         </p>
       )}
 
+      {!showAll && (
+        <button
+          type="button"
+          className="mt-2 text-xs font-semibold text-[var(--color-forest)] underline-offset-2 hover:underline"
+          onClick={() => setPagination((p) => ({ ...p, mode: 'all', allPage: 0 }))}
+        >
+          Ver todas las fuentes ({allPoints.length})
+        </button>
+      )}
+
+      {showAll && (
+        <div className="mt-2 flex items-center justify-between">
+          <p className="text-xs text-[var(--color-stone)]">
+            Fuentes {allStart}–{allEnd} de {allPoints.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={safeAllPage <= 0}
+              onClick={() => setPagination((p) => ({ ...p, allPage: Math.max(0, p.allPage - 1) }))}
+              className="!text-[11px] !px-2 !py-1"
+            >
+              ←
+            </Button>
+            <span className="text-xs text-[var(--color-stone)]">
+              {safeAllPage + 1}/{allTotalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={safeAllPage >= allTotalPages - 1}
+              onClick={() =>
+                setPagination((p) => ({ ...p, allPage: Math.min(allTotalPages - 1, p.allPage + 1) }))
+              }
+              className="!text-[11px] !px-2 !py-1"
+            >
+              →
+            </Button>
+          </div>
+        </div>
+      )}
+
       <ul className="mt-2 space-y-2" role="list" aria-label="Fuentes de agua en la ruta">
-        {waterPoints.map((src) => (
+        {visiblePoints.map((src) => (
           <li
             key={src.id}
             className="rounded-xl bg-white px-3 py-2 ring-1 ring-[var(--color-fog)]"
@@ -114,6 +186,16 @@ export function WaterContextPanel({
           </li>
         ))}
       </ul>
+
+      {showAll && (
+        <button
+          type="button"
+          className="mt-2 text-xs font-semibold text-[var(--color-stone)] underline-offset-2 hover:underline"
+          onClick={() => setPagination((p) => ({ ...p, mode: 'recommended', allPage: 0 }))}
+        >
+          ← Volver a recomendadas
+        </button>
+      )}
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
