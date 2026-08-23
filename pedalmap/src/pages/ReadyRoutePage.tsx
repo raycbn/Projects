@@ -403,7 +403,7 @@ export function ReadyRoutePage() {
     })
 
     weatherService
-      .forecastForRoute(draft.geometry, { forecastDays: 3 })
+      .forecastForRoute(draft.geometry, { forecastDays: 7 })
       .then((forecast) => {
         if (cancelled) return
         const timeline = buildWeatherTimeline(draft.geometry, forecast, draft.stats, {

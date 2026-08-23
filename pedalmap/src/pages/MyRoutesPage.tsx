@@ -79,7 +79,7 @@ export function MyRoutesPage() {
         batch.map(async (route) => {
           try {
             const forecast = await weatherService.forecastForRoute(route.geometry, {
-              forecastDays: 3,
+              forecastDays: 7,
               signal: ac.signal,
             })
             const top = forecast.windows[0]

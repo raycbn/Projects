@@ -8,7 +8,7 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
   const url = new URL(request.url)
   const lat = url.searchParams.get('lat')
   const lng = url.searchParams.get('lng')
-  const forecastDays = Math.min(16, Math.max(1, Number(url.searchParams.get('forecast_days') ?? '7')))
+  const _forecastDays = Math.min(16, Math.max(1, Number(url.searchParams.get('forecast_days') ?? '7')))
 
   if (!lat || !lng) {
     return json({ error: 'lat and lng required' }, 400)
@@ -20,7 +20,8 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
     return json({ error: 'invalid coordinates' }, 400)
   }
 
-  const cacheKey = `weather:${latNum.toFixed(2)},${lngNum.toFixed(2)},${forecastDays}`
+  const upstreamDays = Math.min(16, Math.max(1, 7))
+  const cacheKey = `weather:${latNum.toFixed(2)},${lngNum.toFixed(2)},${upstreamDays}`
   const cached = await caches.default.match(cacheKey)
   if (cached) {
     return cached
@@ -33,21 +34,11 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
     'hourly',
     ['temperature_2m', 'precipitation', 'wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m'].join(','),
   )
-  apiUrl.searchParams.set('forecast_days', String(forecastDays))
+  apiUrl.searchParams.set('forecast_days', String(upstreamDays))
   apiUrl.searchParams.set('timezone', 'auto')
   apiUrl.searchParams.set('wind_speed_unit', 'kmh')
 
-  const res = await fetch(apiUrl.toString(), {
-    headers: { 'User-Agent': USER_AGENT },
-  })
-
-  if (!res.ok) {
-    const body = json({ forecast: null, degraded: true, reason: `upstream_${res.status}` }, 200)
-    await caches.default.put(cacheKey, body.clone())
-    return body
-  }
-
-  const data = await res.json() as {
+  let data: {
     latitude?: number
     longitude?: number
     timezone?: string
@@ -59,6 +50,32 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
       wind_direction_10m?: number[]
       wind_gusts_10m?: number[]
     }
+  }
+
+  try {
+    const res = await fetch(apiUrl.toString(), {
+      headers: { 'User-Agent': USER_AGENT },
+    })
+
+    if (!res.ok) {
+      const reason = `upstream_${res.status}`
+      const body = json({ forecast: null, degraded: true, reason }, 200)
+      await caches.default.put(cacheKey, body.clone())
+      return body
+    }
+
+    try {
+      data = await res.json()
+    } catch {
+      const body = json({ forecast: null, degraded: true, reason: 'upstream_invalid_json' }, 200)
+      await caches.default.put(cacheKey, body.clone())
+      return body
+    }
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'upstream_network_error'
+    const body = json({ forecast: null, degraded: true, reason }, 200)
+    await caches.default.put(cacheKey, body.clone())
+    return body
   }
 
   const times = data.hourly?.time ?? []
