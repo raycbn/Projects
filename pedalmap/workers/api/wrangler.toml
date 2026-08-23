@@ -35,7 +35,7 @@ STRIPE_PRICE_YEARLY = "price_1U3K1LD9NwIvrlQEIIFS5oTG"
 STRIPE_PRICE_GRUPETA_MONTHLY = "price_1U3bpPD9NwIvrlQEzgfsjSvB"
 STRIPE_PRICE_GRUPETA_YEARLY = "price_1U3bmtD9NwIvrlQEJc1FhkLw"
 APP_URL = "https://pedalmap.es"
-ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173,http://localhost:5174,http://127.0.0.1:5174"
+ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,https://fuel.pedalmap.es,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173,http://localhost:5174,http://127.0.0.1:5174"
 # Transactional From (Resend). Receiving still uses IONOS MX.
 MAIL_FROM = "PedalMap <aviso@pedalmap.es>"
 # 90-day Instagram SEO campaign (cron publishes 1 post/day when secrets exist)

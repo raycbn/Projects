@@ -53,6 +53,7 @@ import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { applySelectedOption, ensureRouteOptions } from '@/lib/routeOptions'
 import { buildFuelUrl, canShowFuelCta } from '@/lib/fuel'
+import { mintCustomTokenFromIdToken } from '@/lib/authBridge'
 import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import { routeService } from '@/services/RouteService'
 import { waterSourceService } from '@/services/WaterSourceService'
@@ -982,17 +983,34 @@ export function ReadyRoutePage() {
             if (!canShowFuelCta({ distanceKm, durationMinutes, elevationGainM, temperatureC })) {
               return null
             }
-            const fuelUrl = buildFuelUrl({
-              distanceKm,
-              durationMinutes,
-              elevationGainM,
-              temperatureC,
-            })
+
+            const handleClick = async () => {
+              const fuelWindow = window.open('about:blank', '_blank', 'noopener,noreferrer')
+              if (!fuelWindow) {
+                console.warn('[fuel-handoff] popup blocked')
+                return
+              }
+
+              try {
+                let fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC })
+                if (user && !user.isAnonymous) {
+                  const idToken = await user.getIdToken()
+                  const customToken = await mintCustomTokenFromIdToken(idToken)
+                  fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC }, customToken)
+                }
+                fuelWindow.location.href = fuelUrl
+              } catch (error) {
+                console.error('[fuel-handoff]', error)
+                const fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC })
+                fuelWindow.location.href = fuelUrl
+              }
+            }
+
             return (
               <Button
                 variant="secondary"
                 className="w-full flex-col !py-3"
-                onClick={() => window.open(fuelUrl, '_blank', 'noopener,noreferrer')}
+                onClick={handleClick}
               >
                 <span className="text-sm font-semibold">Preparar nutrición e hidratación</span>
                 <span className="text-xs opacity-80">Plan personalizado para esta salida · con PedalMap Fuel</span>

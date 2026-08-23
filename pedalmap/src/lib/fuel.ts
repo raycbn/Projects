@@ -13,7 +13,7 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(value)
 }
 
-export function buildFuelUrl(context: FuelRouteContext): string {
+export function buildFuelUrl(context: FuelRouteContext, customToken?: string | null): string {
   const params = new URLSearchParams()
 
   params.set('source', 'pedalmap')
@@ -45,7 +45,9 @@ export function buildFuelUrl(context: FuelRouteContext): string {
     params.set('goal', context.goal.trim())
   }
 
-  return `${FUEL_BASE_URL}?${params.toString()}`
+  const base = `${FUEL_BASE_URL}?${params.toString()}`
+  if (!customToken) return base
+  return `${base}#pm_ct=${encodeURIComponent(customToken)}`
 }
 
 export function canShowFuelCta(context: Partial<FuelRouteContext>): boolean {
