@@ -1,6 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { buildFuelUrl, canShowFuelCta } from '@/lib/fuel'
 
+/**
+ * Popup blocker handling is implemented in ReadyRoutePage.tsx, not in fuel.ts.
+ *
+ * Expected flow:
+ *  1. window.open('about:blank', '_blank', 'noopener,noreferrer')  // synchronous, inside click handler
+ *  2. if null → popup blocked → abort (no second window.open)
+ *  3. await getIdToken()
+ *  4. await mintCustomTokenFromIdToken()
+ *  5. buildFuelUrl(context, customToken)
+ *  6. fuelWindow.location.href = fuelUrl  // navigate existing tab
+ *
+ * This ensures the browser sees a synchronous window.open within the user gesture,
+ * avoiding popup blockers. If handoff fails, fuelWindow.location.href navigates the
+ * already-opened tab to the base URL without token.
+ */
+
 describe('buildFuelUrl', () => {
   it('builds a valid Fuel URL with required params', () => {
     const url = buildFuelUrl({ distanceKm: 58.4, durationMinutes: 167, elevationGainM: 620 })
@@ -59,6 +75,36 @@ describe('buildFuelUrl', () => {
     const params = new URLSearchParams(url.split('?')[1])
     expect(params.get('source')).toBe('pedalmap')
     expect(params.get('sport')).toBe('cycling')
+  })
+
+  it('appends custom token to hash when provided', () => {
+    const url = buildFuelUrl({ distanceKm: 50, durationMinutes: 120 }, 'custom-token-123')
+    expect(url).toContain('#pm_ct=custom-token-123')
+    expect(url).not.toContain('custom-token-123?')
+    expect(url).not.toContain('custom-token-123&')
+  })
+
+  it('does not include custom token in query params', () => {
+    const url = buildFuelUrl({ distanceKm: 50, durationMinutes: 120 }, 'secret-token')
+    const [query] = url.split('#')
+    expect(query).not.toContain('secret-token')
+    expect(url).toContain('#pm_ct=secret-token')
+  })
+
+  it('returns base URL when customToken is empty', () => {
+    const url = buildFuelUrl({ distanceKm: 50, durationMinutes: 120 }, '')
+    expect(url).not.toContain('#pm_ct=')
+  })
+
+  it('returns base URL when customToken is undefined', () => {
+    const url = buildFuelUrl({ distanceKm: 50, durationMinutes: 120 })
+    expect(url).not.toContain('#pm_ct=')
+  })
+
+  it('fallback without token omits custom token fragment', () => {
+    const url = buildFuelUrl({ distanceKm: 50, durationMinutes: 120 })
+    expect(url).not.toContain('#pm_ct=')
+    expect(url).toBe('https://fuel.pedalmap.es/planner?source=pedalmap&sport=cycling&distanceKm=50&durationMinutes=120')
   })
 })
 
