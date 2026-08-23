@@ -5,16 +5,18 @@ import { buildFuelUrl, canShowFuelCta } from '@/lib/fuel'
  * Popup blocker handling is implemented in ReadyRoutePage.tsx, not in fuel.ts.
  *
  * Expected flow:
- *  1. window.open('about:blank', '_blank', 'noopener,noreferrer')  // synchronous, inside click handler
+ *  1. window.open('about:blank', '_blank')  // synchronous, inside click handler, WITHOUT noopener
  *  2. if null → popup blocked → abort (no second window.open)
- *  3. await getIdToken()
- *  4. await mintCustomTokenFromIdToken()
- *  5. buildFuelUrl(context, customToken)
- *  6. fuelWindow.location.href = fuelUrl  // navigate existing tab
+ *  3. fuelWindow.opener = null               // manual opener nullification for security
+ *  4. await getIdToken()
+ *  5. await mintCustomTokenFromIdToken()
+ *  6. buildFuelUrl(context, customToken)
+ *  7. fuelWindow.location.href = fuelUrl  // navigate existing tab
  *
  * This ensures the browser sees a synchronous window.open within the user gesture,
- * avoiding popup blockers. If handoff fails, fuelWindow.location.href navigates the
- * already-opened tab to the base URL without token.
+ * avoiding popup blockers, while maintaining security via manual opener nullification.
+ * If handoff fails, fuelWindow.location.href navigates the already-opened tab to
+ * the base URL without token.
  */
 
 describe('buildFuelUrl', () => {

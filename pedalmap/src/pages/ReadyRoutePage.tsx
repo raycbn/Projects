@@ -985,11 +985,12 @@ export function ReadyRoutePage() {
             }
 
             const handleClick = async () => {
-              const fuelWindow = window.open('about:blank', '_blank', 'noopener,noreferrer')
+              const fuelWindow = window.open('about:blank', '_blank')
               if (!fuelWindow) {
                 console.warn('[fuel-handoff] popup blocked')
                 return
               }
+              fuelWindow.opener = null
 
               try {
                 let fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC })
