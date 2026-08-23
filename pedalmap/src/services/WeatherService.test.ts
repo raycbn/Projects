@@ -200,3 +200,138 @@ describe('WeatherService.buildWindows', () => {
     expect(advice!.notes.join(' ')).not.toMatch(/lateral/i)
   })
 })
+
+describe('WeatherService.forecastForRoute worker path', () => {
+  const svc = new WeatherService()
+
+  const tomorrow = new Date()
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+  const tomorrowDay = tomorrow.toISOString().slice(0, 10)
+
+  const workerForecast = {
+    forecast: {
+      latitude: 40.38,
+      longitude: -3.66,
+      timezone: 'Europe/Madrid',
+      routeBearingDeg: null,
+      routeBearingLabel: null,
+      hours: [
+        ...dayHours(tomorrowDay, 8, 20, (t) =>
+          hour(t, { windSpeedKmh: 12, windDirectionDeg: 270, temperatureC: 24 }),
+        ),
+      ],
+      windows: [],
+      attribution: 'Datos: Open-Meteo (CC BY 4.0)',
+    },
+  }
+
+  const geometry = {
+    type: 'LineString' as const,
+    coordinates: [
+      [-3.66, 40.38] as [number, number],
+      [-3.65, 40.39] as [number, number],
+      [-3.64, 40.4] as [number, number],
+    ],
+  }
+
+  it('computes routeBearingDeg from geometry', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(workerForecast), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('routingAuthHeaders', vi.fn().mockResolvedValue({ Authorization: 'Bearer fake' }))
+
+    const result = await svc.forecastForRoute(geometry)
+    expect(result.routeBearingDeg).not.toBeNull()
+    expect(typeof result.routeBearingDeg).toBe('number')
+  })
+
+  it('computes routeBearingLabel from bearing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(workerForecast), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('routingAuthHeaders', vi.fn().mockResolvedValue({ Authorization: 'Bearer fake' }))
+
+    const result = await svc.forecastForRoute(geometry)
+    expect(result.routeBearingLabel).not.toBeNull()
+    expect(typeof result.routeBearingLabel).toBe('string')
+  })
+
+  it('builds windows from worker hours', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(workerForecast), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('routingAuthHeaders', vi.fn().mockResolvedValue({ Authorization: 'Bearer fake' }))
+
+    const now = new Date()
+    now.setUTCHours(7, 0, 0, 0)
+    const result = await svc.forecastForRoute(geometry, { forecastDays: 7, now })
+    expect(result.windows.length).toBeGreaterThan(0)
+  })
+
+  it('preserves hours, timezone and attribution', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(workerForecast), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('routingAuthHeaders', vi.fn().mockResolvedValue({ Authorization: 'Bearer fake' }))
+
+    const result = await svc.forecastForRoute(geometry)
+    expect(result.hours.length).toBeGreaterThan(0)
+    expect(result.timezone).toBe('Europe/Madrid')
+    expect(result.attribution).toBe('Datos: Open-Meteo (CC BY 4.0)')
+  })
+
+  it('enriches empty worker windows same as fallback would', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(workerForecast), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('routingAuthHeaders', vi.fn().mockResolvedValue({ Authorization: 'Bearer fake' }))
+
+    const now = new Date()
+    now.setUTCHours(7, 0, 0, 0)
+    const result = await svc.forecastForRoute(geometry, { forecastDays: 7, now })
+    expect(result.windows.length).toBeGreaterThan(0)
+    expect(result.routeBearingDeg).not.toBeNull()
+    expect(result.routeBearingLabel).not.toBeNull()
+  })
+
+  it('returns null bearing and windows when geometry is a point', async () => {
+    const pointGeometry = {
+      type: 'LineString' as const,
+      coordinates: [[-3.66, 40.38] as [number, number]],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(workerForecast), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('routingAuthHeaders', vi.fn().mockResolvedValue({ Authorization: 'Bearer fake' }))
+
+    const result = await svc.forecastForRoute(pointGeometry)
+    expect(result.routeBearingDeg).toBeNull()
+    expect(result.routeBearingLabel).toBeNull()
+    // Windows may still be generated; just ensure no crash.
+    expect(Array.isArray(result.windows)).toBe(true)
+  })
+})

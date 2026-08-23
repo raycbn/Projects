@@ -137,7 +137,7 @@ describe('handleWeatherForecast', () => {
     await handleWeatherForecast(req7, {} as any)
 
     const cacheCalls = cache.put.mock.calls.map((c) => c[0])
-    expect(cacheCalls[0]).toBe('weather:40.38,-3.66,7')
+    expect(cacheCalls[0]).toBe('https://cache.pedalmap.internal/weather/40.38,-3.66,7')
     expect(cache.put).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
@@ -151,7 +151,7 @@ describe('handleWeatherForecast', () => {
 
     expect(mockCache.put).toHaveBeenCalledTimes(1)
     const cachedKey = mockCache.put.mock.calls[0][0]
-    expect(cachedKey).toContain('weather:40.38,-3.66,7')
+    expect(cachedKey).toBe('https://cache.pedalmap.internal/weather/40.38,-3.66,7')
   })
 
   it('returns cached response on second request', async () => {
@@ -168,5 +168,43 @@ describe('handleWeatherForecast', () => {
     expect(res.status).toBe(200)
     expect(cache.match).toHaveBeenCalledTimes(1)
     expect(cache.put).not.toHaveBeenCalled()
+  })
+
+  it('does not crash when cache.match throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      makeRes(200, {
+        latitude: 40.38,
+        longitude: -3.66,
+        timezone: 'Europe/Madrid',
+        hourly: {
+          time: ['2026-08-23T00:00'],
+          temperature_2m: [20],
+          precipitation: [0],
+          wind_speed_10m: [10],
+          wind_direction_10m: [180],
+          wind_gusts_10m: [15],
+        },
+      }),
+    ))
+    const cache = { match: vi.fn().mockRejectedValue(new Error('cache boom')), put: vi.fn() }
+    vi.stubGlobal('caches', { default: cache })
+
+    const req = new Request('http://localhost/osm/weather-forecast?lat=40.38&lng=-3.66&forecast_days=3')
+    const res = await handleWeatherForecast(req, {} as any)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.forecast?.hours).toHaveLength(1)
+  })
+
+  it('does not crash when cache.put throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeRes(500, { error: 'server' })))
+    const cache = { match: vi.fn().mockResolvedValue(null), put: vi.fn().mockRejectedValue(new Error('cache put boom')) }
+    vi.stubGlobal('caches', { default: cache })
+
+    const req = new Request('http://localhost/osm/weather-forecast?lat=40.38&lng=-3.66&forecast_days=3')
+    const res = await handleWeatherForecast(req, {} as any)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.degraded).toBe(true)
   })
 })

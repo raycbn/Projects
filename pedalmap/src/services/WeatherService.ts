@@ -217,7 +217,19 @@ export class WeatherService {
         )
         if (res.ok) {
           const data = (await res.json()) as { forecast?: RouteWeatherForecast }
-          if (data.forecast) return data.forecast
+          if (data.forecast) {
+            const routeBearingDeg =
+              outboundRouteBearing(geometry) ?? dominantRouteBearing(geometry)
+            return {
+              ...data.forecast,
+              routeBearingDeg,
+              routeBearingLabel: routeBearingDeg == null ? null : bearingLabel(routeBearingDeg),
+              windows: this.buildWindows(data.forecast.hours, routeBearingDeg, {
+                timeZone: data.forecast.timezone,
+                now: opts?.now ?? new Date(),
+              }),
+            }
+          }
         }
       } catch {
         // fallback to direct Open-Meteo

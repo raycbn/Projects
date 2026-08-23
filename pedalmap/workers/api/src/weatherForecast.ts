@@ -21,8 +21,14 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
   }
 
   const upstreamDays = Math.min(16, Math.max(1, 7))
-  const cacheKey = `weather:${latNum.toFixed(2)},${lngNum.toFixed(2)},${upstreamDays}`
-  const cached = await caches.default.match(cacheKey)
+  const cacheKey = `https://cache.pedalmap.internal/weather/${latNum.toFixed(2)},${lngNum.toFixed(2)},${upstreamDays}`
+
+  let cached: Response | undefined
+  try {
+    cached = await caches.default.match(cacheKey)
+  } catch {
+    // Cache API failures must not break the endpoint.
+  }
   if (cached) {
     return cached
   }
@@ -60,7 +66,7 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
     if (!res.ok) {
       const reason = `upstream_${res.status}`
       const body = json({ forecast: null, degraded: true, reason }, 200)
-      await caches.default.put(cacheKey, body.clone())
+      try { await caches.default.put(cacheKey, body.clone()) } catch { /* cache non-fatal */ }
       return body
     }
 
@@ -68,13 +74,13 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
       data = await res.json()
     } catch {
       const body = json({ forecast: null, degraded: true, reason: 'upstream_invalid_json' }, 200)
-      await caches.default.put(cacheKey, body.clone())
+      try { await caches.default.put(cacheKey, body.clone()) } catch { /* cache non-fatal */ }
       return body
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : 'upstream_network_error'
     const body = json({ forecast: null, degraded: true, reason }, 200)
-    await caches.default.put(cacheKey, body.clone())
+    try { await caches.default.put(cacheKey, body.clone()) } catch { /* cache non-fatal */ }
     return body
   }
 
@@ -100,6 +106,6 @@ export async function handleWeatherForecast(request: Request, _env: Env): Promis
   }
 
   const body = json({ forecast }, 200)
-  await caches.default.put(cacheKey, body.clone())
+  try { await caches.default.put(cacheKey, body.clone()) } catch { /* cache non-fatal */ }
   return body
 }
