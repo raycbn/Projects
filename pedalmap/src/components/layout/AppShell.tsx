@@ -49,6 +49,14 @@ export function AppShell() {
             <NavLink to="/premium" className={navClass}>
               Premium
             </NavLink>
+            <a
+              href="https://fuel.pedalmap.es/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={navClass({ isActive: false })}
+            >
+              Nutrición
+            </a>
           </nav>
           <div className="flex shrink-0 items-center gap-2">
             {user && !user.isAnonymous ? (
@@ -149,33 +157,50 @@ export function AppShell() {
 
       {!hideTabbar && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-6 border-t border-[var(--color-fog)] bg-white/95 px-0.5 safe-pb md:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid h-[var(--tabbar-h)] grid-cols-7 border-t border-[var(--color-fog)] bg-white/95 px-0.5 safe-pb md:hidden"
           aria-label="Móvil"
         >
           {[
-            ['/', 'Inicio'],
-            ['/route-planner', 'Crear'],
-            ['/explorar', 'Explorar'],
-            ['/my-routes', 'Mis rutas'],
-            ['/actividades', 'Rodadas'],
-            ['/perfil', 'Perfil'],
-          ].map(([to, label]) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                clsx(
-                  'flex min-h-11 items-center justify-center rounded-lg px-0.5 text-center text-[10px] font-semibold leading-tight sm:text-[11px]',
-                  isActive
-                    ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
-                    : 'text-[var(--color-stone)]',
-                )
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
+            { to: '/', label: 'Inicio', external: false },
+            { to: '/route-planner', label: 'Crear', external: false },
+            { to: '/explorar', label: 'Explorar', external: false },
+            { to: '/my-routes', label: 'Mis rutas', external: false },
+            { to: '/actividades', label: 'Rodadas', external: false },
+            { to: 'https://fuel.pedalmap.es/', label: 'Nutrición', external: true },
+            { to: '/perfil', label: 'Perfil', external: false },
+          ].map((item) => {
+            const { to, label, external } = item
+            if (external) {
+              return (
+                <a
+                  key={to}
+                  href={to}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-11 items-center justify-center rounded-lg px-0.5 text-center text-[10px] font-semibold leading-tight sm:text-[11px] text-[var(--color-stone)]"
+                >
+                  {label}
+                </a>
+              )
+            }
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  clsx(
+                    'flex min-h-11 items-center justify-center rounded-lg px-0.5 text-center text-[10px] font-semibold leading-tight sm:text-[11px]',
+                    isActive
+                      ? 'bg-[var(--color-signal)] text-[var(--color-ink)]'
+                      : 'text-[var(--color-stone)]',
+                  )
+                }
+              >
+                {label}
+              </NavLink>
+            )
+          })}
         </nav>
       )}
     </div>

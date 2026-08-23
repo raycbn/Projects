@@ -52,6 +52,7 @@ import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
 import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { applySelectedOption, ensureRouteOptions } from '@/lib/routeOptions'
+import { buildFuelUrl, canShowFuelCta } from '@/lib/fuel'
 import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import { routeService } from '@/services/RouteService'
 import { waterSourceService } from '@/services/WaterSourceService'
@@ -973,6 +974,31 @@ export function ReadyRoutePage() {
           <Button className="w-full !py-3 text-base" onClick={() => setRideOpen(true)}>
             Salir a rodar
           </Button>
+          {(() => {
+            const distanceKm = draft.stats.distanceMeters / 1000
+            const durationMinutes = draft.stats.estimatedDurationSeconds / 60
+            const elevationGainM = draft.stats.elevationGainMeters
+            const temperatureC = selectedWindHour?.temperatureC
+            if (!canShowFuelCta({ distanceKm, durationMinutes, elevationGainM, temperatureC })) {
+              return null
+            }
+            const fuelUrl = buildFuelUrl({
+              distanceKm,
+              durationMinutes,
+              elevationGainM,
+              temperatureC,
+            })
+            return (
+              <Button
+                variant="secondary"
+                className="w-full flex-col !py-3"
+                onClick={() => window.open(fuelUrl, '_blank', 'noopener,noreferrer')}
+              >
+                <span className="text-sm font-semibold">Preparar nutrición e hidratación</span>
+                <span className="text-xs opacity-80">Plan personalizado para esta salida · con PedalMap Fuel</span>
+              </Button>
+            )
+          })()}
           <div className="grid grid-cols-3 gap-2">
             <Button variant="secondary" disabled={shareBusy} onClick={() => void handleShare()}>
               {shareBusy ? '…' : 'Compartir'}
