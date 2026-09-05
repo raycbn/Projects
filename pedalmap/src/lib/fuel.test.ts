@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { buildFuelUrl, canShowFuelCta } from '@/lib/fuel'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { buildFuelUrl, canShowFuelCta, isFuelEmbeddedApp } from '@/lib/fuel'
 
 /**
  * Popup blocker handling is implemented in ReadyRoutePage.tsx, not in fuel.ts.
@@ -129,5 +129,21 @@ describe('canShowFuelCta', () => {
 
   it('returns false when durationMinutes is zero', () => {
     expect(canShowFuelCta({ distanceKm: 50, durationMinutes: 0 })).toBe(false)
+  })
+})
+
+describe('isFuelEmbeddedApp', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    delete (globalThis as { Capacitor?: unknown }).Capacitor
+  })
+
+  it('returns false when Capacitor global is absent (web)', () => {
+    expect(isFuelEmbeddedApp()).toBe(false)
+  })
+
+  it('returns true when the Capacitor runtime is present (native app)', () => {
+    ;(globalThis as { Capacitor?: unknown }).Capacitor = { isPluginAvailable: () => false }
+    expect(isFuelEmbeddedApp()).toBe(true)
   })
 })

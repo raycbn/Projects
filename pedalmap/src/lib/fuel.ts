@@ -1,5 +1,67 @@
 const FUEL_BASE_URL = 'https://fuel.pedalmap.es/planner'
 
+import type { User } from 'firebase/auth'
+import { useAuth } from '@/app/AuthContext'
+import { FREE_LIMITS, type UserPlan } from '@/domain/types'
+
+export interface HostFuelAuth {
+  user: User | null
+  localUser: null
+  provider: 'local' | 'pedalmap'
+  loading: boolean
+  firebaseReady: boolean
+  plan: 'free' | 'premium' | null
+  entitlementLoading: boolean
+  entitlementError: boolean
+  canSaveRoute: boolean | null
+  maxRoutesSaved: number | null
+  routesSaved: number
+  loginLocal: () => Promise<unknown>
+  registerLocal: () => Promise<unknown>
+  logout: () => Promise<void>
+  handoffLogin: () => Promise<unknown>
+}
+
+export function useHostFuelAuth(): HostFuelAuth {
+  const { user, profile, loading, firebaseReady, logout } = useAuth()
+  const plan: 'free' | 'premium' | null = profile?.plan ?? null
+  const usage = profile?.usage
+  const canSaveRoute = plan === 'premium' ? true : usage ? usage.routesSaved < FREE_LIMITS.maxRoutesSaved : null
+  const maxRoutesSaved = plan === 'premium' ? null : FREE_LIMITS.maxRoutesSaved
+  const routesSaved = usage?.routesSaved ?? 0
+  return {
+    user,
+    localUser: null,
+    provider: user ? 'pedalmap' : 'local',
+    loading,
+    firebaseReady,
+    plan,
+    entitlementLoading: false,
+    entitlementError: false,
+    canSaveRoute,
+    maxRoutesSaved,
+    routesSaved,
+    loginLocal: async () => {
+      throw new Error('login local no disponible en modo app')
+    },
+    registerLocal: async () => {
+      throw new Error('registro local no disponible en modo app')
+    },
+    logout,
+    handoffLogin: async () => {
+      throw new Error('handoff no disponible en modo app')
+    },
+  }
+}
+
+export function mapUserPlanToFuelPlan(plan: UserPlan | null): 'free' | 'premium' | null {
+  if (plan === 'premium') return 'premium'
+  if (plan === 'free') return 'free'
+  return null
+}
+
+
+
 export interface FuelRouteContext {
   distanceKm: number
   durationMinutes: number
@@ -57,4 +119,15 @@ export function canShowFuelCta(context: Partial<FuelRouteContext>): boolean {
     isFiniteNumber(context.durationMinutes) &&
     context.durationMinutes > 0
   )
+}
+
+/**
+ * True when Fuel runs inside the native/Capacitor shell (PedalMap app). In that
+ * mode the CTA navigates to the embedded `/fuel/*` route with RouteContext via
+ * router state instead of opening the standalone fuel.pedalmap.es popup.
+ * Capacitor injects the `Capacitor` global at runtime (not present on the web),
+ * so this detection is not fragile and does not touch native code.
+ */
+export function isFuelEmbeddedApp(): boolean {
+  return typeof window !== 'undefined' && 'Capacitor' in (globalThis as unknown as Record<string, unknown>)
 }

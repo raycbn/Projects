@@ -1,6 +1,18 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+
+/**
+ * Fuel is embedded lazily so it never enters PedalMap's initial bundle.
+ * `@fuel` resolves (via Vite alias) to PedalMapFuel/src — Fuel is consumed as
+ * source, not copied. `react` and `react-router-dom` are hoisted from the host,
+ * so there is no duplicate dependency. The `/fuel/*` route mounts
+ * `<FuelEmbed />`, which passes the host `AuthProvider` session through
+ * `useHostFuelAuth()` instead of booting a second Firebase Auth instance.
+ * Fuel still owns the embedded chunk's `FuelAuthProvider`-free rendering and its
+ * own `fuel-embed.css`, kept isolated from the host.
+ */
 import { AuthProvider } from '@/app/AuthContext'
 import { PlannerProvider } from '@/app/PlannerContext'
+import { FuelEmbed } from '@/components/FuelEmbed'
 import { AppShell } from '@/components/layout/AppShell'
 import { AnalyticsListener } from '@/components/AnalyticsListener'
 import { LandingPage } from '@/pages/LandingPage'
@@ -67,6 +79,10 @@ export default function App() {
               ))}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
+            <Route
+              path="fuel/*"
+              element={<FuelEmbed />}
+            />
           </Routes>
         </BrowserRouter>
       </PlannerProvider>

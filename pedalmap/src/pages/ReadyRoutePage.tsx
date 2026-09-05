@@ -52,7 +52,7 @@ import { buildSurfaceRouteOverlay } from '@/lib/surfaceRouteOverlay'
 import { bearingLabel, windRelativePhrase } from '@/lib/wind'
 import { track } from '@/lib/analytics'
 import { applySelectedOption, ensureRouteOptions } from '@/lib/routeOptions'
-import { buildFuelUrl, canShowFuelCta } from '@/lib/fuel'
+import { buildFuelUrl, canShowFuelCta, isFuelEmbeddedApp } from '@/lib/fuel'
 import { mintCustomTokenFromIdToken } from '@/lib/authBridge'
 import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
 import { routeService } from '@/services/RouteService'
@@ -980,29 +980,37 @@ export function ReadyRoutePage() {
             const durationMinutes = draft.stats.estimatedDurationSeconds / 60
             const elevationGainM = draft.stats.elevationGainMeters
             const temperatureC = selectedWindHour?.temperatureC
-            if (!canShowFuelCta({ distanceKm, durationMinutes, elevationGainM, temperatureC })) {
+            const fuelContext = { distanceKm, durationMinutes, elevationGainM, temperatureC }
+            if (!canShowFuelCta(fuelContext)) {
               return null
             }
 
-            const handleClick = async () => {
+            const handleClick = () => {
+              if (isFuelEmbeddedApp()) {
+                navigate('/fuel', { state: fuelContext })
+                return
+              }
+              void openFuelWeb()
+            }
+
+            async function openFuelWeb() {
               const fuelWindow = window.open('about:blank', '_blank')
               if (!fuelWindow) {
                 console.warn('[fuel-handoff] popup blocked')
                 return
               }
               fuelWindow.opener = null
-
               try {
-                let fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC })
+                let fuelUrl = buildFuelUrl(fuelContext)
                 if (user && !user.isAnonymous) {
                   const idToken = await user.getIdToken()
                   const customToken = await mintCustomTokenFromIdToken(idToken)
-                  fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC }, customToken)
+                  fuelUrl = buildFuelUrl(fuelContext, customToken)
                 }
                 fuelWindow.location.href = fuelUrl
               } catch (error) {
                 console.error('[fuel-handoff]', error)
-                const fuelUrl = buildFuelUrl({ distanceKm, durationMinutes, elevationGainM, temperatureC })
+                const fuelUrl = buildFuelUrl(fuelContext)
                 fuelWindow.location.href = fuelUrl
               }
             }
