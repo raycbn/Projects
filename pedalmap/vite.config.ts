@@ -61,12 +61,44 @@ function maplibreWorkersPlugin(): Plugin {
   }
 }
 
+/**
+ * Rewrites Fuel's internal `@/` alias (tsconfig -> src) to the host `@fuel`
+ * source path, but ONLY for files under PedalMapFuel/src.
+ *
+ * Fuel is consumed as source via the `@fuel` Vite alias. PedalMap keeps its own
+ * `@/` alias pointing at PedalMap src, so without this rewrite Fuel's `@/`
+ * imports would resolve into the wrong tree. The pre-transform rewrites them to
+ * `@fuel/...` so they resolve inside Fuel src, leaving PedalMap untouched.
+ * Reversible: remove the plugin + the `@fuel` alias to fully disable embedding.
+ */
+function fuelSrcAliasPlugin(): Plugin {
+  return {
+    name: 'fuel-src-alias',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.includes('PedalMapFuel/src')) return null
+      return code.replace(
+        /from\s+["']@\/([^"']*)["']/g,
+        (_match: string, p1: string) => `from "@fuel/${p1}"`,
+      )
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), maplibreWorkersPlugin()],
+  plugins: [react(), tailwindcss(), maplibreWorkersPlugin(), fuelSrcAliasPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Embed Fuel as source (no duplication/copy).
+      '@fuel': fileURLToPath(new URL('../../PedalMapFuel/src', import.meta.url)),
     },
+    // Fuel is source-imported and would otherwise resolve its OWN copies from
+    // PedalMapFuel/node_modules (react + react-router v6), which breaks hooks
+    // (duplicate React) and router subpath exports (v6 vs v7). Force the host
+    // (PedalMap) versions for the whole React ecosystem. `dedupe` keeps Vite's
+    // normal `exports` resolution (alias to a dir would break react-router/dom).
+    dedupe: ['react', 'react-dom', 'react-router', 'react-router-dom'],
   },
   // Allow Cloudflare quick tunnels / localtunnel hosts for public previews.
   preview: {
