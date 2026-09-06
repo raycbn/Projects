@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import type { SavedRoute } from '@/domain/types'
 import { FREE_TRIALS } from '@/domain/types'
 import { exportRouteToGpx } from '@/lib/gpx'
+import { saveGpxFile } from '@/lib/saveFile'
 import { track } from '@/lib/analytics'
 import { formatWeatherWindowCaption } from '@/lib/weatherFormat'
 import {
@@ -344,14 +345,8 @@ export function MyRoutesPage() {
                   return
                 }
               }
-              const xml = exportRouteToGpx(route)
-              const blob = new Blob([xml], { type: 'application/gpx+xml' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `${route.shareSlug || route.id}.gpx`
-              a.click()
-              URL.revokeObjectURL(url)
+               const xml = exportRouteToGpx(route)
+               await saveGpxFile(xml, `${route.shareSlug || route.id}.gpx`)
               if (profile && profile.plan !== 'premium') {
                 void authService.recordFreeGpxExport(profile.uid).catch(() => undefined)
                 track('free_trial_used', { kind: 'gpx' })
