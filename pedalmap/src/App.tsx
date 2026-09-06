@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 
 /**
  * Fuel is embedded lazily so it never enters PedalMap's initial bundle.
@@ -38,15 +39,47 @@ import { BlogIndexPage } from '@/pages/BlogIndexPage'
 import { BlogPostPage } from '@/pages/BlogPostPage'
 import { seoPages } from '@/content/seoPages'
 
+// DEV-ONLY: lazy import so the fixture page is never pulled into a production build.
+const LazyDevPreset = lazy(() => import('@/pages/DevPresetPage'))
+
+/**
+ * Listens for `capacitor-deep-link` events dispatched from MainActivity's
+ * `onNewIntent` (Android only) and turns them into React Router navigations
+ * pushed onto the SPA history so Android Back returns to the previous page.
+ * Web never emits this event, so this is a no-op in the browser.
+ */
+function DeepLinkHandler() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const onDeepLink = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail
+      if (detail) navigate(detail)
+    }
+    window.addEventListener('capacitor-deep-link', onDeepLink)
+    return () => window.removeEventListener('capacitor-deep-link', onDeepLink)
+  }, [navigate])
+  return null
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <PlannerProvider>
         <BrowserRouter>
+          <DeepLinkHandler />
           <AnalyticsListener />
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<LandingPage />} />
+              {/* DEV-ONLY: test harness route, never built into production. */}
+              {import.meta.env.DEV ? (
+                <Route
+                  path="dev/demo"
+                  element={
+                    <LazyDevPreset />
+                  }
+                />
+              ) : null}
               <Route path="route-planner" element={<RoutePlannerPage />} />
               <Route path="ruta" element={<ReadyRoutePage />} />
               <Route path="my-routes" element={<MyRoutesPage />} />

@@ -12,6 +12,20 @@ import { consumeCustomTokenFromUrl } from '@/lib/authBridge'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { syncServerPlan } from '@/lib/planSync'
 
+/** DEV-ONLY: fake host user so the embedded Fuel flow can be tested without
+ *  touching production Firebase. Stripped by the runtime guard below and never
+ *  imported by production bundles (DevPresetPage is DEV-lazy). */
+const IS_DEV = import.meta.env.DEV
+const DEV_USER = {
+  uid: 'dev-001',
+  email: 'dev@pedalmap.es',
+  isAnonymous: false,
+  displayName: 'DEV PedalMap',
+  getIdToken: async () => 'dev-token',
+  providerId: 'password',
+  providerData: [],
+} as unknown as User
+
 interface AuthContextValue {
   user: User | null
   profile: UserProfile | null
@@ -41,6 +55,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const firebaseReady = isFirebaseConfigured()
 
   useEffect(() => {
+    // DEV-ONLY override: fake host auth (Free/Premium) so the PedalMap -> Fuel
+    // flow can be validated on the dev server/emulator WITHOUT contacting
+    // production Firebase. No-op in production builds.
+    if (IS_DEV && typeof window !== 'undefined') {
+      const devPlan = sessionStorage.getItem('pm_dev_auth')
+      if (devPlan === 'free' || devPlan === 'premium') {
+        setUser(DEV_USER)
+        setProfile({
+          uid: DEV_USER.uid,
+          email: DEV_USER.email,
+          displayName: DEV_USER.displayName,
+          photoURL: null,
+          plan: devPlan,
+          usage: {
+            routesCreatedThisMonth: 0,
+            routesSaved: 0,
+            monthKey: `${new Date().getUTCFullYear()}-${String(
+              new Date().getUTCMonth() + 1,
+            ).padStart(2, '0')}`,
+          },
+        } as unknown as UserProfile)
+        setLoading(false)
+        return
+      }
+    }
+
     if (!firebaseReady) {
       setLoading(false)
       return
