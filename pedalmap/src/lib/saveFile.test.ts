@@ -3,7 +3,7 @@ import { saveGpxFile } from '@/lib/saveFile'
 
 const { platform, writeFile } = vi.hoisted(() => ({
   platform: { value: 'web' },
-  writeFile: vi.fn(async () => ({ uri: 'file:///x' })),
+  writeFile: vi.fn(async (_opts: { path: string; data: string; directory: string }) => ({ uri: 'file:///x' })),
 }))
 
 vi.mock('@capacitor/core', () => ({
@@ -55,9 +55,9 @@ describe('saveGpxFile', () => {
   it('preserves the slug-based filename ending in .gpx', async () => {
     platform.value = 'android'
     await saveGpxFile('<gpx/>', 'mi-ruta-circular.gpx')
-    const call = writeFile.mock.calls[0][0]
-    expect(call.path).toBe('mi-ruta-circular.gpx')
-    expect(call.path.endsWith('.gpx')).toBe(true)
+    const call = writeFile.mock.calls[0]?.[0]
+    expect(call?.path).toBe('mi-ruta-circular.gpx')
+    expect(call?.path.endsWith('.gpx')).toBe(true)
   })
 
   it('rejects filenames not ending in .gpx', async () => {
@@ -87,6 +87,6 @@ describe('saveGpxFile', () => {
     writeFile.mockClear()
     writeFile.mockImplementation(async () => ({ uri: 'file:///x' }))
     await saveGpxFile(xml, 'ruta.gpx')
-    expect(writeFile.mock.calls[0][0].data).toBe(xml)
+    expect(writeFile.mock.calls[0]?.[0]?.data).toBe(xml)
   })
 })
