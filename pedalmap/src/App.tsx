@@ -39,8 +39,13 @@ import { BlogIndexPage } from '@/pages/BlogIndexPage'
 import { BlogPostPage } from '@/pages/BlogPostPage'
 import { seoPages } from '@/content/seoPages'
 
-// DEV-ONLY: lazy import so the fixture page is never pulled into a production build.
-const LazyDevPreset = lazy(() => import('@/pages/DevPresetPage'))
+// DEV-ONLY: the dev fixture is only ever wired up under `import.meta.env.DEV`
+// (see the conditional route below). Guarding the lazy factory itself with DEV
+// lets Vite dead-code-eliminate the dynamic `import()` in production, so the
+// DevPresetPage chunk / devSeed content never ships in the production build.
+const LazyDevPreset = import.meta.env.DEV
+  ? lazy(() => import('@/pages/DevPresetPage'))
+  : null
 
 /**
  * Listens for `capacitor-deep-link` events dispatched from MainActivity's
@@ -71,11 +76,13 @@ export default function App() {
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<LandingPage />} />
-              {/* DEV-ONLY: test harness route, never built into production. */}
-              {import.meta.env.DEV ? (
+                            {/* DEV-ONLY: test harness route, never built into production. */}
+              {LazyDevPreset ? (
                 <Route
                   path="dev/demo"
                   element={
+
+
                     <LazyDevPreset />
                   }
                 />
