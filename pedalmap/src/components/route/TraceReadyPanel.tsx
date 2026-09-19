@@ -6,6 +6,7 @@ import { RouteWeatherPanel } from '@/components/route/RouteWeatherPanel'
 import { RideChooserSheet } from '@/components/route/RideChooserSheet'
 import { AuthCaptureSheet } from '@/components/auth/AuthCaptureSheet'
 import { useResumePendingAuthAction } from '@/hooks/useResumePendingAuthAction'
+import { getPublicRouteUrl } from '@/lib/share'
 import {
   clearPendingAuthAction,
   setPendingAuthAction,
@@ -228,7 +229,7 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
       })
       setSavedRouteId(published.routeId)
       setShareSlug(published.shareSlug)
-      const url = `${window.location.origin}/route/${published.shareSlug}`
+      const url = getPublicRouteUrl(published.shareSlug)
       stashReadyRoute({
         draft,
         savedRouteId: published.routeId,
@@ -289,7 +290,7 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
           source: 'calculate',
         })
       }
-      const url = `${window.location.origin}/route/${slug}`
+      const url = getPublicRouteUrl(slug)
       const result = await shareRouteStory(draft, url)
       setMessage(
         result === 'shared'

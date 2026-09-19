@@ -35,6 +35,7 @@ import {
   shareRouteCard,
   shareRouteStory,
 } from '@/lib/shareCard'
+import { getPublicRouteUrl } from '@/lib/share'
 import { routeCameraKey } from '@/lib/mapCamera'
 import { routeRepository, geometryFromStored } from '@/services/RouteRepository'
 import {
@@ -658,7 +659,7 @@ export function ReadyRoutePage() {
     stashReadyRoute(next)
     handoffEpochRef.current = readyRouteEpoch()
     setPacket(next)
-    const url = `${window.location.origin}/route/${published.shareSlug}`
+    const url = getPublicRouteUrl(published.shareSlug)
     if (shareAfter) {
       const result = await shareRouteCard(draft, url, { waWindow })
       flashMessage(
@@ -717,7 +718,7 @@ export function ReadyRoutePage() {
     flashMessage('Preparando Story…')
     try {
       let url = packet?.shareSlug
-        ? `${window.location.origin}/route/${packet.shareSlug}`
+        ? getPublicRouteUrl(packet.shareSlug)
         : null
       if (!url) {
         url = await publishPublic(false)

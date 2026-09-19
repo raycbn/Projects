@@ -9,6 +9,7 @@ import type { SavedRoute } from '@/domain/types'
 import { FREE_TRIALS } from '@/domain/types'
 import { exportRouteToGpx } from '@/lib/gpx'
 import { saveGpxFile } from '@/lib/saveFile'
+import { getPublicRouteUrl } from '@/lib/share'
 import { track } from '@/lib/analytics'
 import { formatWeatherWindowCaption } from '@/lib/weatherFormat'
 import {
@@ -306,7 +307,7 @@ export function MyRoutesPage() {
               const published = await routeRepository.publishForShare(user.uid, route, {
                 routeId: route.id,
               })
-              const url = `${window.location.origin}/route/${published.shareSlug}`
+              const url = getPublicRouteUrl(published.shareSlug)
               setShare({ url, title: route.title })
               setRoutes((prev) =>
                 prev.map((r) =>

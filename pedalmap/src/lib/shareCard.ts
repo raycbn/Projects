@@ -1,5 +1,8 @@
 import type { BikeType, RouteDraft, RouteStats } from '@/domain/types'
+import { Capacitor } from '@capacitor/core'
 import { formatDistance, formatDuration, formatElevation } from '@/lib/stats'
+import { canonicalizePublicRouteUrl } from '@/lib/share'
+import { shareRouteCardNative, shareRouteStoryNative } from '@/lib/nativeShare'
 
 /**
  * Render a square share card (PNG) for WhatsApp / native share.
@@ -60,8 +63,7 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
   ctx.fillStyle = 'rgba(255,255,255,0.55)'
   ctx.font = '500 24px DM Sans, sans-serif'
   const footer =
-    shareUrl?.replace(/^https?:\/\//, '') ||
-    (typeof window !== 'undefined' ? window.location.host : 'pedalmap.es')
+    shareUrl ? displayShareUrl(shareUrl) : 'pedalmap.es'
   ctx.fillText(truncate(footer, 48), 72, size - 110)
   ctx.fillStyle = 'rgba(214,255,75,0.85)'
   ctx.font = '600 22px DM Sans, sans-serif'
@@ -74,14 +76,15 @@ export async function renderRouteShareCard(draft: RouteDraft, shareUrl?: string)
 
 /** WhatsApp often drops `url` when files are attached — keep the link inside `text`. */
 export function withShareUtm(url: string, medium = 'whatsapp'): string {
+  const canonicalUrl = canonicalizePublicRouteUrl(url)
   try {
-    const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'https://pedalmap.es')
+    const u = new URL(canonicalUrl, typeof window !== 'undefined' ? window.location.origin : 'https://pedalmap.es')
     if (!u.searchParams.has('utm_source')) u.searchParams.set('utm_source', 'share')
     u.searchParams.set('utm_medium', medium)
     if (!u.searchParams.has('utm_campaign')) u.searchParams.set('utm_campaign', 'route_card')
     return u.toString()
   } catch {
-    return url
+    return canonicalUrl
   }
 }
 
@@ -110,9 +113,17 @@ export function buildWhatsAppShareUrl(text: string): string {
  * Do not pass `noopener` here: Chrome then returns null and we cannot set location.
  */
 export function openWhatsAppPlaceholder(): Window | null {
+  console.log('[share-debug] function=openWhatsAppPlaceholder phase=before method=window.open native=' + Capacitor.isNativePlatform())
+  if (Capacitor.isNativePlatform()) {
+    console.log('[share-debug] function=openWhatsAppPlaceholder phase=skipped reason=native')
+    return null
+  }
   try {
-    return window.open('about:blank', 'pedalmap_wa')
-  } catch {
+    const result = window.open('about:blank', 'pedalmap_wa')
+    console.log('[share-debug] function=openWhatsAppPlaceholder phase=after method=window.open opened=' + Boolean(result))
+    return result
+  } catch (error) {
+    console.log('[share-debug] function=openWhatsAppPlaceholder phase=error method=window.open error=' + (error as Error)?.message)
     return null
   }
 }
@@ -127,19 +138,24 @@ export function closeWhatsAppPlaceholder(waWindow: Window | null | undefined): v
 }
 
 function navigateWhatsAppWindow(waWindow: Window | null | undefined, waUrl: string): boolean {
+  console.log('[share-debug] function=navigateWhatsAppWindow phase=before method=' + (waWindow && !waWindow.closed ? 'location.href' : 'window.open') + ' waUrl=' + waUrl)
   if (waWindow && !waWindow.closed) {
     try {
       waWindow.location.href = waUrl
+      console.log('[share-debug] function=navigateWhatsAppWindow phase=after method=location.href')
       return true
-    } catch {
+    } catch (error) {
+      console.log('[share-debug] function=navigateWhatsAppWindow phase=error method=location.href error=' + (error as Error)?.message)
       closeWhatsAppPlaceholder(waWindow)
     }
   }
   try {
     // Named target reuses the placeholder tab when the handle was lost.
     const popup = window.open(waUrl, 'pedalmap_wa')
+    console.log('[share-debug] function=navigateWhatsAppWindow phase=after method=window.open opened=' + Boolean(popup))
     return Boolean(popup)
-  } catch {
+  } catch (error) {
+    console.log('[share-debug] function=navigateWhatsAppWindow phase=error method=window.open error=' + (error as Error)?.message)
     return false
   }
 }
@@ -159,11 +175,48 @@ export async function shareRouteCard(
   url: string,
   options?: ShareCardOptions,
 ): Promise<'whatsapp' | 'shared' | 'copied' | 'downloaded'> {
-  if (!url.includes('/route/')) {
+  const shareStartedAt = performance.now()
+  console.log('[share-timing] shareRouteCard=start')
+  const publicUrl = canonicalizePublicRouteUrl(url)
+  console.log('[share-debug] function=shareRouteCard phase=before platform=' + Capacitor.getPlatform() + ' native=' + Capacitor.isNativePlatform() + ' publicUrl=' + publicUrl)
+  if (!publicUrl.includes('/route/')) {
     throw new Error('Se necesita un enlace público /route/… para compartir la ruta')
   }
+  console.log('[share] action=SEND publicUrl=' + publicUrl + ' textEncoding=UTF-8')
 
-  const text = buildRouteShareText(draft, url)
+  // Native Android: use the Android Sharesheet with the share card image
+  if (Capacitor.isNativePlatform()) {
+    console.log('[share-debug] function=shareRouteCard phase=native-branch-before method=shareRouteCardNative')
+    const text = buildRouteShareText(draft, publicUrl)
+    try {
+      const renderStartedAt = performance.now()
+      console.log('[share-timing] renderRouteShareCard=start')
+      const blob = await renderRouteShareCard(draft, publicUrl)
+      console.log('[share-timing] renderRouteShareCard=' + Math.round(performance.now() - renderStartedAt) + 'ms')
+      console.log('[share-debug] function=shareRouteCard phase=image-ready method=shareRouteCardNative')
+      const ok = await shareRouteCardNative(draft.title || 'Ruta PedalMap', text, publicUrl, blob, shareStartedAt)
+      console.log('[share-debug] function=shareRouteCard phase=native-branch-after method=shareRouteCardNative ok=' + ok)
+      if (ok) return 'shared'
+    } catch (error) {
+      console.log('[share-debug] function=shareRouteCard phase=native-branch-error method=shareRouteCardNative error=' + (error as Error)?.message)
+      console.warn('[share] native share failed, falling back to clipboard: ' + (error as Error)?.message)
+    }
+    // On Android native, don't fall through to WhatsApp web flow — use clipboard only
+    console.log('[share-debug] function=shareRouteCard phase=clipboard-fallback-before')
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(buildRouteShareText(draft, publicUrl))
+        console.log('[share-debug] function=shareRouteCard phase=clipboard-fallback-after')
+        console.log('[share] text copied to clipboard as fallback')
+      }
+    } catch (error) {
+      console.log('[share-debug] function=shareRouteCard phase=clipboard-fallback-error error=' + (error as Error)?.message)
+    }
+    return 'copied'
+  }
+
+  console.log('[share-debug] function=shareRouteCard phase=web-branch-before method=whatsapp')
+  const text = buildRouteShareText(draft, publicUrl)
   const waUrl = buildWhatsAppShareUrl(text)
 
   // 1) Clipboard first so the user always keeps the link in PedalMap.
@@ -178,7 +231,9 @@ export async function shareRouteCard(
   }
 
   // 2) Open WhatsApp — prefer the pre-opened placeholder from the click gesture.
+  console.log('[share-debug] function=shareRouteCard phase=whatsapp-open-before waUrl=' + waUrl)
   const openedWhatsApp = navigateWhatsAppWindow(options?.waWindow, waUrl)
+  console.log('[share-debug] function=shareRouteCard phase=whatsapp-open-after opened=' + openedWhatsApp)
 
   // 3) Optional card download in the background (don't block WhatsApp).
   void renderRouteShareCard(draft, url)
@@ -335,11 +390,12 @@ export function fitRouteSilhouette(
 
 /** Host + path only — UTM stays on the clipboard, not painted on the Story. */
 export function displayShareUrl(url: string): string {
+  const canonicalUrl = canonicalizePublicRouteUrl(url)
   try {
-    const u = new URL(url, 'https://pedalmap.es')
+    const u = new URL(canonicalUrl, 'https://pedalmap.es')
     return `${u.host}${u.pathname}`.replace(/\/$/, '')
   } catch {
-    return url.replace(/^https?:\/\//, '').split('?')[0] ?? url
+    return canonicalUrl.replace(/^https?:\/\//, '').split('?')[0] || canonicalUrl
   }
 }
 
@@ -458,10 +514,14 @@ export async function shareRouteStory(
   draft: RouteDraft,
   url: string,
 ): Promise<'shared' | 'downloaded'> {
-  if (!url.includes('/route/')) {
+  console.log('[share-timing] shareRouteStory=start')
+  const shareStartedAt = performance.now()
+  const publicUrl = canonicalizePublicRouteUrl(url)
+  if (!publicUrl.includes('/route/')) {
     throw new Error('Se necesita un enlace público /route/… para la Story')
   }
-  const shareUrl = withShareUtm(url, 'instagram')
+  console.log('[share] action=SEND publicUrl=' + publicUrl + ' textEncoding=UTF-8')
+  const shareUrl = withShareUtm(publicUrl, 'instagram')
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(shareUrl)
@@ -470,7 +530,22 @@ export async function shareRouteStory(
     /* ignore */
   }
 
-  const blob = await renderRouteStoryCard(draft, url)
+  const storyRenderStartedAt = performance.now()
+  console.log('[share-timing] renderRouteStoryCard=start')
+  const blob = await renderRouteStoryCard(draft, publicUrl)
+  console.log('[share-timing] renderRouteStoryCard=' + Math.round(performance.now() - storyRenderStartedAt) + 'ms')
+
+  // Native Android: use Instagram's ADD_TO_STORY intent
+  if (Capacitor.isNativePlatform()) {
+    console.log('[share] sharing Story via native Instagram intent')
+    try {
+      const ok = await shareRouteStoryNative(draft.title || 'Ruta PedalMap', shareUrl, publicUrl, blob, shareStartedAt)
+      if (ok) return 'shared'
+    } catch (error) {
+      console.warn('[share] native Instagram story failed, falling back: ' + (error as Error)?.message)
+    }
+  }
+
   const file = new File([blob], 'pedalmap-story.png', { type: 'image/png' })
 
   try {
