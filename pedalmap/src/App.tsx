@@ -56,13 +56,67 @@ const LazyDevPreset = import.meta.env.DEV
 function DeepLinkHandler() {
   const navigate = useNavigate()
   useEffect(() => {
+    const handledUrls = new Set<string>()
     const onDeepLink = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail
-      if (detail) navigate(detail)
+      const detail = (e as CustomEvent<string | { url?: string; source?: string }>).detail
+      if (!detail) return
+      const url = typeof detail === 'string' ? detail : (detail.url ?? '')
+      const source = typeof detail === 'object' ? detail.source : undefined
+      if (!url) return
+
+      if (!isExternalAppLink(url)) {
+        console.log('[applink] internal route ignored=' + url)
+        return
+      }
+
+      const routeId = extractRouteId(url)
+      if (!routeId) {
+        console.log('[applink] invalid route=' + url)
+        return
+      }
+
+      if (handledUrls.has(url)) {
+        console.log('[applink] duplicate ignored=' + url)
+        return
+      }
+      handledUrls.add(url)
+
+      let path = '/route/' + routeId
+      console.log('[applink] received external URL=' + url)
+      console.log('[applink] routeId=' + routeId)
+      console.log('[applink] navigating=' + path)
+      navigate(path)
     }
     window.addEventListener('capacitor-deep-link', onDeepLink)
     return () => window.removeEventListener('capacitor-deep-link', onDeepLink)
   }, [navigate])
+  return null
+}
+
+function isExternalAppLink(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:') return false
+    const host = u.hostname
+    if (host !== 'pedalmap.es' && host !== 'www.pedalmap.es') return false
+    return u.pathname.startsWith('/route/') || u.pathname.startsWith('/ruta/')
+  } catch {
+    return false
+  }
+}
+
+function extractRouteId(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (u.pathname.startsWith('/route/')) {
+      return u.pathname.slice('/route/'.length)
+    }
+    if (u.pathname.startsWith('/ruta/')) {
+      return u.pathname.slice('/ruta/'.length)
+    }
+  } catch {
+    // ignore
+  }
   return null
 }
 

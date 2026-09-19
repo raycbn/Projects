@@ -7,6 +7,9 @@ import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Minimal MainActivity: receives VIEW intents (deep links) on the single top
  * task and drives the Capacitor WebView as an in-app SPA navigation.
@@ -18,6 +21,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 
   private static final String TAG = "PedalMap MainActivity";
+  private final Set<String> handledIntents = new HashSet<>();
 
   @Override
   public void onNewIntent(Intent intent) {
@@ -32,31 +36,79 @@ public class MainActivity extends BridgeActivity {
 
     String path = data.getPath();
     if (path == null) return;
-    String query = data.getEncodedQuery();
-    String target = path + (query != null && !query.isEmpty() ? "?" + query : "");
 
-    // Skip anything we don't own (e.g. /route/:slug, /blog/:slug) so host
-    // routes not handled by the embedded SPA stay as-is.
-    Log.d(TAG, "Deep link received: " + target);
-
-    WebView webView = getBridge() != null ? getBridge().getWebView() : null;
-    if (webView == null) {
-      Log.w(TAG, "WebView not ready; deferring.");
+    String scheme = data.getScheme();
+    String host = data.getHost();
+    if (!"https".equals(scheme) || !isPedalMapHost(host)) {
+      Log.d(TAG, "applink internal route ignored=" + path);
       return;
     }
 
-    // Android deep-link -> SPA navigation. Build an ABSOLUTE url from the current
-    // WebView origin (https://localhost in production, http://10.0.2.2:5173 on the
-    // Vite dev server) so the same APK works for both and the navigation stays
-    // in-app. This lets React Router (BrowserRouter) match the route and mount the
-    // lazy chunk, pushing a real WebView history entry so Android Back can return.
-    String safe = target.replace("'", "\\'").replace("\"", "\\\"");
-    String base = webView.getUrl();
-    String origin = base == null ? "https://localhost" : base;
-    int slash = origin.indexOf('/', origin.indexOf("//") + 2);
-    if (slash > 0) origin = origin.substring(0, slash);
-    String js = "window.location.href='" + origin + safe + "';";
-    webView.evaluateJavascript(js, null);
+    if (!isAppLinkPath(path)) {
+      Log.d(TAG, "applink internal route ignored=" + path);
+      return;
+    }
+
+    String query = data.getEncodedQuery();
+    String target = path + (query != null && !query.isEmpty() ? "?" + query : "");
+
+    String routeId = extractRouteId(path);
+    if (routeId == null) {
+      Log.d(TAG, "applink invalid route path=" + path);
+      return;
+    }
+
+    if (isDuplicateIntent(target)) {
+      Log.d(TAG, "applink duplicate ignored=" + target);
+      return;
+    }
+    markIntentHandled(target);
+
+    Log.d(TAG, "applink received external URL=" + target);
+    Log.d(TAG, "applink routeId=" + routeId);
+    Log.d(TAG, "applink navigating=" + target);
+    dispatchDeepLink(target, "external");
+  }
+
+  private boolean isPedalMapHost(String host) {
+    return "pedalmap.es".equals(host) || "www.pedalmap.es".equals(host);
+  }
+
+  private boolean isAppLinkPath(String path) {
+    return path != null && (path.startsWith("/route/") || path.startsWith("/ruta/"));
+  }
+
+  private String extractRouteId(String path) {
+    if (path.startsWith("/route/")) {
+      return path.substring("/route/".length());
+    }
+    if (path.startsWith("/ruta/")) {
+      return path.substring("/ruta/".length());
+    }
+    return null;
+  }
+
+  private boolean isDuplicateIntent(String target) {
+    return handledIntents.contains(target);
+  }
+
+  private void markIntentHandled(String target) {
+    handledIntents.add(target);
+    if (handledIntents.size() > 50) {
+      handledIntents.clear();
+    }
+  }
+
+  private void dispatchDeepLink(String target, String source) {
+    WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+    if (webView == null) {
+      Log.w(TAG, "dispatchDeepLink: webView is null");
+      return;
+    }
+    String safe = target.replace("'", "\\'");
+    Log.d(TAG, "dispatchDeepLink target=" + safe + " source=" + source);
+    String js = "window.dispatchEvent(new CustomEvent('capacitor-deep-link', { detail: { url: '" + safe + "', source: '" + source + "' } }))";
+    webView.post(() -> webView.evaluateJavascript(js, null));
   }
 
   /**
@@ -66,7 +118,7 @@ public class MainActivity extends BridgeActivity {
    * the user inside PedalMap rather than hard-exiting. Normal in-page navigation
    * (Fuel internal links, PedalMap routes) still uses native WebView back.
    */
-   @Override
+  @Override
   public void onBackPressed() {
     if (getBridge() != null && getBridge().getWebView() != null) {
       android.webkit.WebView webView = getBridge().getWebView();
