@@ -11,6 +11,7 @@ import { authErrorMessage, authService } from '@/services/AuthService'
 import { consumeCustomTokenFromUrl } from '@/lib/authBridge'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { syncServerPlan } from '@/lib/planSync'
+import { Capacitor } from '@capacitor/core'
 
 /** DEV-ONLY: fake host user so the embedded Fuel flow can be tested without
  *  touching production Firebase. Stripped by the runtime guard below and never
@@ -68,6 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           displayName: DEV_USER.displayName,
           photoURL: null,
           plan: devPlan,
+          bikePreferences: { bikeType: 'road', preferences: [] },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           usage: {
             routesCreatedThisMonth: 0,
             routesSaved: 0,
@@ -132,7 +136,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await authService.completeCustomToken(customToken)
           return
         }
-        await authService.completeGoogleRedirect()
+        // On native Android/iOS, avoid calling getRedirectResult() which can
+        // trigger signInWithRedirect from the WebView (accounts.google.com),
+        // resulting in origin_mismatch / 400 errors. Native apps use the
+        // GoogleSignIn plugin (startActivityForResult) for sign-in.
+        if (!Capacitor.isNativePlatform()) {
+          await authService.completeGoogleRedirect()
+        }
       } catch (error) {
         console.error('[auth] google session', error)
         if (!cancelled) {

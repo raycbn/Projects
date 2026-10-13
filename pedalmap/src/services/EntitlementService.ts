@@ -1,5 +1,7 @@
 import type { FreemiumLimits, RoutePreference, UserPlan, UserProfile } from '@/domain/types'
 import { FREE_LIMITS, FREE_ROUTING_TOGGLES, FREE_TRIALS, PREMIUM_LIMITS } from '@/domain/types'
+
+export { FREE_LIMITS, FREE_TRIALS, FREE_ROUTING_TOGGLES, PREMIUM_LIMITS } from '@/domain/types'
 import {
   guestCircularUsedThisMonth,
   guestGpxUsedThisWeek,
@@ -29,17 +31,31 @@ export function canSaveRoute(profile: UserProfile | null): { ok: boolean; reason
   return { ok: true }
 }
 
-export function canCreateRoute(profile: UserProfile | null, guestCreates: number): {
+export function canCreateRoute(profile: UserProfile | null, guestCreates: number, isAnonymous: boolean): {
   ok: boolean
   reason?: string
 } {
   if (!profile) {
-    // Offline / pre-auth guests share Free monthly create budget (not a harsh 3-try wall).
-    if (guestCreates >= FREE_LIMITS.maxRoutesCreatedPerMonth) {
-      return { ok: false, reason: 'guest_limit' }
+    // A guest is a preview, not an unmetered Free account. This local guard is
+    // only a UX fallback; the Worker enforces the authoritative UID + IP quota.
+    // Never grant the registered-user allowance of 15 routes without a profile.
+    if (guestCreates >= 3) {
+      return { ok: false, reason: 'anonymous_limit_reached' }
     }
     return { ok: true }
   }
+  if (profile.plan === 'premium') return { ok: true }
+
+  // Anonymous users (isAnonymous = true) have a hard limit of 3 total creations
+  if (isAnonymous) {
+    const anonCreated = profile.usage.anonymousRoutesCreated ?? 0
+    if (anonCreated >= 3) {
+      return { ok: false, reason: 'anonymous_limit_reached' }
+    }
+    return { ok: true }
+  }
+
+  // Authenticated Free users: 15/month
   const limits = getLimits(profile.plan)
   if (profile.usage.routesCreatedThisMonth >= limits.maxRoutesCreatedPerMonth) {
     return { ok: false, reason: 'create_limit' }

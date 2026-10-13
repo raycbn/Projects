@@ -1015,7 +1015,7 @@ export function MapView({
       }
       map.on('styledata', repairOverlays)
       map.on('idle', repairOverlays)
-      map.on('error', (e: { error?: Error }) => {
+      map.on('error', (e) => {
         console.error('[maplibre]', e.error ?? e)
       })
 

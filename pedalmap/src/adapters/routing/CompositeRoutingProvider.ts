@@ -108,6 +108,21 @@ export class CompositeRoutingProvider implements RoutingProvider {
         }
         return result
       } catch (error) {
+        if (
+          error instanceof RoutingError &&
+          [
+            'create_limit',
+            'anonymous_limit_reached',
+            'guest_identity_limit_reached',
+            'free_circular_limit',
+            'filter_limit',
+            'quota_unavailable',
+          ].includes(error.code)
+        ) {
+          // Quota/entitlement responses are authoritative, not provider outages.
+          // Falling back would let the same request bypass the Free policy.
+          throw error
+        }
         console.warn('[routing] Valhalla failed; falling back to ORS', error)
         // Cheap primary retry without alternatives, then top up vias client-side.
         if (request.wantAlternatives && request.routeType !== 'circular') {
@@ -141,8 +156,11 @@ export class CompositeRoutingProvider implements RoutingProvider {
     request: RoutingRequest,
     result: RoutingResult,
   ): Promise<RoutingResult> {
-    let alts = [...(result.alternatives ?? [])]
-    if (alts.length >= 2) return result
+    const maxAlternatives = Math.max(0, Math.min(2, (result.maxRouteOptions ?? 3) - 1))
+    let alts = [...(result.alternatives ?? [])].slice(0, maxAlternatives)
+    if (alts.length >= maxAlternatives || maxAlternatives === 0) {
+      return { ...result, alternatives: alts.length ? alts : undefined }
+    }
 
     if (this.ors.isConfigured()) {
       try {
@@ -150,27 +168,38 @@ export class CompositeRoutingProvider implements RoutingProvider {
           ...request,
           wantAlternatives: true,
         })
-        alts = mergeAlts(result, [
-          {
-            geometry: ors.geometry,
-            elevationProfile: ors.elevationProfile,
-            stats: ors.stats,
-            rawInstructions: ors.rawInstructions,
-            surfaceEdges: ors.surfaceEdges,
-          },
-          ...(ors.alternatives ?? []),
-        ])
+        alts = mergeAlts(
+          result,
+          [
+            {
+              geometry: ors.geometry,
+              elevationProfile: ors.elevationProfile,
+              stats: ors.stats,
+              rawInstructions: ors.rawInstructions,
+              surfaceEdges: ors.surfaceEdges,
+            },
+            ...(ors.alternatives ?? []),
+          ],
+          maxAlternatives,
+        )
       } catch (orsErr) {
         console.warn('[routing] ORS alternatives top-up failed', orsErr)
       }
     }
 
-    if (alts.length < 2 && this.valhalla.isConfigured() && request.waypoints.length >= 2) {
+    if (
+      alts.length < maxAlternatives &&
+      this.valhalla.isConfigured() &&
+      request.waypoints.length >= 2
+    ) {
       const detours = await this.fetchViaDetours(request, result)
-      alts = mergeAlts(result, [...alts, ...detours])
+      alts = mergeAlts(result, [...alts, ...detours], maxAlternatives)
     }
 
-    return { ...result, alternatives: alts.length ? alts.slice(0, 2) : undefined }
+    return {
+      ...result,
+      alternatives: alts.length ? alts.slice(0, maxAlternatives) : undefined,
+    }
   }
 
   private async fetchViaDetours(

@@ -1,5 +1,8 @@
-import { lazy, useEffect } from 'react'
+import { lazy, useEffect, useRef } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { App as CapacitorApp } from '@capacitor/app'
+import { parseGpx, importedGpxToDraft } from '@/lib/gpx'
+import { usePlanner } from '@/app/PlannerContext'
 
 /**
  * Fuel is embedded lazily so it never enters PedalMap's initial bundle.
@@ -37,6 +40,7 @@ import { ConnectGpsPage } from '@/pages/ConnectGpsPage'
 import { NavigationPage } from '@/pages/NavigationPage'
 import { BlogIndexPage } from '@/pages/BlogIndexPage'
 import { BlogPostPage } from '@/pages/BlogPostPage'
+import { GpxImportPage } from '@/pages/GpxImportPage'
 import { seoPages } from '@/content/seoPages'
 
 // DEV-ONLY: the dev fixture is only ever wired up under `import.meta.env.DEV`
@@ -52,71 +56,134 @@ const LazyDevPreset = import.meta.env.DEV
  * `onNewIntent` (Android only) and turns them into React Router navigations
  * pushed onto the SPA history so Android Back returns to the previous page.
  * Web never emits this event, so this is a no-op in the browser.
+ *
+ * NEW: Also uses Capacitor App API (getLaunchUrl, appUrlOpen) for official
+ * deep link handling including custom scheme (pedalmap://shortcut/...)
+ * and verified App Links (https://pedalmap.es/route/...).
  */
 function DeepLinkHandler() {
   const navigate = useNavigate()
+  const handledUrls = useRef(new Set<string>())
+  const listenerRef = useRef<{ remove: () => void } | null>(null)
+
   useEffect(() => {
-    const handledUrls = new Set<string>()
-    const onDeepLink = (e: Event) => {
-      const detail = (e as CustomEvent<string | { url?: string; source?: string }>).detail
-      if (!detail) return
-      const url = typeof detail === 'string' ? detail : (detail.url ?? '')
-      const source = typeof detail === 'object' ? detail.source : undefined
+    let mounted = true
+
+    const handleLaunchUrl = (url: string) => {
+      if (!mounted) return
       if (!url) return
 
-      if (!isExternalAppLink(url)) {
-        console.log('[applink] internal route ignored=' + url)
+      // Deduplicate
+      if (handledUrls.current.has(url)) {
+        console.log('[deep-link] duplicate ignored=', url)
         return
       }
 
-      const routeId = extractRouteId(url)
-      if (!routeId) {
-        console.log('[applink] invalid route=' + url)
+      let source: 'shortcut' | 'applink' | 'unknown' = 'unknown'
+      let target: string | null = null
+
+      try {
+        const u = new URL(url)
+
+        // Detect custom scheme shortcuts: pedalmap://shortcut/<id>
+        if (u.protocol === 'pedalmap:' && u.hostname === 'shortcut') {
+          source = 'shortcut'
+          const path = u.pathname
+          if (path === '/create_route') target = '/route-planner'
+          else if (path === '/my_routes') target = '/my-routes'
+          else if (path === '/import_gpx') target = '/gpx-import'
+          else if (path === '/daily_route') target = '/ruta'
+        }
+        // Detect verified App Links: https://pedalmap.es/route/<id> or /ruta/<id>
+        else if (u.protocol === 'https:' && (u.hostname === 'pedalmap.es' || u.hostname === 'www.pedalmap.es')) {
+          if (u.pathname.startsWith('/route/') || u.pathname.startsWith('/ruta/')) {
+            source = 'applink'
+            const routeId = u.pathname.startsWith('/route/')
+              ? u.pathname.slice('/route/'.length)
+              : u.pathname.slice('/ruta/'.length)
+            if (routeId) target = '/route/' + routeId
+          }
+        }
+      } catch {
+        // Invalid URL, ignore
+      }
+
+      if (!target) {
+        console.log('[deep-link] invalid or unsupported url=', url)
         return
       }
 
-      if (handledUrls.has(url)) {
-        console.log('[applink] duplicate ignored=' + url)
-        return
-      }
-      handledUrls.add(url)
-
-      let path = '/route/' + routeId
-      console.log('[applink] received external URL=' + url)
-      console.log('[applink] routeId=' + routeId)
-      console.log('[applink] navigating=' + path)
-      navigate(path)
+      handledUrls.current.add(url)
+      console.log('[deep-link] handle url=', url)
+      console.log('[deep-link] source=', source)
+      console.log('[deep-link] navigate target=', target)
+      navigate(target)
     }
-    window.addEventListener('capacitor-deep-link', onDeepLink)
-    return () => window.removeEventListener('capacitor-deep-link', onDeepLink)
+
+    // 1. Register listener FIRST for warm start events
+    const initListener = async () => {
+      const listener = await CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+        console.log('[deep-link] appUrlOpen=', url)
+        handleLaunchUrl(url)
+      })
+      listenerRef.current = listener
+
+      // 2. Get launch URL for cold start
+      const launch = await CapacitorApp.getLaunchUrl()
+      console.log('[deep-link] getLaunchUrl=', launch?.url ?? null)
+      if (launch?.url && mounted) {
+        handleLaunchUrl(launch.url)
+      }
+    }
+
+    initListener()
+
+    return () => {
+      mounted = false
+      if (listenerRef.current) {
+        listenerRef.current.remove()
+      }
+    }
   }, [navigate])
+
   return null
 }
 
-function isExternalAppLink(url: string): boolean {
-  try {
-    const u = new URL(url)
-    if (u.protocol !== 'https:') return false
-    const host = u.hostname
-    if (host !== 'pedalmap.es' && host !== 'www.pedalmap.es') return false
-    return u.pathname.startsWith('/route/') || u.pathname.startsWith('/ruta/')
-  } catch {
-    return false
-  }
-}
+/**
+ * Listens for `pedalmap-gpx-import` events dispatched from MainActivity
+ * when a GPX file is opened via "Open With" or "Share" from another app.
+ * Imports the GPX content into the planner and navigates to the route planner.
+ */
+function GpxImportHandler() {
+  const navigate = useNavigate()
+  const { setDraftFromImport } = usePlanner()
+  const handledUris = useRef(new Set<string>())
 
-function extractRouteId(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (u.pathname.startsWith('/route/')) {
-      return u.pathname.slice('/route/'.length)
+  useEffect(() => {
+    const onGpxImport = (e: Event) => {
+      const detail = (e as CustomEvent<{ uri?: string; type?: string; content?: string }>).detail
+      if (!detail?.content) return
+      const uri = detail.uri ?? ''
+      if (handledUris.current.has(uri)) {
+        console.log('[gpx-import] duplicate ignored uri=' + uri)
+        return
+      }
+      handledUris.current.add(uri)
+      console.log('[gpx-import] received uri=' + uri)
+      try {
+        const imported = parseGpx(detail.content)
+        const draft = importedGpxToDraft(imported)
+        setDraftFromImport(draft)
+        console.log('[gpx-import] navigate to /route-planner')
+        navigate('/route-planner')
+      } catch (error) {
+        console.error('[gpx-import] parse error', error)
+        alert('No se pudo importar el GPX. Comprueba que el archivo sea válido.')
+      }
     }
-    if (u.pathname.startsWith('/ruta/')) {
-      return u.pathname.slice('/ruta/'.length)
-    }
-  } catch {
-    // ignore
-  }
+    window.addEventListener('pedalmap-gpx-import', onGpxImport)
+    return () => window.removeEventListener('pedalmap-gpx-import', onGpxImport)
+  }, [navigate, setDraftFromImport])
   return null
 }
 
@@ -126,6 +193,7 @@ export default function App() {
       <PlannerProvider>
         <BrowserRouter>
           <DeepLinkHandler />
+          <GpxImportHandler />
           <AnalyticsListener />
           <Routes>
             <Route element={<AppShell />}>
@@ -135,8 +203,6 @@ export default function App() {
                 <Route
                   path="dev/demo"
                   element={
-
-
                     <LazyDevPreset />
                   }
                 />
@@ -144,6 +210,7 @@ export default function App() {
               <Route path="route-planner" element={<RoutePlannerPage />} />
               <Route path="ruta" element={<ReadyRoutePage />} />
               <Route path="my-routes" element={<MyRoutesPage />} />
+              <Route path="gpx-import" element={<GpxImportPage />} />
               <Route path="actividades" element={<MyActivitiesPage />} />
               <Route path="actividades/:activityId" element={<ActivityDetailPage />} />
               <Route path="actividades/conectar" element={<ConnectGpsPage />} />

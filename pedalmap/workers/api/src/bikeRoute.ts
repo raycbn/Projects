@@ -1,6 +1,14 @@
 import type { Env } from './types'
 import { json } from './types'
 import { unwrapValhallaAlternates } from './valhallaAlternates'
+import {
+  readUserEntitlements,
+  checkFreeCircularLimit,
+  consumeFreeCircular,
+  assertFilterLimitAllowed,
+  QuotaLimitReachedError,
+  QuotaUnavailableError,
+} from './firestore'
 
 const DEFAULT_VALHALLA = 'https://valhalla1.openstreetmap.de'
 const USER_AGENT = 'PedalMap/1.0 (+https://pedalmap-79b3a.web.app; bike routing)'
@@ -747,9 +755,12 @@ async function routeLocationsWithOptions(
  * Single round-trip from the browser: Valhalla route + surface + elevation.
  * Supports A→B, out-and-back, and Objetivo circular loops.
  */
-export async function handleBikeRoute(request: Request, env: Env, deps?: {
-  routeLocations?: typeof routeLocations
-}): Promise<Response> {
+export async function handleBikeRoute(
+  request: Request,
+  env: Env,
+  deps?: { routeLocations?: typeof routeLocations },
+  identityForPlan?: { uid: string; isAnonymous: boolean },
+): Promise<Response> {
   let body: BikeRouteRequest
   try {
     body = (await request.json()) as BikeRouteRequest
@@ -775,9 +786,44 @@ export async function handleBikeRoute(request: Request, env: Env, deps?: {
 
   const costing = bicycleCosting(bikeType, preferences)
   const resolveRouteLocations = deps?.routeLocations ?? routeLocations
+  let maxRouteOptions: 2 | 3 = 3
+  if (identityForPlan) {
+    try {
+      const entitlements = await readUserEntitlements(env, identityForPlan.uid)
+      if (!entitlements) {
+        return json({ error: 'Route option entitlement unavailable', code: 'quota_unavailable' }, 503)
+      }
+      maxRouteOptions = entitlements.plan === 'premium' ? 3 : 2
+    } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return json({ error: 'Route option entitlement unavailable', code: 'quota_unavailable' }, 503)
+      }
+      throw error
+    }
+  }
 
   try {
+    // 1. Filter limit check (applies to all route types)
+    const identity = (request as unknown as { identity?: { uid: string; isAnonymous: boolean } }).identity
+    if (identity) {
+      const filterError = await assertFilterLimitAllowed(env, identity.uid, identity.isAnonymous, preferences)
+      if (filterError) {
+        return json({ error: filterError.error, code: filterError.code }, 403)
+      }
+    }
+
+    // 2. Circular route specific quota check
     if (routeType === 'circular') {
+      if (!circularDistanceMeters || circularDistanceMeters < 1000) {
+        return json({ error: 'circularDistanceMeters required (>=1000)' }, 400)
+      }
+      const identity = (request as unknown as { identity?: { uid: string; isAnonymous: boolean } }).identity
+      if (identity) {
+        const checkResult = await checkFreeCircularLimit(env, identity.uid)
+        if (checkResult) {
+          return json({ error: checkResult.error, code: checkResult.code }, 403)
+        }
+      }
       if (!circularDistanceMeters || circularDistanceMeters < 1000) {
         return json({ error: 'circularDistanceMeters required (>=1000)' }, 400)
       }
@@ -972,10 +1018,30 @@ export async function handleBikeRoute(request: Request, env: Env, deps?: {
       if (!settled.length) return json({ error: 'No circular route found' }, 404)
       const best = settled[0]
       const { alternatives: _alts, ...primary } = best.candidate
-      const alternatives = settled.slice(1, 3).map((row, idx) => {
+      const alternatives = settled.slice(1, maxRouteOptions).map((row, idx) => {
         const { alternatives: _a, ...rest } = row.candidate
         return { ...rest, label: `Variante ${idx + 2}` }
       })
+
+      // Consume circular quota after successful calculation (Free users only)
+      const identityForConsume = (request as unknown as { identity?: { uid: string; isAnonymous: boolean } }).identity
+      if (identityForConsume) {
+        const ent = await readUserEntitlements(env, identityForConsume.uid)
+        if (ent?.plan === 'free') {
+          try {
+            await consumeFreeCircular(env, identityForConsume.uid)
+          } catch (e) {
+            if (e instanceof QuotaLimitReachedError) {
+              return json({ error: e.message, code: e.code }, 403)
+            }
+            if (e instanceof QuotaUnavailableError) {
+              return json({ error: 'Quota consumption failed', code: 'quota_unavailable' }, 503)
+            }
+            throw e
+          }
+        }
+      }
+
       return json({
         ok: true,
         provider: 'valhalla',
@@ -987,6 +1053,7 @@ export async function handleBikeRoute(request: Request, env: Env, deps?: {
         objectiveElevationGainMeters: best.elevationGainMeters,
         ...primary,
         alternatives,
+        maxRouteOptions,
       })
     }
 
@@ -1020,8 +1087,20 @@ export async function handleBikeRoute(request: Request, env: Env, deps?: {
             elevationIntervalM: routeType === 'out_and_back' || longSpan ? 45 : ROUTE_ELEVATION_INTERVAL_M,
             ...(wantsOptions && !longSpan ? { alternates: 2 } : {}),
           })
-    return json({ ok: true, provider: 'valhalla', bikeType, routeType, ...result })
+    return json({
+      ok: true,
+      provider: 'valhalla',
+      bikeType,
+      routeType,
+      ...result,
+      alternatives: result.alternatives?.slice(0, maxRouteOptions - 1),
+      maxRouteOptions,
+    })
   } catch (error) {
+    if (error instanceof QuotaUnavailableError) {
+      console.error('[bike-route] quota unavailable', error.message)
+      return json({ error: 'Quota check unavailable', code: 'quota_unavailable' }, 503)
+    }
     const message = error instanceof Error ? error.message : 'Valhalla bike-route failed'
     console.error('[bike-route]', message)
     return json({ error: message }, 502)

@@ -183,9 +183,8 @@ export async function handleClaimGpx(
   env: Env,
   identity: FirebaseIdentity,
 ): Promise<Response> {
-  if (identity.isAnonymous) {
-    return json({ error: 'Se requiere una cuenta real', code: 'auth_required' }, 401)
-  }
+  // Anonymous guests are allowed a server-enforced Free GPX trial too.
+  // The router enforces the monthly pseudonymous-IP identity gate before this handler.
   try {
     const result = await claimFreeGpxExport(env, identity.uid)
     if (!result.allowed) {
@@ -208,7 +207,10 @@ export async function handleClaimGpx(
       remaining: result.remaining === Number.POSITIVE_INFINITY ? null : result.remaining,
     })
   } catch (error) {
-    console.error('[claim-gpx]', error)
-    return json({ error: 'No se pudo registrar el export GPX' }, 500)
+    console.error('[claim-gpx]', error instanceof Error ? error.message : 'unknown error')
+    return json(
+      { error: 'No se pudo verificar ni registrar la cuota GPX.', code: 'quota_unavailable' },
+      503,
+    )
   }
 }

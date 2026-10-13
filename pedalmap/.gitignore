@@ -26,6 +26,11 @@ dist-ssr
 *.sln
 *.sw?
 
+# Android signing
+*.jks
+*.keystore
+key.properties
+
 # Testing / Playwright
 coverage
 test-results
@@ -45,6 +50,8 @@ workers/**/.dev.vars
 workers/**/.wrangler
 workers/**/node_modules
 workers/**/.secrets
+# Wrangler-generated local bundles/source maps; never commit build output.
+workers/api/dev/
 pedalmap/docs/social-assets/videos/
 .kilo/
 

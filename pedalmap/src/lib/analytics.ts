@@ -12,6 +12,8 @@ export type AnalyticsEvent =
   | 'premium_activated'
   | 'signup_started'
   | 'signup_completed'
+  | 'signup_email_clicked'
+  | 'login_existing_clicked'
   | 'auth_prompt_shown'
   | 'activity_started'
   | 'activity_finished'

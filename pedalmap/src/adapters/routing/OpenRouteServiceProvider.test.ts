@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   geometryFromOrsCoordinates,
   isOrsMaintenanceResponse,
@@ -103,5 +103,69 @@ describe('OpenRouteServiceProvider', () => {
         routeType: 'a_to_b',
       }),
     ).rejects.toBeInstanceOf(RoutingError)
+  })
+
+  it('returns the first valid Free circular trial immediately when the Worker marks it consumed', async () => {
+    const originalFetch = globalThis.fetch
+    const payload = {
+      features: [{
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [[-3.7, 40.4, 600], [-3.69, 40.41, 605]],
+        },
+        properties: { summary: { distance: 20000, duration: 3600, ascent: 30, descent: 25 } },
+      }],
+      pedalmapQuotaConsumed: true,
+    }
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    try {
+      const provider = new OpenRouteServiceProvider('test-key', 'https://ors.test')
+      const result = await provider.calculateRoute({
+        waypoints: [{ lat: 40.4, lng: -3.7 }],
+        bikeType: 'road',
+        preferences: [],
+        routeType: 'circular',
+        circularDistanceMeters: 20000,
+        circularSeed: 0,
+        targetElevationGainMeters: 1200,
+      })
+
+      expect(result.geometry.coordinates).toHaveLength(2)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('propagates the server-side Free circular quota error', async () => {
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      error: 'Límite de Objetivo circular alcanzado',
+      code: 'free_circular_limit',
+    }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    try {
+      const provider = new OpenRouteServiceProvider('test-key', 'https://ors.test')
+      await expect(provider.calculateRoute({
+        waypoints: [{ lat: 40.4, lng: -3.7 }],
+        bikeType: 'road',
+        preferences: [],
+        routeType: 'circular',
+        circularDistanceMeters: 20000,
+      })).rejects.toMatchObject({ code: 'free_circular_limit' })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 })

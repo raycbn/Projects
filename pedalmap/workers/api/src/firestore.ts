@@ -7,6 +7,18 @@ type ServiceAccount = {
   token_uri?: string
 }
 
+type FirestoreValue =
+  | { stringValue: string }
+  | { integerValue: string }
+  | { doubleValue: number }
+  | { booleanValue: boolean }
+  | { timestampValue: string }
+  | { mapValue: { fields: Record<string, unknown> } }
+  | { arrayValue: { values: unknown[] } }
+  | { nullValue: 'NULL_VALUE' }
+  | { geoPointValue: { latitude: number; longitude: number } }
+  | { referenceValue: string }
+
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   const b64 = pem
     .replace(/-----BEGIN PRIVATE KEY-----/, '')
@@ -79,6 +91,9 @@ export function parseServiceAccount(env: Env): ServiceAccount | null {
 export async function upsertSubscriptionAndPlan(
   env: Env,
   input: {
+    // When supplied by the webhook, bind the write to the subscription record
+    // version used to calculate the product-side merge.
+    expectedExistingUpdateTime?: string | null
     uid: string
     plan: 'free' | 'premium'
     status: string
@@ -103,6 +118,13 @@ export async function upsertSubscriptionAndPlan(
 
   // Preserve existing customer id / product sides when not provided (avoid wipe on revoke).
   const existing = await adminGetDocument(projectId, token, `subscriptions/${input.uid}`)
+  if (input.expectedExistingUpdateTime !== undefined) {
+    const actualUpdateTime =
+      typeof existing?.updateTime === 'string' ? existing.updateTime : null
+    if (actualUpdateTime !== input.expectedExistingUpdateTime) {
+      throw new Error('Subscription changed concurrently; retry webhook')
+    }
+  }
   const prevCustomer =
     fieldString(existing, 'stripeCustomerId') || undefined
   const customerId = input.stripeCustomerId || prevCustomer
@@ -121,10 +143,13 @@ export async function upsertSubscriptionAndPlan(
     'grupetaStatus',
     'annualTrialUsed',
   ]
+  const subPrecondition =
+    typeof existing?.updateTime === 'string'
+      ? `&currentDocument.updateTime=${encodeURIComponent(existing.updateTime)}`
+      : '&currentDocument.exists=false'
   const subUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/subscriptions/${input.uid}?${masks
     .map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`)
-    .join('&')}`
-  const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${input.uid}?updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt`
+    .join('&')}${subPrecondition}`
 
   const prevSoloId = fieldString(existing, 'soloSubscriptionId') || undefined
   const prevSoloStatus = fieldString(existing, 'soloStatus') || undefined
@@ -173,29 +198,35 @@ export async function upsertSubscriptionAndPlan(
     },
   }
 
-  const [subRes, userRes] = await Promise.all([
-    fetch(subUrl, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(subBody),
-    }),
-    fetch(userUrl, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userBody),
-    }),
-  ])
-
+  const subRes = await fetch(subUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(subBody),
+  })
   if (!subRes.ok) {
     const t = await subRes.text()
     throw new Error(`subscriptions write failed: ${subRes.status} ${t.slice(0, 300)}`)
   }
+
+  // Update the profile plan only after the authoritative subscription document
+  // write succeeds, using a fresh CAS precondition to prevent lost updates.
+  const userDoc = await adminGetDocument(projectId, token, `users/${input.uid}`)
+  const userPrecondition =
+    typeof userDoc?.updateTime === 'string'
+      ? `&currentDocument.updateTime=${encodeURIComponent(userDoc.updateTime)}`
+      : '&currentDocument.exists=false'
+  const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${input.uid}?updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt${userPrecondition}`
+  const userRes = await fetch(userUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userBody),
+  })
   if (!userRes.ok) {
     const t = await userRes.text()
     throw new Error(`users.plan write failed: ${userRes.status} ${t.slice(0, 300)}`)
@@ -226,10 +257,234 @@ export type UserEntitlements = {
   monthKey: string
   freeGpxWeekKey?: string
   freeGpxUsedThisWeek?: number
+  anonymousRoutesCreated?: number
+  freeCircularUsedThisMonth?: number
+}
+
+/** Error thrown when quota check cannot be performed reliably (server-side failure). */
+export class QuotaUnavailableError extends Error {
+  constructor(message = 'Quota check unavailable') {
+    super(message)
+    this.name = 'QuotaUnavailableError'
+  }
+}
+
+export class QuotaLimitReachedError extends Error {
+  constructor(
+    readonly code:
+      | 'create_limit'
+      | 'anonymous_limit_reached'
+      | 'guest_identity_limit_reached'
+      | 'free_circular_limit',
+    message: string,
+  ) {
+    super(message)
+    this.name = 'QuotaLimitReachedError'
+  }
 }
 
 export const FREE_MAX_ROUTES_CREATED_PER_MONTH = 15
 export const FREE_GPX_PER_WEEK = 1
+export const FREE_MAX_CIRCULAR_PER_MONTH = 1
+export const FREE_MAX_ACTIVE_PREFERENCES = 2
+export const FREE_MAX_WIND_ALERT_ROUTES = 1
+
+/**
+ * Bind one anonymous Firebase identity to a pseudonymous public-IP marker for
+ * the current UTC month. This deters incognito resets; it is not proof of a
+ * person's identity, and registered accounts are not subject to this gate.
+ */
+export async function ensureAnonymousIdentityForIp(
+  env: Env,
+  uid: string,
+  clientIp: string | null,
+): Promise<void> {
+  const ip = clientIp?.trim()
+  if (!ip || ip === 'unknown') {
+    throw new QuotaUnavailableError('Anonymous identity cannot be checked without a trusted client IP')
+  }
+
+  let sa: ServiceAccount | null
+  try {
+    sa = parseServiceAccount(env)
+  } catch {
+    throw new QuotaUnavailableError('Guest quota service-account configuration is invalid')
+  }
+  if (!sa) throw new QuotaUnavailableError('Guest quota service account is not configured')
+
+  const secret = env.GUEST_QUOTA_HMAC_SECRET?.trim() || sa.private_key
+  if (!secret || secret.length < 32) {
+    throw new QuotaUnavailableError('Guest quota HMAC secret is missing or too short')
+  }
+
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  let token: string
+  try {
+    token = await getAccessToken(sa)
+  } catch {
+    throw new QuotaUnavailableError('Guest quota service authentication failed')
+  }
+
+  const hmacHex = async (value: string): Promise<string> => {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    )
+    const signature = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      new TextEncoder().encode(value),
+    )
+    return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  }
+
+  let ipHash: string
+  let uidHash: string
+  try {
+    ;[ipHash, uidHash] = await Promise.all([
+      hmacHex(`guest-ip:${ip}`),
+      hmacHex(`guest-uid:${uid}`),
+    ])
+  } catch {
+    throw new QuotaUnavailableError('Guest quota pseudonym could not be created')
+  }
+
+  const monthKey = utcMonthKey()
+  const markerPath = `guestIdentityLimits/${monthKey}_${ipHash}`
+  const readMarker = async () => {
+    try {
+      return await adminGetDocument(projectId, token, markerPath)
+    } catch {
+      throw new QuotaUnavailableError('Guest identity marker read failed')
+    }
+  }
+  const checkExisting = (doc: Record<string, unknown> | null): boolean => {
+    if (!doc) return false
+    const fields = doc.fields as Record<string, { stringValue?: string }> | undefined
+    const storedUidHash = fields?.identityHash?.stringValue
+    if (!storedUidHash) {
+      throw new QuotaUnavailableError('Guest identity marker is missing its identity hash')
+    }
+    if (storedUidHash !== uidHash) {
+      throw new QuotaLimitReachedError(
+        'guest_identity_limit_reached',
+        'Este navegador o red ya ha usado la prueba de invitado este mes. Crea una cuenta gratis para continuar.',
+      )
+    }
+    return true
+  }
+
+  if (checkExisting(await readMarker())) return
+
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString()
+  const markerUrl =
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${markerPath}?currentDocument.exists=false`
+  let writeResponse: Response
+  try {
+    writeResponse = await fetch(markerUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fields: {
+          monthKey: { stringValue: monthKey },
+          identityHash: { stringValue: uidHash },
+          createdAt: { timestampValue: now.toISOString() },
+          expiresAt: { timestampValue: expiresAt },
+        },
+      }),
+    })
+  } catch {
+    throw new QuotaUnavailableError('Guest identity marker write failed')
+  }
+  if (writeResponse.ok) return
+
+  // Another anonymous UID may have claimed this IP concurrently. Re-read to
+  // distinguish that conflict from a transient Firestore outage.
+  const racedDoc = await readMarker()
+  if (checkExisting(racedDoc)) return
+  throw new QuotaUnavailableError('Guest identity marker could not be reserved')
+}
+
+/**
+ * Spark-compatible retention fallback for projects where Firestore TTL cannot be enabled.
+ * It removes a bounded batch of expired pseudonymous guest markers on the existing daily
+ * Worker cron. No raw client IP is stored or queried.
+ */
+export async function cleanupExpiredGuestIdentityMarkers(
+  env: Env,
+  limit = 100,
+): Promise<number> {
+  const sa = parseServiceAccount(env)
+  if (!sa) throw new Error('Guest marker cleanup service account is not configured')
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  if (!projectId) throw new Error('Guest marker cleanup project ID is not configured')
+  const token = await getAccessToken(sa)
+  const now = new Date()
+  const cutoff = now.toISOString()
+  const boundedLimit = Math.max(1, Math.min(500, Math.trunc(limit) || 100))
+  const queryUrl =
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`
+  const queryResponse = await fetch(queryUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: 'guestIdentityLimits' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'expiresAt' },
+            op: 'LESS_THAN',
+            value: { timestampValue: cutoff },
+          },
+        },
+        orderBy: [{ field: { fieldPath: 'expiresAt' }, direction: 'ASCENDING' }],
+        limit: boundedLimit,
+      },
+    }),
+  })
+  if (!queryResponse.ok) {
+    throw new Error(`Guest marker cleanup query failed with HTTP ${queryResponse.status}`)
+  }
+
+  const rows = (await queryResponse.json()) as Array<{
+    document?: {
+      name?: string
+      fields?: Record<string, { timestampValue?: string }>
+    }
+  }>
+  const documentPrefix =
+    `projects/${projectId}/databases/(default)/documents/guestIdentityLimits/`
+  let deleted = 0
+  for (const row of rows) {
+    const document = row.document
+    const name = document?.name
+    if (!name || !name.startsWith(documentPrefix)) continue
+    const expiresAt = document?.fields?.expiresAt?.timestampValue
+    const expiresMs = expiresAt ? Date.parse(expiresAt) : Number.NaN
+    // Do not delete malformed markers or any document whose expiry is still in the future.
+    if (!Number.isFinite(expiresMs) || expiresMs >= now.getTime()) continue
+
+    const deleteResponse = await fetch(`https://firestore.googleapis.com/v1/${name}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (deleteResponse.ok || deleteResponse.status === 404) deleted += 1
+    else {
+      throw new Error(`Guest marker cleanup delete failed with HTTP ${deleteResponse.status}`)
+    }
+  }
+  return deleted
+}
 
 export function utcMonthKey(d = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
@@ -244,17 +499,34 @@ export function isoWeekKey(d = new Date()): string {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
-/** Read users/{uid}.plan + usage via Admin REST. */
+/** Read users/{uid}.plan + usage via Admin REST. Throws QuotaUnavailableError if cannot read reliably. */
 export async function readUserEntitlements(
   env: Env,
   uid: string,
-): Promise<UserEntitlements | null> {
-  const sa = parseServiceAccount(env)
-  if (!sa) return null
+): Promise<UserEntitlements> {
+  let sa: ServiceAccount | null
+  try {
+    sa = parseServiceAccount(env)
+  } catch {
+    throw new QuotaUnavailableError('Service account configuration is invalid')
+  }
+  if (!sa) {
+    throw new QuotaUnavailableError('Service account not configured')
+  }
   const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
-  const token = await getAccessToken(sa)
+  let token: string
+  try {
+    token = await getAccessToken(sa)
+  } catch {
+    throw new QuotaUnavailableError('Service account authentication failed')
+  }
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  let res: Response
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  } catch {
+    throw new QuotaUnavailableError('Firestore entitlement read failed')
+  }
   const nowKey = utcMonthKey()
   if (res.status === 404) {
     return {
@@ -264,10 +536,13 @@ export async function readUserEntitlements(
       monthKey: nowKey,
       freeGpxWeekKey: isoWeekKey(),
       freeGpxUsedThisWeek: 0,
+      anonymousRoutesCreated: 0,
     }
   }
-  if (!res.ok) return null
-  const json = (await res.json()) as {
+  if (!res.ok) {
+    throw new QuotaUnavailableError(`Firestore read failed: ${res.status}`)
+  }
+  let json: {
     fields?: {
       plan?: { stringValue?: string }
       usage?: {
@@ -278,10 +553,17 @@ export async function readUserEntitlements(
             monthKey?: { stringValue?: string }
             freeGpxWeekKey?: { stringValue?: string }
             freeGpxUsedThisWeek?: { integerValue?: string; doubleValue?: number }
+            freeCircularUsedThisMonth?: { integerValue?: string; doubleValue?: number }
+            anonymousRoutesCreated?: { integerValue?: string; doubleValue?: number }
           }
         }
       }
     }
+  }
+  try {
+    json = (await res.json()) as typeof json
+  } catch {
+    throw new QuotaUnavailableError('Firestore entitlement response was invalid')
   }
   const planRaw = json.fields?.plan?.stringValue
   const plan: 'free' | 'premium' = planRaw === 'premium' ? 'premium' : 'free'
@@ -304,6 +586,12 @@ export async function readUserEntitlements(
         usageFields?.freeGpxUsedThisWeek?.doubleValue ??
         0,
     ) || 0
+  const freeCircularUsedThisMonth =
+    Number(
+      usageFields?.freeCircularUsedThisMonth?.integerValue ??
+        usageFields?.freeCircularUsedThisMonth?.doubleValue ??
+        0,
+    ) || 0
   return {
     plan,
     routesSaved,
@@ -311,10 +599,14 @@ export async function readUserEntitlements(
     monthKey: storedMonth,
     freeGpxWeekKey,
     freeGpxUsedThisWeek,
+    freeCircularUsedThisMonth,
+    anonymousRoutesCreated: Number(
+      usageFields?.anonymousRoutesCreated?.integerValue ??
+        usageFields?.anonymousRoutesCreated?.doubleValue ??
+        0,
+    ) || 0,
   }
 }
-
-/** Brief public route fields for cheers / share emails. */
 export async function readRouteOwnerBrief(
   env: Env,
   routeId: string,
@@ -387,15 +679,29 @@ export async function readUserFollowNotifyTarget(
   }
 }
 
-/** 403 when Free monthly create cap is exhausted. null = allowed (or cannot read). */
+/** 403 when Free monthly create cap is exhausted. Throws QuotaUnavailableError if cannot check. */
 export async function assertRoutingCreateAllowed(
   env: Env,
   uid: string,
+  isAnonymous: boolean,
 ): Promise<{ error: string; code: string } | null> {
-  const ent = await readUserEntitlements(env, uid)
-  if (!ent) return null
+  let ent: UserEntitlements
+  try {
+    ent = await readUserEntitlements(env, uid)
+  } catch (e) {
+    if (e instanceof QuotaUnavailableError) throw e
+    throw new QuotaUnavailableError('Entitlements check failed')
+  }
   if (ent.plan === 'premium') return null
-  if (ent.routesCreatedThisMonth >= FREE_MAX_ROUTES_CREATED_PER_MONTH) {
+  if (isAnonymous) {
+    const anonCreated = ent.anonymousRoutesCreated ?? 0
+    if (anonCreated >= 3) {
+      return {
+        error: 'Límite de 3 creaciones alcanzado para usuarios anónimos. Regístrate para continuar.',
+        code: 'anonymous_limit_reached',
+      }
+    }
+  } else if (ent.routesCreatedThisMonth >= FREE_MAX_ROUTES_CREATED_PER_MONTH) {
     return {
       error: 'Has alcanzado el límite de creaciones del plan Free este mes.',
       code: 'create_limit',
@@ -404,18 +710,29 @@ export async function assertRoutingCreateAllowed(
   return null
 }
 
-/** Admin bump of monthly create counter (source of truth for Free caps). */
-export async function bumpRoutesCreatedThisMonth(env: Env, uid: string): Promise<void> {
+/** Admin bump of monthly create counter (source of truth for Free caps). Throws QuotaUnavailableError if cannot write. */
+export async function bumpRoutesCreatedThisMonth(
+  env: Env,
+  uid: string,
+  isAnonymous: boolean,
+): Promise<void> {
   const sa = parseServiceAccount(env)
-  if (!sa) return
+  if (!sa) {
+    throw new QuotaUnavailableError('Service account not configured')
+  }
   const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
   const token = await getAccessToken(sa)
   const now = new Date().toISOString()
   const nowKey = utcMonthKey()
   const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+  if (!userDoc?.updateTime) {
+    throw new QuotaUnavailableError('Create quota user document is unavailable')
+  }
+  const documentFields = userDoc.fields as Record<string, unknown> | undefined
+  const currentPlan = (documentFields?.plan as { stringValue?: string } | undefined)?.stringValue
   const usageFields =
     (
-      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
+      documentFields?.usage as
         | { mapValue?: { fields?: Record<string, unknown> } }
         | undefined
     )?.mapValue?.fields ?? {}
@@ -428,13 +745,74 @@ export async function bumpRoutesCreatedThisMonth(env: Env, uid: string): Promise
         (usageFields.routesCreatedThisMonth as { doubleValue?: number } | undefined)?.doubleValue ??
         0,
     ) || 0
-  const next = storedMonth === nowKey ? rawCreated + 1 : 1
-  const merged = {
-    ...usageFields,
-    routesCreatedThisMonth: { integerValue: String(next) },
-    monthKey: { stringValue: nowKey },
+
+  // For anonymous users, also track total anonymous creations (no monthly reset)
+  const anonCreated =
+    Number(
+      (usageFields.anonymousRoutesCreated as { integerValue?: string; doubleValue?: number } | undefined)
+        ?.integerValue ??
+        (usageFields.anonymousRoutesCreated as { doubleValue?: number } | undefined)?.doubleValue ??
+        0,
+    ) || 0
+  const nextAnonCreated = isAnonymous ? anonCreated + 1 : anonCreated
+  const convertedAtField = usageFields.convertedAt as { timestampValue?: string; stringValue?: string } | undefined
+  const hasConvertedAt = convertedAtField?.timestampValue ?? convertedAtField?.stringValue
+  const currentMonthCreated = storedMonth === nowKey ? rawCreated : 0
+  const conversionPending = !isAnonymous && anonCreated > 0 && !hasConvertedAt
+  const monthlyCreatedField = usageFields.routesCreatedThisMonth as
+    | { integerValue?: string; doubleValue?: number }
+    | undefined
+  const hasMonthlyRouteCounter =
+    monthlyCreatedField?.integerValue !== undefined || monthlyCreatedField?.doubleValue !== undefined
+  // The monthly counter is authoritative when present. Lifetime anonymous
+  // usage is only a migration fallback for legacy profiles with no monthly
+  // counter at all; it must never cross a month boundary.
+  const countForLimit =
+    conversionPending && storedMonth === nowKey && !hasMonthlyRouteCounter
+      ? anonCreated
+      : currentMonthCreated
+  const circularMonthReset = storedMonth === nowKey
+    ? {}
+    : { freeCircularUsedThisMonth: { integerValue: '0' } }
+
+  if (isAnonymous && anonCreated >= 3) {
+    throw new QuotaLimitReachedError(
+      'anonymous_limit_reached',
+      'Límite de 3 creaciones alcanzado para usuarios anónimos.',
+    )
   }
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt`
+  if (
+    !isAnonymous &&
+    currentPlan !== 'premium' &&
+    countForLimit >= FREE_MAX_ROUTES_CREATED_PER_MONTH
+  ) {
+    throw new QuotaLimitReachedError(
+      'create_limit',
+      'Has alcanzado el límite de creaciones del plan Free este mes.',
+    )
+  }
+
+  let nextCreated = currentMonthCreated + 1
+
+  // CONVERSION: anonymous -> authenticated
+  // The anonymous identity may already be represented in this month's counter.
+  // Use the greater of the current-month and lifetime anonymous counts, then
+  // add this successfully calculated route exactly once.
+  if (conversionPending) {
+    const convertedAt = now
+    const preConversionAnonymousCreates = anonCreated
+    nextCreated = countForLimit + 1
+    // Mark conversion as done
+    const merged = {
+      ...usageFields,
+      ...circularMonthReset,
+      routesCreatedThisMonth: { integerValue: String(nextCreated) },
+      monthKey: { stringValue: nowKey },
+      anonymousRoutesCreated: { integerValue: String(nextAnonCreated) },
+      convertedAt: { timestampValue: convertedAt },
+      preConversionAnonymousCreates: { integerValue: String(preConversionAnonymousCreates) },
+    }
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt&currentDocument.updateTime=${encodeURIComponent(String(userDoc.updateTime))}`
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
@@ -450,7 +828,36 @@ export async function bumpRoutesCreatedThisMonth(env: Env, uid: string): Promise
   })
   if (!res.ok) {
     const t = await res.text()
-    throw new Error(`create usage bump failed: ${res.status} ${t.slice(0, 300)}`)
+    throw new QuotaUnavailableError(`create usage bump failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+  return
+  }
+
+  // Normal bump (no conversion)
+  const merged = {
+    ...usageFields,
+    ...circularMonthReset,
+    routesCreatedThisMonth: { integerValue: String(nextCreated) },
+    monthKey: { stringValue: nowKey },
+    anonymousRoutesCreated: { integerValue: String(nextAnonCreated) },
+  }
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt&currentDocument.updateTime=${encodeURIComponent(String(userDoc.updateTime))}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        usage: { mapValue: { fields: merged } },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    throw new QuotaUnavailableError(`create usage bump failed: ${res.status} ${t.slice(0, 300)}`)
   }
 }
 
@@ -477,26 +884,39 @@ export async function claimFreeGpxExport(
 
   const sa = parseServiceAccount(env)
   if (!sa) {
-    // Soft allow when Admin SA missing — client still records locally.
-    return { allowed: true, plan: 'free', remaining: FREE_GPX_PER_WEEK - used - 1, reason: 'sa_missing' }
+    throw new QuotaUnavailableError('Service account not configured for GPX quota')
   }
   const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
   const token = await getAccessToken(sa)
   const now = new Date().toISOString()
   const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+  if (!userDoc?.updateTime) {
+    throw new QuotaUnavailableError('GPX quota user document is unavailable')
+  }
   const usageFields =
     (
-      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
+      (userDoc.fields as Record<string, unknown> | undefined)?.usage as
         | { mapValue?: { fields?: Record<string, unknown> } }
         | undefined
     )?.mapValue?.fields ?? {}
-  const nextUsed = used + 1
+  const storedWeek = (usageFields.freeGpxWeekKey as { stringValue?: string } | undefined)?.stringValue
+  const storedUsed = Number(
+    (usageFields.freeGpxUsedThisWeek as { integerValue?: string; doubleValue?: number } | undefined)
+      ?.integerValue ??
+      (usageFields.freeGpxUsedThisWeek as { doubleValue?: number } | undefined)?.doubleValue ??
+      0,
+  ) || 0
+  const currentUsed = storedWeek === week ? storedUsed : 0
+  if (currentUsed >= FREE_GPX_PER_WEEK) {
+    return { allowed: false, plan: 'free', remaining: 0, reason: 'gpx_week_limit' }
+  }
+  const nextUsed = currentUsed + 1
   const merged = {
     ...usageFields,
     freeGpxWeekKey: { stringValue: week },
     freeGpxUsedThisWeek: { integerValue: String(nextUsed) },
   }
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt`
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt&currentDocument.updateTime=${encodeURIComponent(String(userDoc.updateTime))}`
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
@@ -512,9 +932,204 @@ export async function claimFreeGpxExport(
   })
   if (!res.ok) {
     const t = await res.text()
-    throw new Error(`gpx claim failed: ${res.status} ${t.slice(0, 300)}`)
+    throw new QuotaUnavailableError(`GPX claim failed: ${res.status} ${t.slice(0, 300)}`)
   }
   return { allowed: true, plan: 'free', remaining: Math.max(0, FREE_GPX_PER_WEEK - nextUsed) }
+}
+
+/**
+ * Checks if user can create a circular route (Free: 1/month, Premium: unlimited).
+ * Does NOT consume the quota. Returns null if allowed, error object if rejected.
+ * Throws QuotaUnavailableError if entitlements cannot be read.
+ */
+export async function checkFreeCircularLimit(
+  env: Env,
+  uid: string,
+): Promise<{ error: string; code: string } | null> {
+  const ent = await readUserEntitlements(env, uid)
+  if (!ent) throw new QuotaUnavailableError('Entitlements check failed')
+  if (ent.plan === 'premium') return null
+  const nowKey = utcMonthKey()
+  const used = ent.monthKey === nowKey ? (ent.freeCircularUsedThisMonth ?? 0) : 0
+  if (used >= FREE_MAX_CIRCULAR_PER_MONTH) {
+    return {
+      error: 'Límite de Objetivo circular alcanzado',
+      code: 'free_circular_limit',
+    }
+  }
+  return null
+}
+
+/**
+ * Atomically consumes one circular route credit for a Free user.
+ * Uses Firestore conditional write (currentDocument.updateTime) for concurrency safety.
+ * Returns { allowed: true, remaining } on success.
+ * Throws QuotaUnavailableError on quota failure or concurrency conflict.
+ */
+export async function consumeFreeCircular(
+  env: Env,
+  uid: string,
+): Promise<{ allowed: boolean; remaining: number }> {
+  const sa = parseServiceAccount(env)
+  if (!sa) {
+    throw new QuotaUnavailableError('Service account not configured')
+  }
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  let token: string
+  try {
+    token = await getAccessToken(sa)
+  } catch {
+    throw new QuotaUnavailableError('Service account authentication failed')
+  }
+  const now = new Date().toISOString()
+  const nowKey = utcMonthKey()
+
+  // Read current document to get updateTime for conditional write
+  let userDoc: Record<string, unknown> | null
+  try {
+    userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+  } catch {
+    throw new QuotaUnavailableError('Circular quota read failed')
+  }
+  if (!userDoc) {
+    throw new QuotaUnavailableError('User document not found')
+  }
+  const documentFields = userDoc.fields as Record<string, unknown> | undefined
+  const currentPlan = (documentFields?.plan as { stringValue?: string } | undefined)?.stringValue
+  if (currentPlan === 'premium') {
+    return { allowed: true, remaining: Number.POSITIVE_INFINITY }
+  }
+  const updateTime = userDoc.updateTime
+  if (!updateTime) {
+    throw new QuotaUnavailableError('Document missing updateTime')
+  }
+  const updateTimeStr = String(updateTime)
+
+  const usageFields = (
+      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
+        | { mapValue?: { fields?: Record<string, { stringValue?: string; integerValue?: string; doubleValue?: number }> } }
+        | undefined
+    )?.mapValue?.fields ?? {}
+  const storedMonth: string = ((usageFields.monthKey as { stringValue?: string } | undefined)?.stringValue) ?? utcMonthKey()
+  // Type assertion to satisfy TypeScript
+  const storedMonthStr: string = storedMonth
+  const rawCreated =
+    Number(
+      (usageFields.freeCircularUsedThisMonth as { integerValue?: string; doubleValue?: number } | undefined)?.integerValue ??
+        (usageFields.freeCircularUsedThisMonth as { doubleValue?: number } | undefined)?.doubleValue ??
+        0
+    ) || 0
+  const rawRoutesCreated =
+    Number(
+      (usageFields.routesCreatedThisMonth as { integerValue?: string; doubleValue?: number } | undefined)?.integerValue ??
+        (usageFields.routesCreatedThisMonth as { doubleValue?: number } | undefined)?.doubleValue ??
+        0
+    ) || 0
+
+  const sameMonth = storedMonthStr === nowKey
+  const currentMonthCreated = sameMonth ? rawRoutesCreated : 0
+  const currentUsed = sameMonth ? rawCreated : 0
+  if (currentUsed >= FREE_MAX_CIRCULAR_PER_MONTH) {
+    throw new QuotaLimitReachedError(
+      'free_circular_limit',
+      'Límite de Objetivo circular alcanzado',
+    )
+  }
+  const nextUsed = currentUsed + 1
+
+  const merged: Record<string, FirestoreValue> = {
+    ...(usageFields as Record<string, FirestoreValue>),
+    // routesCreatedThisMonth and freeCircularUsedThisMonth share monthKey.
+    // When Objetivo is the first operation in a new month, reset the route
+    // counter too or the previous month's 15-route quota would leak forward.
+    routesCreatedThisMonth: { integerValue: String(currentMonthCreated) },
+    freeCircularUsedThisMonth: { integerValue: String(nextUsed) },
+    monthKey: { stringValue: nowKey },
+  } satisfies Record<string, FirestoreValue>
+
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt&currentDocument.updateTime=${encodeURIComponent(updateTimeStr)}`
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fields: {
+        usage: { mapValue: { fields: merged } },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const t = await res.text()
+    if (res.status === 409 || res.status === 412) {
+      throw new QuotaUnavailableError('Circular quota concurrent modification - retry')
+    }
+    throw new QuotaUnavailableError(`circular consume failed: ${res.status} ${t.slice(0, 300)}`)
+  }
+
+  return { allowed: true, remaining: Math.max(0, FREE_MAX_CIRCULAR_PER_MONTH - nextUsed) }
+}
+
+/**
+ * Legacy response-shape wrapper. All actual consumption must go through the
+ * same CAS helper as the current routing endpoints; this path must never fail open.
+ */
+export async function claimFreeCircular(
+  env: Env,
+  uid: string,
+): Promise<{ allowed: boolean; plan: 'free' | 'premium'; remaining: number; reason?: string }> {
+  const ent = await readUserEntitlements(env, uid)
+  if (!ent) {
+    return { allowed: false, plan: 'free', remaining: 0, reason: 'entitlements_unavailable' }
+  }
+  if (ent.plan === 'premium') {
+    return { allowed: true, plan: 'premium', remaining: Number.POSITIVE_INFINITY }
+  }
+
+  try {
+    const result = await consumeFreeCircular(env, uid)
+    if (!Number.isFinite(result.remaining)) {
+      return { allowed: true, plan: 'premium', remaining: Number.POSITIVE_INFINITY }
+    }
+    return { allowed: true, plan: 'free', remaining: result.remaining }
+  } catch (error) {
+    if (error instanceof QuotaLimitReachedError) {
+      return { allowed: false, plan: 'free', remaining: 0, reason: 'circular_month_limit' }
+    }
+    if (error instanceof QuotaUnavailableError) {
+      return { allowed: false, plan: 'free', remaining: 0, reason: 'entitlements_unavailable' }
+    }
+    throw error
+  }
+}
+
+/**
+ * Validates that the number of active preferences does not exceed the plan limit.
+ * Throws QuotaUnavailableError if entitlements cannot be read.
+ * Returns null if allowed, error object if rejected.
+ */
+export async function assertFilterLimitAllowed(
+  env: Env,
+  uid: string,
+  isAnonymous: boolean,
+  preferences: unknown[],
+): Promise<{ error: string; code: string } | null> {
+  if (!Array.isArray(preferences)) return null
+  const ent = await readUserEntitlements(env, uid)
+  if (!ent) throw new QuotaUnavailableError('Entitlements check failed')
+  if (ent.plan === 'premium') return null
+  const count = preferences.length
+  if (count > FREE_MAX_ACTIVE_PREFERENCES) {
+    return {
+      error: `Has alcanzado el límite de ${FREE_MAX_ACTIVE_PREFERENCES} filtros simultáneos del plan Free.`,
+      code: 'filter_limit',
+    }
+  }
+  return null
 }
 
 /** Admin-only: set users.plan (allowlist / Stripe). Client rules freeze plan. */
@@ -532,7 +1147,7 @@ export async function writeUserPlan(
   const token = await getAccessToken(sa)
   const now = new Date().toISOString()
   const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt`
-  const res = await fetch(userUrl, {
+const res = await fetch(userUrl, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -543,7 +1158,7 @@ export async function writeUserPlan(
         plan: { stringValue: plan },
         updatedAt: { timestampValue: now },
       },
-    }),
+    } as { fields: Record<string, unknown> }),
   })
   if (!res.ok) {
     const t = await res.text()
@@ -791,6 +1406,7 @@ export async function readSubscriptionRecord(
 ): Promise<{
   status?: string
   plan?: string
+  updateTime?: string
   stripeSubscriptionId?: string
   stripeCustomerId?: string
   product?: string
@@ -810,6 +1426,7 @@ export async function readSubscriptionRecord(
   return {
     status: fieldString(doc, 'status') || undefined,
     plan: fieldString(doc, 'plan') || undefined,
+    updateTime: typeof doc.updateTime === 'string' ? doc.updateTime : undefined,
     stripeSubscriptionId: fieldString(doc, 'stripeSubscriptionId') || undefined,
     stripeCustomerId: fieldString(doc, 'stripeCustomerId') || undefined,
     product: fieldString(doc, 'product') || undefined,
@@ -1258,6 +1875,8 @@ export type PublishShareInput = {
   routeId?: string
   /** Optional capped turn-by-turn for shared viewers / reopen. */
   instructions?: string[]
+  /** Whether to enable wind alert for this route. */
+  windAlertEnabled?: boolean
 }
 
 const FREE_MAX_ROUTES_SAVED = 5
@@ -1314,39 +1933,57 @@ async function bumpRoutesSaved(
   projectId: string,
   token: string,
   uid: string,
-  currentSaved: number,
 ): Promise<void> {
-  const now = new Date().toISOString()
-  const next = currentSaved + 1
-  const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
-  const usageFields =
-    (
-      (userDoc?.fields as Record<string, unknown> | undefined)?.usage as
-        | { mapValue?: { fields?: Record<string, unknown> } }
-        | undefined
-    )?.mapValue?.fields ?? {}
-  const merged = {
-    ...usageFields,
-    routesSaved: { integerValue: String(next) },
-  }
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt`
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      fields: {
-        usage: { mapValue: { fields: merged } },
-        updatedAt: { timestampValue: now },
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`
+
+  // Re-read and conditionally update so simultaneous save requests cannot all
+  // pass a stale count of four and exceed the Free cap of five saved routes.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const userDoc = await adminGetDocument(projectId, token, `users/${uid}`)
+    if (!userDoc?.updateTime) throw new QuotaUnavailableError('Saved-route usage document unavailable')
+
+    const userFields = (userDoc.fields as Record<string, unknown> | undefined) ?? {}
+    const usageFields =
+      (
+        userFields.usage as
+          | { mapValue?: { fields?: Record<string, unknown> } }
+          | undefined
+      )?.mapValue?.fields ?? {}
+    const savedField = usageFields.routesSaved as
+      | { integerValue?: string; doubleValue?: number }
+      | undefined
+    const currentSaved = Number(savedField?.integerValue ?? savedField?.doubleValue ?? 0) || 0
+    const plan = fieldString(userDoc, 'plan') === 'premium' ? 'premium' : 'free'
+    if (plan !== 'premium' && currentSaved >= FREE_MAX_ROUTES_SAVED) {
+      throw new Error('save_limit')
+    }
+
+    const now = new Date().toISOString()
+    const merged = {
+      ...usageFields,
+      routesSaved: { integerValue: String(currentSaved + 1) },
+    }
+    const patchUrl = `${url}?updateMask.fieldPaths=usage&updateMask.fieldPaths=updatedAt&currentDocument.updateTime=${encodeURIComponent(String(userDoc.updateTime))}`
+    const response = await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
-    }),
-  })
-  if (!res.ok) {
-    const t = await res.text()
-    throw new Error(`usage bump failed: ${res.status} ${t.slice(0, 300)}`)
+      body: JSON.stringify({
+        fields: {
+          usage: { mapValue: { fields: merged } },
+          updatedAt: { timestampValue: now },
+        },
+      }),
+    })
+    if (response.ok) return
+    if (response.status === 409 || response.status === 412) continue
+    const text = await response.text()
+    throw new QuotaUnavailableError(`Saved-route usage update failed: ${response.status} ${text.slice(0, 300)}`)
   }
+
+  throw new QuotaUnavailableError('Saved-route usage changed concurrently; retry')
 }
 
 /**
@@ -1383,6 +2020,7 @@ export async function publishPublicRouteShare(
     isPublic: { booleanValue: true },
     shareSlug: { stringValue: shareSlug },
     updatedAt: { timestampValue: now },
+    windAlertEnabled: { booleanValue: input.windAlertEnabled ?? false },
   }
   if (instructions.length) routeFields.instructions = toFirestoreValue(instructions)
   if (input.description) routeFields.description = { stringValue: String(input.description).slice(0, 500) }
@@ -1416,6 +2054,7 @@ export async function publishPublicRouteShare(
       'description',
       'circularDistanceMeters',
       'instructions',
+      'windAlertEnabled',
     ]
       .map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`)
       .join('&')
@@ -1447,12 +2086,7 @@ export async function publishPublicRouteShare(
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        fields: {
-          ...routeFields,
-          createdAt: { timestampValue: now },
-        },
-      }),
+body: JSON.stringify({ fields: routeFields }) as string,
     })
     if (!createRes.ok) {
       const t = await createRes.text()
@@ -1462,9 +2096,26 @@ export async function publishPublicRouteShare(
     routeId = created.name?.split('/').pop() || ''
     if (!routeId) throw new Error('route create missing id')
     try {
-      await bumpRoutesSaved(projectId, token, uid, saved)
+      await bumpRoutesSaved(projectId, token, uid)
     } catch (err) {
-      console.warn('[publish] usage bump failed', err)
+      // The route document was created first so we could allocate its Firestore
+      // ID. If the conditional slot claim loses a race or Firestore is unavailable,
+      // delete that just-created document rather than leave an uncounted saved route.
+      try {
+        const rollback = await fetch(
+          `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/routes/${encodeURIComponent(routeId)}`,
+          { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (!rollback.ok && rollback.status !== 404) {
+          console.error('[publish] failed to roll back uncounted route', rollback.status)
+        }
+      } catch (rollbackError) {
+        console.error('[publish] failed to roll back uncounted route', rollbackError)
+      }
+
+      if (err instanceof Error && err.message === 'save_limit') throw err
+      console.error('[publish] saved-route quota persistence failed', err)
+      throw new QuotaUnavailableError('quota_unavailable')
     }
   }
 
@@ -1618,16 +2269,17 @@ const WEBHOOK_LEASE_MS = 5 * 60 * 1000
  * 1. Event doesn't exist → create with status=processing (claimed)
  * 2. Event exists with status=completed → duplicate
  * 3. Event exists with status=processing:
- *    - claimedAt not expired → duplicate (another worker owns it)
- *    - claimedAt expired → atomically update to reclaim (compare-and-set)
+ *    - claimedAt not expired → in_progress (another worker owns it; caller should retry)
+ *    - claimedAt expired → atomically reclaim and renew the lease (compare-and-set)
  *
- * @returns 'claimed' if this worker claimed it, 'duplicate' if already claimed/owned, 'failed' if error
+ * @returns 'claimed' if this worker owns it, 'duplicate' only if completed,
+ * 'in_progress' when another worker holds a live lease, and 'failed' on storage errors.
  */
 export async function claimWebhookEvent(
   env: Env,
   eventId: string,
   eventType: string,
-): Promise<'claimed' | 'duplicate' | 'failed'> {
+): Promise<'claimed' | 'duplicate' | 'in_progress' | 'failed'> {
   const sa = parseServiceAccount(env)
   if (!sa) return 'failed'
   const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
@@ -1687,15 +2339,16 @@ export async function claimWebhookEvent(
   if (status === 'processing' && claimedAtStr) {
     const claimedAt = new Date(claimedAtStr).getTime()
     const nowMs = Date.now()
-    if (nowMs - claimedAt < WEBHOOK_LEASE_MS) {
-      // Lease still valid - another worker is processing
-      return 'duplicate'
+    if (Number.isFinite(claimedAt) && nowMs - claimedAt < WEBHOOK_LEASE_MS) {
+      // The event is incomplete. The handler returns 503 so Stripe retries if the
+      // current owner fails after this request arrives.
+      return 'in_progress'
     }
     // Lease expired - try to atomically reclaim using compare-and-set on updateTime
     // We use the document's updateTime as the precondition
     const updateTime = doc.updateTime
     if (updateTime) {
-      const reclaimUrl = `${docUrl}?currentDocument.updateTime=${encodeURIComponent(updateTime)}`
+      const reclaimUrl = `${docUrl}?updateMask.fieldPaths=status&updateMask.fieldPaths=claimedAt&updateMask.fieldPaths=updatedAt&currentDocument.updateTime=${encodeURIComponent(updateTime)}`
       const reclaimRes = await fetch(reclaimUrl, {
         method: 'PATCH',
         headers: {
@@ -1704,8 +2357,9 @@ export async function claimWebhookEvent(
         },
         body: JSON.stringify({
           fields: {
-            claimedAt: { timestampValue: now },
             status: { stringValue: 'processing' },
+            claimedAt: { timestampValue: now },
+            updatedAt: { timestampValue: now },
           },
         }),
       })
@@ -1713,8 +2367,8 @@ export async function claimWebhookEvent(
         return 'claimed'
       }
       if (reclaimRes.status === 409 || reclaimRes.status === 412) {
-        // Another worker reclaimed it concurrently
-        return 'duplicate'
+        // Another worker reclaimed it concurrently; this event is not complete.
+        return 'in_progress'
       }
       const text = await reclaimRes.text().catch(() => '')
       console.error(`[firestore] reclaim webhook failed: ${reclaimRes.status} ${text.slice(0, 200)}`)
@@ -1722,8 +2376,9 @@ export async function claimWebhookEvent(
     }
   }
 
-  // Any other state or missing claimedAt - treat as duplicate to be safe
-  return 'duplicate'
+  // An unknown or malformed state is not proof of successful processing.
+  // Fail closed so Stripe retries rather than acknowledging a potentially lost event.
+  return 'failed'
 }
 
 /**
@@ -1744,22 +2399,291 @@ export async function markWebhookEventProcessed(
   const now = new Date().toISOString()
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/webhookEvents/${eventId}?updateMask.fieldPaths=status&updateMask.fieldPaths=processedAt`
 
+  const body = {
+    fields: {
+      status: { stringValue: 'completed' },
+      processedAt: { timestampValue: now },
+    },
+  } as { fields: Record<string, { stringValue?: string; integerValue?: string; doubleValue?: number; timestampValue?: string }> }
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      fields: {
-        status: { stringValue: 'completed' },
-        processedAt: { timestampValue: now },
-      },
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
     const t = await res.text()
     throw new Error(`webhookEvents completion failed: ${res.status} ${t.slice(0, 300)}`)
   }
+}
+
+export type CheckoutLockProduct = 'solo' | 'grupeta'
+export type CheckoutLockInterval = 'month' | 'year'
+
+export type CheckoutLockClaim =
+  | { kind: 'claimed'; lockToken: string }
+  | {
+      kind: 'existing_session'
+      sessionId: string
+      checkoutUrl: string
+      product: CheckoutLockProduct
+      interval: CheckoutLockInterval
+      trial: boolean
+      updateTime: string
+    }
+  | { kind: 'in_progress' }
+
+const CHECKOUT_LOCK_LEASE_MS = 2 * 60 * 1000
+
+function checkoutLockField(
+  doc: Record<string, unknown>,
+  key: string,
+): { stringValue?: string; timestampValue?: string; booleanValue?: boolean } | undefined {
+  const fields = doc.fields as Record<string, {
+    stringValue?: string
+    timestampValue?: string
+    booleanValue?: boolean
+  }> | undefined
+  return fields?.[key]
+}
+
+function checkoutLockUrl(projectId: string, uid: string): string {
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/checkoutLocks/${encodeURIComponent(uid)}`
+}
+
+async function claimCheckoutLockFromVersion(
+  baseUrl: string,
+  token: string,
+  updateTime: string,
+  product: CheckoutLockProduct,
+  interval: CheckoutLockInterval,
+  lockToken: string,
+  now: string,
+): Promise<'claimed' | 'conflict'> {
+  const masks = [
+    'status',
+    'product',
+    'interval',
+    'lockToken',
+    'claimedAt',
+    'updatedAt',
+    'checkoutSessionId',
+    'checkoutUrl',
+    'expiresAt',
+    'trial',
+  ]
+  const url = `${baseUrl}?${masks.map((field) => `updateMask.fieldPaths=${field}`).join('&')}&currentDocument.updateTime=${encodeURIComponent(updateTime)}`
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields: {
+        status: { stringValue: 'creating' },
+        product: { stringValue: product },
+        interval: { stringValue: interval },
+        lockToken: { stringValue: lockToken },
+        claimedAt: { timestampValue: now },
+        updatedAt: { timestampValue: now },
+      },
+    }),
+  })
+  if (response.status === 200 || response.status === 201) return 'claimed'
+  if (response.status === 409 || response.status === 412) return 'conflict'
+  const details = await response.text().catch(() => '')
+  throw new Error(`checkout lock claim failed: ${response.status} ${details.slice(0, 250)}`)
+}
+
+/**
+ * Atomically reserve the right to create/reuse one Checkout session per Firebase UID.
+ * A live session is returned to the caller; an in-progress create fails closed.
+ */
+export async function claimCheckoutLock(
+  env: Env,
+  uid: string,
+  product: CheckoutLockProduct,
+  interval: CheckoutLockInterval,
+): Promise<CheckoutLockClaim> {
+  const sa = parseServiceAccount(env)
+  if (!sa) throw new Error('Service account not configured for checkout lock')
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const accessToken = await getAccessToken(sa)
+  const baseUrl = checkoutLockUrl(projectId, uid)
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const doc = await adminGetDocument(projectId, accessToken, `checkoutLocks/${uid}`)
+    const lockToken = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    if (!doc) {
+      const response = await fetch(`${baseUrl}?currentDocument.exists=false`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: {
+            uid: { stringValue: uid },
+            status: { stringValue: 'creating' },
+            product: { stringValue: product },
+            interval: { stringValue: interval },
+            lockToken: { stringValue: lockToken },
+            claimedAt: { timestampValue: now },
+            updatedAt: { timestampValue: now },
+          },
+        }),
+      })
+      if (response.status === 200 || response.status === 201) {
+        return { kind: 'claimed', lockToken }
+      }
+      if (response.status === 409 || response.status === 412) continue
+      const details = await response.text().catch(() => '')
+      throw new Error(`checkout lock create failed: ${response.status} ${details.slice(0, 250)}`)
+    }
+
+    const status = checkoutLockField(doc, 'status')?.stringValue
+    const updateTime = typeof doc.updateTime === 'string' ? doc.updateTime : undefined
+    if (!updateTime) throw new Error('Checkout lock document has no updateTime')
+
+    if (status === 'open') {
+      const sessionId = checkoutLockField(doc, 'checkoutSessionId')?.stringValue
+      const checkoutUrl = checkoutLockField(doc, 'checkoutUrl')?.stringValue
+      const storedProduct = checkoutLockField(doc, 'product')?.stringValue
+      const storedInterval = checkoutLockField(doc, 'interval')?.stringValue
+      const expiresAt = checkoutLockField(doc, 'expiresAt')?.timestampValue
+      const expiryMs = expiresAt ? new Date(expiresAt).getTime() : Number.NaN
+      if (
+        !sessionId ||
+        !checkoutUrl ||
+        (storedProduct !== 'solo' && storedProduct !== 'grupeta') ||
+        (storedInterval !== 'month' && storedInterval !== 'year') ||
+        !Number.isFinite(expiryMs)
+      ) {
+        // An unknown open-lock shape is not proof that the previous session is gone.
+        // Fail closed instead of creating a second purchase on corrupted state.
+        throw new Error('Checkout lock open state is malformed')
+      }
+      if (expiryMs > Date.now()) {
+        return {
+          kind: 'existing_session',
+          sessionId,
+          checkoutUrl,
+          product: storedProduct,
+          interval: storedInterval,
+          trial: checkoutLockField(doc, 'trial')?.booleanValue === true,
+          updateTime,
+        }
+      }
+      // Only a known expired session can be replaced with a compare-and-set claim.
+      const reclaimed = await claimCheckoutLockFromVersion(
+        baseUrl, accessToken, updateTime, product, interval, lockToken, now,
+      )
+      if (reclaimed === 'claimed') return { kind: 'claimed', lockToken }
+      continue
+    }
+
+    if (status !== 'creating') {
+      throw new Error('Checkout lock has an unknown state')
+    }
+
+    const claimedAt = checkoutLockField(doc, 'claimedAt')?.timestampValue
+    const claimedAtMs = claimedAt ? new Date(claimedAt).getTime() : Number.NaN
+    if (Number.isFinite(claimedAtMs) && Date.now() - claimedAtMs < CHECKOUT_LOCK_LEASE_MS) {
+      return { kind: 'in_progress' }
+    }
+
+    const reclaimed = await claimCheckoutLockFromVersion(
+      baseUrl, accessToken, updateTime, product, interval, lockToken, now,
+    )
+    if (reclaimed === 'claimed') return { kind: 'claimed', lockToken }
+  }
+
+  return { kind: 'in_progress' }
+}
+
+/** Save an open Checkout session only while the caller still owns its lock lease. */
+export async function finalizeCheckoutLock(
+  env: Env,
+  uid: string,
+  lockToken: string,
+  input: {
+    product: CheckoutLockProduct
+    interval: CheckoutLockInterval
+    sessionId: string
+    checkoutUrl: string
+    expiresAt: number
+    trial: boolean
+  },
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) throw new Error('Service account not configured for checkout lock')
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const accessToken = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, accessToken, `checkoutLocks/${uid}`)
+  if (!doc || checkoutLockField(doc, 'lockToken')?.stringValue !== lockToken) {
+    throw new Error('Checkout lock lease was lost before session finalization')
+  }
+  if (typeof doc.updateTime !== 'string') throw new Error('Checkout lock document has no updateTime')
+
+  const now = new Date().toISOString()
+  const fields = [
+    'status',
+    'product',
+    'interval',
+    'lockToken',
+    'checkoutSessionId',
+    'checkoutUrl',
+    'expiresAt',
+    'updatedAt',
+    'trial',
+  ]
+  const url = `${checkoutLockUrl(projectId, uid)}?${fields.map((field) => `updateMask.fieldPaths=${field}`).join('&')}&currentDocument.updateTime=${encodeURIComponent(doc.updateTime)}`
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields: {
+        status: { stringValue: 'open' },
+        product: { stringValue: input.product },
+        interval: { stringValue: input.interval },
+        lockToken: { stringValue: lockToken },
+        checkoutSessionId: { stringValue: input.sessionId },
+        checkoutUrl: { stringValue: input.checkoutUrl },
+        expiresAt: { timestampValue: new Date(input.expiresAt * 1000).toISOString() },
+        updatedAt: { timestampValue: now },
+        trial: { booleanValue: input.trial },
+      },
+    }),
+  })
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`checkout lock finalization failed: ${response.status} ${details.slice(0, 250)}`)
+  }
+}
+
+/** Remove a lock only if its session/token still matches, so stale events cannot unlock a newer checkout. */
+export async function releaseCheckoutLock(
+  env: Env,
+  uid: string,
+  expected: { sessionId: string; lockToken?: never } | { lockToken: string; sessionId?: never },
+): Promise<void> {
+  const sa = parseServiceAccount(env)
+  if (!sa) throw new Error('Service account not configured for checkout lock')
+  const projectId = sa.project_id || env.FIREBASE_PROJECT_ID
+  const accessToken = await getAccessToken(sa)
+  const doc = await adminGetDocument(projectId, accessToken, `checkoutLocks/${uid}`)
+  if (!doc) return
+  if (expected.sessionId && checkoutLockField(doc, 'checkoutSessionId')?.stringValue !== expected.sessionId) return
+  if (expected.lockToken && checkoutLockField(doc, 'lockToken')?.stringValue !== expected.lockToken) return
+  if (typeof doc.updateTime !== 'string') throw new Error('Checkout lock document has no updateTime')
+
+  const url = `${checkoutLockUrl(projectId, uid)}?currentDocument.updateTime=${encodeURIComponent(doc.updateTime)}`
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (response.status === 404 || response.ok) return
+  if (response.status === 409 || response.status === 412) return
+  const details = await response.text().catch(() => '')
+  throw new Error(`checkout lock release failed: ${response.status} ${details.slice(0, 250)}`)
 }

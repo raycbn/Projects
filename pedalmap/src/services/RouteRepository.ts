@@ -457,6 +457,7 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
               routesCreatedThisMonth: usage.routesCreatedThisMonth ?? 0,
               routesSaved: saved + 1,
               monthKey: usage.monthKey ?? monthKey(),
+              lastRouteMutationRouteId: routeRef.id,
             },
             updatedAt: serverTimestamp(),
           },
@@ -514,7 +515,23 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
     if (!existing.exists() || existing.data().userId !== userId) {
       throw new Error('No tienes permiso para editar esta ruta')
     }
-    await updateDoc(ref, { windAlertEnabled: enabled, updatedAt: serverTimestamp() })
+
+    const base = apiBase()
+    if (!base) throw new Error('wind_alert_service_unavailable')
+
+    const response = await fetch(`${base}/routes/wind-alert`, {
+      method: 'POST',
+      headers: await routingAuthHeaders(),
+      body: JSON.stringify({ routeId, enabled }),
+    })
+    const result = (await response.json().catch(() => ({}))) as {
+      ok?: boolean
+      code?: string
+      error?: string
+    }
+    if (!response.ok || result.ok !== true) {
+      throw new Error(result.code || result.error || `wind_alert_http_${response.status}`)
+    }
   }
 
   async duplicate(userId: string, route: SavedRoute): Promise<SavedRoute> {
@@ -564,6 +581,7 @@ async listPublicByUserIds(userIds: string[], max = 40): Promise<SavedRoute[]> {
             routesCreatedThisMonth: usage.routesCreatedThisMonth ?? 0,
             routesSaved: Math.max(0, (usage.routesSaved ?? 0) - 1),
             monthKey: usage.monthKey ?? monthKey(),
+            lastRouteMutationRouteId: routeId,
           },
           updatedAt: serverTimestamp(),
         },

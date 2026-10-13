@@ -1,6 +1,7 @@
 const FUEL_BASE_URL = 'https://fuel.pedalmap.es/planner'
 
 import type { User } from 'firebase/auth'
+import { Capacitor } from '@capacitor/core'
 import { useAuth } from '@/app/AuthContext'
 import { FREE_LIMITS, type UserPlan } from '@/domain/types'
 
@@ -129,5 +130,5 @@ export function canShowFuelCta(context: Partial<FuelRouteContext>): boolean {
  * so this detection is not fragile and does not touch native code.
  */
 export function isFuelEmbeddedApp(): boolean {
-  return typeof window !== 'undefined' && 'Capacitor' in (globalThis as unknown as Record<string, unknown>)
+  return Capacitor.isNativePlatform()
 }

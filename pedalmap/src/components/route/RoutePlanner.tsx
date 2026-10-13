@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/Button'
 import { usePlanner } from '@/app/PlannerContext'
 import { useAuth } from '@/app/AuthContext'
 import { RouteModeChips } from '@/components/route/RouteModeChips'
@@ -70,7 +71,7 @@ export function RoutePlanner() {
     adjustOnMap,
     guestCreates,
   } = usePlanner()
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [locating, setLocating] = useState(false)
   const [mapExpanded, setMapExpanded] = useState(false)
   const [compareBusy, setCompareBusy] = useState(false)
@@ -279,7 +280,7 @@ export function RoutePlanner() {
       showPaywall('circular_premium')
       return
     }
-    const entitlement = canCreateRoute(profile, guestCreates)
+    const entitlement = canCreateRoute(profile, guestCreates, user?.isAnonymous ?? false)
     if (!entitlement.ok) {
       showPaywall(entitlement.reason ?? 'create_limit')
       return
@@ -350,6 +351,33 @@ export function RoutePlanner() {
   return (
     <>
       {paywallReason && <PremiumCard reason={paywallReason} onClose={clearPaywall} />}
+
+      {user?.isAnonymous &&
+        !paywallReason &&
+        Math.max(profile?.usage.anonymousRoutesCreated ?? 0, guestCreates) === 2 && (
+          <div
+            className="mx-auto mt-3 flex w-full max-w-2xl flex-col gap-3 rounded-2xl border border-[var(--color-fog)] bg-white/90 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            role="status"
+          >
+            <div>
+              <p className="font-semibold text-[var(--color-forest)]">
+                Ya has probado 2 de tus 3 rutas gratis
+              </p>
+              <p className="mt-1 text-sm text-[var(--color-stone)]">
+                Crea una cuenta gratis antes de llegar al límite: conserva tus rutas y tendrás hasta 15 creaciones al mes, 5 guardadas y 1 GPX semanal.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                track('signup_email_clicked' as const, { from: 'guest_second_route' })
+                navigate('/register')
+              }}
+              className="shrink-0"
+            >
+              Crear cuenta gratis
+            </Button>
+          </div>
+        )}
 
       {isTrace ? (
         <TracePlannerView

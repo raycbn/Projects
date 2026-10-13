@@ -30,8 +30,7 @@ export class StripeService {
     return (
       isFirebaseConfigured() &&
       String(import.meta.env.VITE_STRIPE_ENABLED || '').toLowerCase() === 'true' &&
-      Boolean(apiBase()) &&
-      Boolean(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
+      Boolean(apiBase())
     )
   }
 

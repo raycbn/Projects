@@ -108,7 +108,7 @@ export function ProfilePage() {
   useEffect(() => {
     let cancelled = false
     async function loadPack() {
-      if (!user || user.isAnonymous || !grupetaService.isConfigured()) {
+      if (!user?.uid || user?.isAnonymous !== false || !grupetaService.isConfigured()) {
         setOwnsGrupetaPack(false)
         return
       }
@@ -126,7 +126,7 @@ export function ProfilePage() {
     return () => {
       cancelled = true
     }
-  }, [user?.uid, profile?.plan])
+  }, [user?.uid, user?.isAnonymous, profile?.plan])
 
   useEffect(() => {
     let cancelled = false

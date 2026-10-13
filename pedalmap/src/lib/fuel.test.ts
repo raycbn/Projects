@@ -1,4 +1,13 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
+
+const platform = vi.hoisted(() => ({ value: 'web' as 'web' | 'android' }))
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    getPlatform: () => platform.value,
+    isNativePlatform: () => platform.value !== 'web',
+  },
+}))
+
 import { buildFuelUrl, canShowFuelCta, isFuelEmbeddedApp } from '@/lib/fuel'
 
 /**
@@ -143,7 +152,7 @@ describe('isFuelEmbeddedApp', () => {
   })
 
   it('returns true when the Capacitor runtime is present (native app)', () => {
-    ;(globalThis as { Capacitor?: unknown }).Capacitor = { isPluginAvailable: () => false }
+    platform.value = 'android'
     expect(isFuelEmbeddedApp()).toBe(true)
   })
 })

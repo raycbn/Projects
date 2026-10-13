@@ -3,6 +3,8 @@ export interface Env {
   STRIPE_SECRET_KEY: string
   STRIPE_WEBHOOK_SECRET?: string
   FIREBASE_SERVICE_ACCOUNT?: string
+  /** Optional server-only HMAC key for pseudonymizing anonymous guest quota markers. */
+  GUEST_QUOTA_HMAC_SECRET?: string
   FIREBASE_PROJECT_ID: string
   STRIPE_PRICE_MONTHLY: string
   STRIPE_PRICE_YEARLY: string

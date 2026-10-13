@@ -21,7 +21,6 @@ import {
 } from '@/lib/windAlerts'
 import { canEnableWindAlertOnRoute, canExportGpx } from '@/services/EntitlementService'
 import { alertService } from '@/services/AlertService'
-import { authService } from '@/services/AuthService'
 import { routeRepository } from '@/services/RouteRepository'
 import { weatherService } from '@/services/WeatherService'
 import { usePageMeta } from '@/hooks/usePageMeta'
@@ -333,26 +332,38 @@ export function MyRoutesPage() {
             setRoutes((prev) => prev.filter((r) => r.id !== route.id))
           }}
           onExport={(route) => {
-            if (!canExportGpx(profile)) {
+            console.log('[gpx] EXPORT BUTTON CLICK source=MyRoutesPage')
+            console.log('[gpx] auth=' + (profile?.uid ? 'authenticated uid=' + profile.uid : 'guest'))
+            if (!profile && !canExportGpx(null)) {
               alert('Tu GPX Free de esta semana ya está usado. Premium = ilimitado.')
               return
             }
             void (async () => {
+              console.log('[gpx] calling saveGpxFile route=' + route.id)
               if (profile && profile.plan !== 'premium') {
                 const { claimServerGpxExport } = await import('@/lib/planSync')
                 const claim = await claimServerGpxExport()
-                if (claim && !claim.allowed) {
-                  alert('Tu GPX Free de esta semana ya está usado. Premium = ilimitado.')
+                if (!claim?.allowed) {
+                  alert(
+                    claim?.error === 'quota_unavailable'
+                      ? 'No se pudo verificar la cuota GPX. Inténtalo de nuevo en unos minutos.'
+                      : 'Tu GPX Free de esta semana ya está usado. Premium = ilimitado.',
+                  )
                   return
                 }
               }
-               const xml = exportRouteToGpx(route)
-               await saveGpxFile(xml, `${route.shareSlug || route.id}.gpx`)
-              if (profile && profile.plan !== 'premium') {
-                void authService.recordFreeGpxExport(profile.uid).catch(() => undefined)
-                track('free_trial_used', { kind: 'gpx' })
-              }
-              track('gpx_exported')
+                const xml = exportRouteToGpx(route)
+                console.log('[gpx] exporting route id=' + route.id + ' uid=' + (profile?.uid ?? 'guest'))
+                console.log('[gpx] calling saveGpxFile')
+                const outcome = await saveGpxFile(xml, `${route.shareSlug || route.id}.gpx`)
+                console.log('[gpx] save outcome=' + outcome)
+                if (outcome === 'canceled') return
+                if (profile && profile.plan !== 'premium') {
+                  // The Worker has already atomically consumed the GPX credit.
+                  // Do not try to mutate server-owned quota fields from the client.
+                  track('free_trial_used', { kind: 'gpx' })
+                }
+                track('gpx_exported')
             })()
           }}
         />

@@ -134,6 +134,31 @@
             "value": "public,max-age=86400"
           }
         ]
+      },
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "geolocation=(self), camera=(), microphone=()"
+          },
+          {
+            "key": "Content-Security-Policy-Report-Only",
+            "value": "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self' https://accounts.google.com; script-src 'self' 'sha256-NeDqezUMebKdMTlcmjSJ8huYmKfmr5c885VpkK+5u4Y=' https://accounts.google.com https://apis.google.com https://plausible.io https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://images.unsplash.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://tiles.openfreemap.org https://demotiles.maplibre.org https://tile.waymarkedtrails.org https://tiles.mapterhorn.com; connect-src 'self' https://pedalmap-api.broken-dietician.workers.dev https://fuel.pedalmap.es https://api.heigit.org https://api.openrouteservice.org https://api.open-meteo.com https://tiles.openfreemap.org https://demotiles.maplibre.org https://tile.waymarkedtrails.org https://tiles.mapterhorn.com https://nominatim.openstreetmap.org https://photon.komoot.io https://accounts.google.com https://apis.google.com https://*.googleapis.com https://securetoken.google.com https://*.firebaseapp.com https://*.cloudfunctions.net https://firebasestorage.googleapis.com https://storage.googleapis.com https://plausible.io https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com; frame-src 'self' https://accounts.google.com https://pedalmap.es https://pedalmap-79b3a.web.app https://pedalmap-79b3a.firebaseapp.com; worker-src 'self' blob:; manifest-src 'self';"
+          }
+        ]
       }
     ]
   }

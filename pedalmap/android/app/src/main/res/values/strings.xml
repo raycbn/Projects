@@ -4,4 +4,14 @@
     <string name="title_activity_main">PedalMap</string>
     <string name="package_name">com.pedalmap.app</string>
     <string name="custom_url_scheme">com.pedalmap.app</string>
+    <string name="shortcut_create_route">Crear ruta</string>
+    <string name="shortcut_my_routes">Mis rutas</string>
+    <string name="shortcut_import_gpx">Importar GPX</string>
+    <string name="shortcut_daily_route">¿Qué ruta hago hoy?</string>
+    <string name="notification_channel_name">Notificaciones PedalMap</string>
+    <string name="notification_channel_desc">Notificaciones de rutas y compartidos</string>
+    <string name="notification_gpx_saved_title">GPX guardado</string>
+    <string name="notification_gpx_saved_text">Toca para abrir o compartir tu ruta GPX</string>
+    <string name="notification_action_open">Abrir</string>
+    <string name="notification_action_share">Compartir</string>
 </resources>

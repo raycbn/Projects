@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <shortcut
+    android:shortcutId="create_route"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_create_route"
+    android:shortcutShortLabel="@string/shortcut_create_route">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="com.pedalmap.app"
+      android:targetClass="com.pedalmap.app.MainActivity"
+      android:data="pedalmap://shortcut/create_route" />
+    <categories android:name="android.intent.category.DEFAULT" />
+  </shortcut>
+
+  <shortcut
+    android:shortcutId="my_routes"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_my_routes"
+    android:shortcutShortLabel="@string/shortcut_my_routes">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="com.pedalmap.app"
+      android:targetClass="com.pedalmap.app.MainActivity"
+      android:data="pedalmap://shortcut/my_routes" />
+    <categories android:name="android.intent.category.DEFAULT" />
+  </shortcut>
+
+  <shortcut
+    android:shortcutId="import_gpx"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_import_gpx"
+    android:shortcutShortLabel="@string/shortcut_import_gpx">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="com.pedalmap.app"
+      android:targetClass="com.pedalmap.app.MainActivity"
+      android:data="pedalmap://shortcut/import_gpx" />
+    <categories android:name="android.intent.category.DEFAULT" />
+  </shortcut>
+
+  <shortcut
+    android:shortcutId="daily_route"
+    android:enabled="true"
+    android:icon="@drawable/ic_shortcut_daily_route"
+    android:shortcutShortLabel="@string/shortcut_daily_route">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="com.pedalmap.app"
+      android:targetClass="com.pedalmap.app.MainActivity"
+      android:data="pedalmap://shortcut/daily_route" />
+    <categories android:name="android.intent.category.DEFAULT" />
+  </shortcut>
+
+</shortcuts>

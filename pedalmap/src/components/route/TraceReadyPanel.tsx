@@ -459,6 +459,8 @@ export function TraceReadyPanel({ draft, showPaywall, onWindOverlayChange }: Pro
           )
         }}
         onExportGpx={() => {
+          console.log('[gpx] EXPORT BUTTON CLICK source=TraceReadyPanel (navigate to ReadyRoute)')
+          console.log('[gpx] handler ENTER source=TraceReadyPanel (navigate only)')
           stashReadyRoute({ draft, savedRouteId, source: 'calculate' })
           setRideOpen(false)
           navigate('/ruta')

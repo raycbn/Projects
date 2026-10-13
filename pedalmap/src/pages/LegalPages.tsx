@@ -15,24 +15,32 @@ export function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-12 pb-24">
       <h1 className="font-display text-3xl font-extrabold text-[var(--color-forest)]">Privacidad</h1>
-      <p className="mt-2 text-xs text-[var(--color-stone)]">Última actualización: 10 agosto 2026</p>
+      <p className="mt-2 text-xs text-[var(--color-stone)]">Última actualización: 12 octubre 2026</p>
       <div className="mt-4 space-y-4 text-sm leading-relaxed text-[var(--color-stone)]">
         <p>
           PedalMap (responsable: contacto {contact}) minimiza los datos personales. Solo tratamos lo
-          necesario para autenticación, rutas guardadas, preferencias de ciclismo y, si contratas
-          Premium, la gestión de la suscripción.
+          necesario para autenticación, rutas guardadas, preferencias de ciclismo, seguridad del
+          servicio y, si contratas Premium, la gestión de la suscripción.
         </p>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Datos que tratamos</h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>Cuenta: email, nombre/foto si usas Google, UID de Firebase Auth.</li>
           <li>Rutas y actividades que guardas (geometría, stats, metadatos).</li>
           <li>Preferencias de bici y filtros del planificador.</li>
+          <li>
+            Seguridad y prevención de abuso: para limitar la creación repetida de pruebas de invitado,
+            el servicio de routing utiliza la IP recibida para generar un identificador seudónimo
+            mediante hash y lo vincula al UID anónimo y al mes UTC. El marcador no guarda la IP en
+            claro y no se utiliza para publicidad.
+          </li>
           <li>Datos de facturación vía Stripe (nosotros no almacenamos números de tarjeta).</li>
         </ul>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Finalidad y base legal</h2>
         <p>
-          Prestación del servicio (contrato), seguridad de la cuenta e interés legítimo en mejorar el
-          producto con métricas agregadas solo si das consentimiento de analítica.
+          Prestación del servicio (contrato), seguridad y prevención del abuso del modo invitado
+          mediante identificadores seudónimos limitados por mes, e interés legítimo en proteger la
+          capacidad del servicio. Las métricas de analítica de producto solo se activan si das tu
+          consentimiento.
         </p>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Ubicación</h2>
         <p>
@@ -122,8 +130,11 @@ export function TermsPage() {
         </p>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Cuentas y límites</h2>
         <p>
-          El plan Free incluye límites de guardado, creaciones mensuales y filtros. El abuso del API
-          de routing puede resultar en limitación temporal (HTTP 429).
+          El plan Free incluye límites de guardado, creaciones mensuales y filtros. El modo invitado
+          tiene una prueba más reducida y controles para evitar reinicios repetidos de esa cuota:
+          utilizar una ventana privada no la restablece. Para continuar con los límites de la cuenta
+          Free, puedes registrarte gratis. El abuso del API de routing puede resultar en limitación
+          temporal (HTTP 429).
         </p>
         <h2 className="font-display text-xl font-bold text-[var(--color-forest)]">Contenido</h2>
         <p>

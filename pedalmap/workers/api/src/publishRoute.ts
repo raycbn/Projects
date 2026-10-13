@@ -1,7 +1,11 @@
 import type { Env } from './types'
 import { json } from './types'
 import type { FirebaseIdentity } from './firebaseAuth'
-import { publishPublicRouteShare, type PublishShareInput } from './firestore'
+import {
+  publishPublicRouteShare,
+  QuotaUnavailableError,
+  type PublishShareInput,
+} from './firestore'
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return Boolean(v) && typeof v === 'object' && !Array.isArray(v)
@@ -73,6 +77,8 @@ export async function handlePublishRoute(
   }
 
   try {
+    // Wind alerts are managed only by the quota-aware /routes/wind-alert endpoint.
+    // Public-share payloads intentionally cannot enable or reserve an alert slot.
     const published = await publishPublicRouteShare(env, identity.uid, input)
     return json({
       ok: true,
@@ -82,6 +88,12 @@ export async function handlePublishRoute(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'publish_failed'
+    if (error instanceof QuotaUnavailableError || message === 'quota_unavailable') {
+      return json(
+        { error: 'No se pudo verificar el límite de rutas guardadas. Inténtalo de nuevo.', code: 'quota_unavailable' },
+        503,
+      )
+    }
     if (message === 'save_limit') {
       return json(
         {

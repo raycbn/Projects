@@ -23,6 +23,7 @@ type BikeRoutePayload = {
   objectiveDistanceError?: number
   objectiveElevationError?: number
   objectiveElevationGainMeters?: number
+  maxRouteOptions?: 2 | 3
 }
 
 type BikeRouteResponse = BikeRoutePayload & {
@@ -161,13 +162,74 @@ export class ValhallaProvider implements RoutingProvider {
       if (response.status === 429) {
         throw new RoutingError('Rate limit exceeded', 'rate_limited', text)
       }
+      const responseCode = (data as { code?: string }).code
       if (
         response.status === 403 &&
-        (text.includes('create_limit') || (data as { code?: string }).code === 'create_limit')
+        (text.includes('create_limit') || responseCode === 'create_limit')
       ) {
         throw new RoutingError(
           (data as { error?: string }).error || 'Create limit exceeded',
           'create_limit',
+          text,
+        )
+      }
+      if (
+        response.status === 403 &&
+        (text.includes('anonymous_limit_reached') || responseCode === 'anonymous_limit_reached')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Límite de 3 creaciones alcanzado para usuarios anónimos. Regístrate para continuar.',
+          'anonymous_limit_reached',
+          text,
+        )
+      }
+      if (
+        response.status === 403 &&
+        (text.includes('guest_identity_limit_reached') || responseCode === 'guest_identity_limit_reached')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Crea una cuenta gratis para continuar usando PedalMap.',
+          'guest_identity_limit_reached',
+          text,
+        )
+      }
+      if (
+        response.status === 503 &&
+        (text.includes('quota_unavailable') || responseCode === 'quota_unavailable')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Servicio de cuotas no disponible',
+          'quota_unavailable',
+          text,
+        )
+      }
+      if (
+        response.status === 403 &&
+        (text.includes('free_circular_limit') || responseCode === 'free_circular_limit')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Límite de Objetivo circular alcanzado',
+          'free_circular_limit',
+          text,
+        )
+      }
+      if (
+        response.status === 403 &&
+        (text.includes('filter_limit') || responseCode === 'filter_limit')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Límite de filtros alcanzado',
+          'filter_limit',
+          text,
+        )
+      }
+      if (
+        response.status === 403 &&
+        (text.includes('wind_alert_limit') || responseCode === 'wind_alert_limit')
+      ) {
+        throw new RoutingError(
+          (data as { error?: string }).error || 'Límite de alerta de viento alcanzado',
+          'wind_alert_limit',
           text,
         )
       }
@@ -199,7 +261,10 @@ export class ValhallaProvider implements RoutingProvider {
     return {
       ...primary,
       provider: this.name,
-      alternatives: alternatives.length ? alternatives : undefined,
+      alternatives: alternatives.length
+        ? alternatives.slice(0, Math.max(0, (data.maxRouteOptions ?? 3) - 1))
+        : undefined,
+      maxRouteOptions: data.maxRouteOptions,
     }
   }
 }

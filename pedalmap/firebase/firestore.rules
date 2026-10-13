@@ -5,6 +5,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Anonymous Firebase sessions can plan and exercise the guest quota, but saved
+    // routes and public sharing require a durable account. Do not trust UI-only gates.
+    function isRegisteredUser() {
+      return isSignedIn()
+        && ('firebase' in request.auth.token)
+        && (
+          ('sign_in_provider' in request.auth.token.firebase
+            && request.auth.token.firebase.sign_in_provider != 'anonymous')
+          || ('email' in request.auth.token && request.auth.token.email is string)
+          || (
+            'identities' in request.auth.token.firebase
+            && request.auth.token.firebase.identities is map
+            && request.auth.token.firebase.identities.keys().size() > 0
+          )
+        );
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -38,53 +55,103 @@ service cloud.firestore {
       return string(request.time.year()) + '-' + (m < 10 ? '0' + string(m) : string(m));
     }
 
-    function usageOk() {
-      return !('usage' in request.resource.data)
-        || !('usage' in resource.data)
-        || (
-          request.resource.data.usage.routesSaved >= 0
-          && request.resource.data.usage.routesSaved
-            <= resource.data.usage.routesSaved + 1
-          && request.resource.data.usage.routesSaved
-            >= resource.data.usage.routesSaved - 1
-          // Free never stores a routesSaved above the Free cap (Premium may).
-          && (isPremiumUser() || request.resource.data.usage.routesSaved <= 5)
-          // monthKey may only stay put or advance to the real UTC calendar month.
-          && (
-            request.resource.data.usage.monthKey == resource.data.usage.monthKey
-            || request.resource.data.usage.monthKey == currentMonthKey()
-          )
-          && (
-            // Same month: creates may only stay or +1 (recordRouteCreated).
-            (
-              request.resource.data.usage.monthKey == resource.data.usage.monthKey
-              && request.resource.data.usage.routesCreatedThisMonth
-                >= resource.data.usage.routesCreatedThisMonth
-              && request.resource.data.usage.routesCreatedThisMonth
-                <= resource.data.usage.routesCreatedThisMonth + 1
-            )
-            // Real month rollover: counter resets to 0, or 1 if combined with first create.
-            || (
-              request.resource.data.usage.monthKey != resource.data.usage.monthKey
-              && request.resource.data.usage.routesCreatedThisMonth >= 0
-              && request.resource.data.usage.routesCreatedThisMonth <= 1
+    function routeSavedMutationMatches(userId, routeId) {
+      return (
+        request.resource.data.usage.routesSaved == resource.data.usage.routesSaved
+        && request.resource.data.usage.lastRouteMutationRouteId
+          == resource.data.usage.lastRouteMutationRouteId
+      ) || (
+        request.resource.data.usage.routesSaved == resource.data.usage.routesSaved + 1
+        && request.resource.data.usage.lastRouteMutationRouteId is string
+        && !exists(/databases/$(database)/documents/routes/$(routeId))
+        && existsAfter(/databases/$(database)/documents/routes/$(routeId))
+        && getAfter(/databases/$(database)/documents/routes/$(routeId)).data.userId == userId
+      ) || (
+        request.resource.data.usage.routesSaved == resource.data.usage.routesSaved - 1
+        && request.resource.data.usage.lastRouteMutationRouteId is string
+        && exists(/databases/$(database)/documents/routes/$(routeId))
+        && !existsAfter(/databases/$(database)/documents/routes/$(routeId))
+        && get(/databases/$(database)/documents/routes/$(routeId)).data.userId == userId
+      );
+    }
+
+    function usageChangesOk(userId) {
+      let changed = request.resource.data.usage.diff(resource.data.usage).affectedKeys();
+      return changed.hasOnly(['routesSaved', 'lastRouteMutationRouteId'])
+        && (
+          !changed.hasAny(['routesSaved', 'lastRouteMutationRouteId'])
+          || (
+            'routesSaved' in request.resource.data.usage
+            && 'routesSaved' in resource.data.usage
+            && request.resource.data.usage.routesSaved is int
+            && resource.data.usage.routesSaved is int
+            && request.resource.data.usage.routesSaved >= 0
+            && request.resource.data.usage.routesSaved
+              <= resource.data.usage.routesSaved + 1
+            && request.resource.data.usage.routesSaved
+              >= resource.data.usage.routesSaved - 1
+            && (isPremiumUser() || request.resource.data.usage.routesSaved <= 5)
+            && request.resource.data.usage.lastRouteMutationRouteId is string
+            && routeSavedMutationMatches(
+              userId,
+              request.resource.data.usage.lastRouteMutationRouteId
             )
           )
         );
     }
 
+    function usageOk(userId) {
+      // Legacy profiles without usage may still update preferences, but clients
+      // cannot add/remove the map themselves to reset server-owned quota counters.
+      return (!('usage' in request.resource.data) && !('usage' in resource.data))
+        || (
+          'usage' in request.resource.data
+          && 'usage' in resource.data
+          && request.resource.data.usage is map
+          && resource.data.usage is map
+          // All create/anonymity/GPX/circular/month counters are server-owned.
+          && usageChangesOk(userId)
+        );
+    }
+
+    function routeSavedCountMatches(userId, routeId, delta) {
+      return getAfter(/databases/$(database)/documents/users/$(userId)).data.usage.routesSaved
+          == get(/databases/$(database)/documents/users/$(userId)).data.usage.routesSaved + delta
+        && getAfter(/databases/$(database)/documents/users/$(userId)).data.usage.lastRouteMutationRouteId
+          == routeId;
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId);
-      // Clients may only start as Free — Worker/Admin/Stripe alone may set premium.
+      // Clients may only create the public profile fields owned by the client SDK.
+      // Server-managed flags/metadata cannot be injected when the document is created.
       allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'plan',
+          'bikePreferences', 'usage', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.usage is map
+        && request.resource.data.usage.keys().hasOnly([
+          'routesCreatedThisMonth', 'routesSaved', 'monthKey'
+        ])
+        && request.resource.data.usage.routesCreatedThisMonth is int
+        && request.resource.data.usage.routesCreatedThisMonth == 0
+        && request.resource.data.usage.routesSaved is int
+        && request.resource.data.usage.routesSaved == 0
+        && request.resource.data.usage.monthKey is string
         && request.resource.data.uid == userId
         && request.resource.data.plan == 'free';
-      // Plan is frozen for clients (Worker/Admin + Stripe only).
-      // Usage may change by at most ±1 on routesSaved (save/delete).
+      // Only preferences, notification settings, planner draft, usage and timestamp
+      // are client-editable. Identity, plan, conversion, and server metadata are frozen.
       allow update: if isOwner(userId)
         && request.resource.data.plan == resource.data.plan
-        && usageOk();
-      allow delete: if isOwner(userId);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'bikePreferences', 'notifications', 'plannerDraft', 'usage', 'updatedAt'
+        ])
+        && usageOk(userId);
+      // Client-side deletion stays disabled until a trusted account-deletion endpoint
+      // can remove the profile and related data without resetting quota state.
+      allow delete: if false;
     }
 
     match /publicProfiles/{userId} {
@@ -108,24 +175,52 @@ service cloud.firestore {
 
     match /routes/{routeId} {
       allow read: if resource.data.isPublic == true || isOwner(resource.data.userId);
-      allow create: if isSignedIn()
+      // Clients can create route content, but never server-controlled alert flags.
+      // A saved route and its routesSaved increment must commit together.
+      allow create: if isRegisteredUser()
+        && request.resource.data.keys().hasOnly([
+          'title', 'description', 'type', 'bikeType', 'preferences', 'waypoints',
+          'geometry', 'elevationProfile', 'stats', 'circularDistanceMeters',
+          'targetElevationGainMeters', 'circularSeed', 'instructions', 'surfaceEdges',
+          'selectedOptionId', 'routeOptions', 'alternatives', 'bestWindWindow',
+          'userId', 'isPublic', 'shareSlug', 'createdAt', 'updatedAt'
+        ])
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
-        && withinSaveLimit();
-      allow update, delete: if isOwner(resource.data.userId);
+        && withinSaveLimit()
+        && routeSavedCountMatches(request.auth.uid, routeId, 1);
+      // Route identity and server-enforced alert flags cannot be edited by the client.
+      // Keep the exact editable payloads used by RouteRepository.update/makePublic/private.
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'description', 'type', 'bikeType', 'preferences', 'waypoints',
+          'geometry', 'elevationProfile', 'stats', 'circularDistanceMeters',
+          'targetElevationGainMeters', 'circularSeed', 'instructions', 'surfaceEdges',
+          'selectedOptionId', 'routeOptions', 'alternatives', 'bestWindWindow',
+          'isPublic', 'shareSlug', 'windAlertEnabled', 'updatedAt'
+        ])
+        // Turning alerts off is always safe; enabling must go through the quota-aware Worker.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['windAlertEnabled'])
+          || request.resource.data.windAlertEnabled == false
+        );
+      // A route can only be deleted in the same atomic operation as its counter decrement.
+      allow delete: if isOwner(resource.data.userId)
+        && routeSavedCountMatches(resource.data.userId, routeId, -1);
     }
 
     match /routeShares/{shareSlug} {
       allow read: if true;
-      allow create: if isSignedIn()
+      allow create: if isRegisteredUser()
         && request.resource.data.userId == request.auth.uid;
       // Updates must keep the existing owner — prevent public-slug hijack via userId swap.
-      allow update: if isSignedIn()
+      allow update: if isRegisteredUser()
         && resource.data.userId == request.auth.uid
         && request.resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn()
+      allow delete: if isRegisteredUser()
         && resource.data.userId == request.auth.uid;
     }
 
@@ -162,10 +257,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    /** Strava OAuth tokens — Worker Admin only. */
+    /** Strava OAuth tokens — Worker Admin only; never expose tokens to client SDKs. */
     match /stravaConnections/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // Pack Grupeta — Admin/Worker only. Clients read via /grupeta/pack API.

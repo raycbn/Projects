@@ -35,10 +35,92 @@ function profile(partial: Partial<UserProfile> = {}): UserProfile {
 }
 
 describe('entitlements', () => {
-  it('allows guest creates up to Free monthly budget', () => {
-    expect(canCreateRoute(null, 0).ok).toBe(true)
-    expect(canCreateRoute(null, 3).ok).toBe(true)
-    expect(canCreateRoute(null, FREE_LIMITS.maxRoutesCreatedPerMonth).ok).toBe(false)
+  it('limits guests to 3 preview routes and never gives them the registered 15-route allowance', () => {
+    expect(canCreateRoute(null, 0, false).ok).toBe(true)
+    expect(canCreateRoute(null, 2, false).ok).toBe(true)
+    expect(canCreateRoute(null, 3, false)).toEqual({
+      ok: false,
+      reason: 'anonymous_limit_reached',
+    })
+    expect(canCreateRoute(null, FREE_LIMITS.maxRoutesCreatedPerMonth, false)).toEqual({
+      ok: false,
+      reason: 'anonymous_limit_reached',
+    })
+  })
+
+  it('blocks free save limit', () => {
+    expect(
+      canSaveRoute(
+        profile({ usage: { routesCreatedThisMonth: 0, routesSaved: 5, monthKey: utcMonthKey() } }),
+      ).ok,
+    ).toBe(false)
+  })
+
+  it('allows free weekly GPX trial then blocks', () => {
+    const fresh = profile()
+    expect(canExportGpx(fresh)).toBe(true)
+    expect(freeGpxRemaining(fresh)).toBe(FREE_TRIALS.gpxPerWeek)
+    const used = profile({
+      usage: {
+        routesCreatedThisMonth: 0,
+        routesSaved: 0,
+        monthKey: utcMonthKey(),
+        freeGpxWeekKey: isoWeekKey(),
+        freeGpxUsedThisWeek: 1,
+      },
+    })
+    expect(canExportGpx(used)).toBe(false)
+    expect(canExportGpx(profile({ plan: 'premium' }))).toBe(true)
+  })
+
+  it('allows one free Objetivo per month', () => {
+    expect(canUseAdvancedCircular(null)).toBe(true)
+    expect(canUseAdvancedCircular(profile())).toBe(true)
+    expect(freeCircularRemaining(profile())).toBe(FREE_TRIALS.circularPerMonth)
+    const used = profile({
+      usage: {
+        routesCreatedThisMonth: 1,
+        routesSaved: 0,
+        monthKey: utcMonthKey(),
+        freeCircularUsedThisMonth: 1,
+      },
+    })
+    expect(canUseAdvancedCircular(used)).toBe(false)
+    expect(canUseAdvancedCircular(profile({ plan: 'premium' }))).toBe(true)
+  })
+
+  it('anonymous user blocked after 3 total creations', () => {
+    const anon0 = profile({ usage: { ...profile().usage, anonymousRoutesCreated: 0 } })
+    const anon2 = profile({ usage: { ...profile().usage, anonymousRoutesCreated: 2 } })
+    const anon3 = profile({ usage: { ...profile().usage, anonymousRoutesCreated: 3 } })
+    const anon4 = profile({ usage: { ...profile().usage, anonymousRoutesCreated: 4 } })
+
+    expect(canCreateRoute(anon0, 0, true).ok).toBe(true)
+    expect(canCreateRoute(anon2, 0, true).ok).toBe(true)
+    expect(canCreateRoute(anon3, 0, true).ok).toBe(false)
+    if (!canCreateRoute(anon3, 0, true).ok) {
+      expect(canCreateRoute(anon3, 0, true).reason).toBe('anonymous_limit_reached')
+    }
+    expect(canCreateRoute(anon4, 0, true).ok).toBe(false)
+  })
+
+  it('authenticated free user uses monthly limit of 15', () => {
+    const free14 = profile({ usage: { ...profile().usage, routesCreatedThisMonth: 14 } })
+    const free15 = profile({ usage: { ...profile().usage, routesCreatedThisMonth: 15 } })
+    const free16 = profile({ usage: { ...profile().usage, routesCreatedThisMonth: 16 } })
+
+    expect(canCreateRoute(free14, 0, false).ok).toBe(true)
+    expect(canCreateRoute(free15, 0, false).ok).toBe(false)
+    if (!canCreateRoute(free15, 0, false).ok) {
+      expect(canCreateRoute(free15, 0, false).reason).toBe('create_limit')
+    }
+    expect(canCreateRoute(free16, 0, false).ok).toBe(false)
+  })
+
+  it('premium user unlimited', () => {
+    const premium = profile({ plan: 'premium', usage: { ...profile().usage, routesCreatedThisMonth: 999, anonymousRoutesCreated: 999 } })
+    expect(canCreateRoute(premium, 0, true).ok).toBe(true)
+    expect(canCreateRoute(premium, 0, false).ok).toBe(true)
   })
 
   it('blocks free save limit', () => {

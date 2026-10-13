@@ -39,8 +39,9 @@ export async function routingAuthHeaders(
   }
   user = getFirebaseAuth().currentUser ?? user
   if (!user) return headers
-  const token = await user.getIdToken()
+  const token = await user.getIdToken(/* forceRefresh */ true)
   headers.Authorization = `Bearer ${token}`
+  console.log('[routingAuth] token uid=' + user.uid + ' isAnonymous=' + user.isAnonymous + ' tokenLen=' + token.length)
   return headers
 }
 

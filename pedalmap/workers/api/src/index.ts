@@ -3,7 +3,7 @@ import { corsHeaders, json } from './types'
 import { handleOrsProxy } from './ors'
 import { handleValhallaProxy } from './valhalla'
 import { handleBikeRoute } from './bikeRoute'
-import { handleCheckout, handlePortal, handleWebhook } from './stripe'
+import { handleCheckout, handlePortal, handleWebhook, handleStripeReadiness } from './stripe'
 import {
   handleWindAlertEmail,
   handleFollowAlertEmail,
@@ -34,6 +34,7 @@ import {
   isGpsProvider,
 } from './gps'
 import { handlePublishRoute } from './publishRoute'
+import { handleSetWindAlert } from './windAlert'
 import { handleInstagramPublish, handleInstagramStatus } from './instagram'
 import {
   handleInstagramScheduleRun,
@@ -44,8 +45,16 @@ import { runRetentionNudges } from './retentionCron'
 import { handleWaterSources } from './waterSources'
 import { handleWeatherForecast } from './weatherForecast'
 import {
+  assertFilterLimitAllowed,
   assertRoutingCreateAllowed,
   bumpRoutesCreatedThisMonth,
+  checkFreeCircularLimit,
+  consumeFreeCircular,
+  ensureAnonymousIdentityForIp,
+  cleanupExpiredGuestIdentityMarkers,
+  readUserEntitlements,
+  QuotaLimitReachedError,
+  QuotaUnavailableError,
 } from './firestore'
 
 function withCors(env: Env, request: Request, response: Response): Response {
@@ -55,19 +64,240 @@ function withCors(env: Env, request: Request, response: Response): Response {
   return new Response(response.body, { status: response.status, headers })
 }
 
-/** Enforce Free monthly create cap; bump usage after a successful routing response. */
-async function withRoutingCreateQuota(
+/**
+ * Reserve a single anonymous UID per public IP and UTC month. Cloudflare supplies
+ * CF-Connecting-IP; X-Forwarded-For is intentionally not trusted for this gate.
+ */
+async function enforceAnonymousIdentityGate(
+  env: Env,
+  request: Request,
+  identity: FirebaseIdentity,
+): Promise<Response | null> {
+  if (!identity.isAnonymous) return null
+  try {
+    await ensureAnonymousIdentityForIp(
+      env,
+      identity.uid,
+      request.headers.get('CF-Connecting-IP'),
+    )
+    return null
+  } catch (error) {
+    if (error instanceof QuotaLimitReachedError) {
+      return json({ error: error.message, code: error.code }, 403)
+    }
+    if (error instanceof QuotaUnavailableError) {
+      console.error('[guest-quota] identity check unavailable', error.message)
+      return json({ error: 'Guest quota check unavailable', code: 'quota_unavailable' }, 503)
+    }
+    throw error
+  }
+}
+
+/**
+ * ORS payloads normally contain provider-specific options, not the original
+ * PedalMap preference list. The client sends that list as metadata for this
+ * Worker; validate it before calculating and strip it before upstream forwarding.
+ */
+export async function enforceOrsFilterLimit(
+  env: Env,
+  request: Request,
+  identity: FirebaseIdentity,
+): Promise<Response | null> {
+  let body: unknown
+  try {
+    body = await request.clone().json()
+  } catch {
+    // Keep malformed-body handling with the ORS proxy itself.
+    return null
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null
+
+  const preferences = (body as Record<string, unknown>).pedalmapPreferences
+  if (!Array.isArray(preferences) || preferences.some((item) => typeof item !== 'string')) {
+    return json(
+      { error: 'Routing preference metadata missing or invalid', code: 'quota_unavailable' },
+      503,
+    )
+  }
+
+  try {
+    const blocked = await assertFilterLimitAllowed(env, identity.uid, identity.isAnonymous, preferences)
+    return blocked ? json(blocked, 403) : null
+  } catch (error) {
+    if (error instanceof QuotaUnavailableError) {
+      return json({ error: 'Filter quota check unavailable', code: 'quota_unavailable' }, 503)
+    }
+    throw error
+  }
+}
+
+async function getRouteOptionLimit(
+  env: Env,
+  identity: FirebaseIdentity,
+): Promise<2 | 3 | Response> {
+  try {
+    const entitlements = await readUserEntitlements(env, identity.uid)
+    if (!entitlements) {
+      return json({ error: 'Route option entitlement unavailable', code: 'quota_unavailable' }, 503)
+    }
+    return entitlements.plan === 'premium' ? 3 : 2
+  } catch (error) {
+    console.error('[route-options] entitlement lookup failed', error)
+    return json({ error: 'Route option entitlement unavailable', code: 'quota_unavailable' }, 503)
+  }
+}
+
+/** Apply server-owned option and circular-trial limits before/after ORS. */
+export async function handleOrsProxyWithEntitlements(
+  env: Env,
+  identity: FirebaseIdentity,
+  request: Request,
+  path: string,
+): Promise<Response> {
+  const maxRouteOptions = await getRouteOptionLimit(env, identity)
+  if (maxRouteOptions instanceof Response) return maxRouteOptions
+
+  let isCircularRequest = false
+  try {
+    const body = await request.clone().json() as unknown
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      const options = (body as Record<string, unknown>).options
+      isCircularRequest = Boolean(
+        options &&
+        typeof options === 'object' &&
+        !Array.isArray(options) &&
+        (options as Record<string, unknown>).round_trip &&
+        typeof (options as Record<string, unknown>).round_trip === 'object',
+      )
+    }
+  } catch {
+    // handleOrsProxy remains responsible for returning the provider's malformed-body response.
+  }
+
+  if (isCircularRequest && maxRouteOptions === 2) {
+    try {
+      const blocked = await checkFreeCircularLimit(env, identity.uid)
+      if (blocked) return json(blocked, 403)
+    } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return json({ error: 'Circular quota check unavailable', code: 'quota_unavailable' }, 503)
+      }
+      throw error
+    }
+  }
+
+  const response = await handleOrsProxy(request, env, path, maxRouteOptions)
+  if (!response.ok) return response
+
+  // ORS can return HTTP 200 with an empty feature list. That is not a route
+  // creation, so normalize it to non-2xx before the monthly counter is bumped.
+  let payload: Record<string, unknown>
+  try {
+    const parsed = await response.clone().json() as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return json({ error: 'Invalid ORS route response', code: 'provider_error' }, 502)
+    }
+    payload = parsed as Record<string, unknown>
+    if (!Array.isArray(payload.features)) {
+      return json({ error: 'ORS response did not include route features', code: 'provider_error' }, 502)
+    }
+  } catch {
+    return json({ error: 'Invalid ORS route response', code: 'provider_error' }, 502)
+  }
+  if (payload.features.length === 0) {
+    return json({ error: 'No route found', code: 'no_route' }, 404)
+  }
+
+  if (!isCircularRequest || maxRouteOptions === 3) return response
+
+  // A circular trial is consumed only when ORS actually returns a route. The
+  // Firestore CAS protects concurrent requests racing for the same monthly credit.
+  try {
+    await consumeFreeCircular(env, identity.uid)
+  } catch (error) {
+    if (error instanceof QuotaLimitReachedError) {
+      return json({ error: error.message, code: error.code }, 403)
+    }
+    if (error instanceof QuotaUnavailableError) {
+      console.error('[route-options] circular quota consumption failed', error.message)
+      return json({ error: 'Circular quota consumption unavailable', code: 'quota_unavailable' }, 503)
+    }
+    throw error
+  }
+
+  // Tell the ORS client to return this first valid Free trial route immediately;
+  // it must not launch a second seed/profile attempt that would spend the trial again.
+  try {
+    const payload = await response.json() as Record<string, unknown>
+    payload.pedalmapQuotaConsumed = true
+    const headers = new Headers(response.headers)
+    headers.delete('content-length')
+    headers.delete('content-encoding')
+    headers.set('Content-Type', 'application/json')
+    return new Response(JSON.stringify(payload), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  } catch {
+    return response
+  }
+}
+
+/** Enforce anonymous identity + Free monthly quota; bump after a successful route. */
+export function withRoutingCreateQuota(
+  env: Env,
+  identity: FirebaseIdentity,
+  request: Request,
+  run: () => Promise<Response>,
+): Promise<Response>
+/** Legacy registered-user call shape; anonymous calls without a Request fail closed. */
+export function withRoutingCreateQuota(
   env: Env,
   identity: FirebaseIdentity,
   run: () => Promise<Response>,
+): Promise<Response>
+export async function withRoutingCreateQuota(
+  env: Env,
+  identity: FirebaseIdentity,
+  requestOrRun: Request | (() => Promise<Response>),
+  maybeRun?: () => Promise<Response>,
 ): Promise<Response> {
-  const blocked = await assertRoutingCreateAllowed(env, identity.uid)
+  const request = requestOrRun instanceof Request ? requestOrRun : null
+  const run = typeof requestOrRun === 'function' ? requestOrRun : maybeRun
+  if (!run) return json({ error: 'Quota check unavailable', code: 'quota_unavailable' }, 503)
+  if (identity.isAnonymous) {
+    if (!request) {
+      return json({ error: 'Guest quota check requires the client IP', code: 'quota_unavailable' }, 503)
+    }
+    const guestIdentityBlock = await enforceAnonymousIdentityGate(env, request, identity)
+    if (guestIdentityBlock) return guestIdentityBlock
+  }
+  let blocked: { error: string; code: string } | null
+  try {
+    blocked = await assertRoutingCreateAllowed(env, identity.uid, identity.isAnonymous)
+  } catch (e) {
+    if (e instanceof QuotaUnavailableError) {
+      return json({ error: 'Quota check unavailable', code: 'quota_unavailable' }, 503)
+    }
+    throw e
+  }
   if (blocked) return json(blocked, 403)
   const response = await run()
   if (response.ok) {
-    void bumpRoutesCreatedThisMonth(env, identity.uid).catch((err) => {
-      console.warn('[create-quota] bump failed', err)
-    })
+    try {
+      await bumpRoutesCreatedThisMonth(env, identity.uid, identity.isAnonymous)
+    } catch (e) {
+      if (e instanceof QuotaLimitReachedError) {
+        return json({ error: e.message, code: e.code }, 403)
+      }
+      if (e instanceof QuotaUnavailableError) {
+        console.error('[create-quota] quota bump unavailable', e.message)
+        return json({ error: 'Quota update unavailable', code: 'quota_unavailable' }, 503)
+      }
+      console.warn('[create-quota] bump failed', e)
+      return json({ error: 'Quota update unavailable', code: 'quota_unavailable' }, 503)
+    }
   }
   return response
 }
@@ -88,6 +318,18 @@ async function requireFirebaseUser(
       401,
     )
   }
+}
+
+/** Account-only features must be protected by the Worker, not just UI controls. */
+export function requireRegisteredAccount(identity: FirebaseIdentity): Response | null {
+  if (!identity.isAnonymous) return null
+  return json(
+    {
+      error: 'Crea una cuenta gratis para guardar rutas públicas y activar avisos de viento.',
+      code: 'registration_required',
+    },
+    403,
+  )
 }
 
 /** Per-uid limit, plus a tighter shared IP bucket for anonymous churn. */
@@ -113,6 +355,12 @@ async function enforceRoutingRateLimit(
 
 export default {
   async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    try {
+      const deleted = await cleanupExpiredGuestIdentityMarkers(env, 100)
+      console.log('[cron guest marker cleanup]', JSON.stringify({ deleted }))
+    } catch (err) {
+      console.error('[cron guest marker cleanup]', err instanceof Error ? err.message : err)
+    }
     try {
       const result = await runScheduledSocialPost(env)
       console.log('[cron social]', JSON.stringify(result))
@@ -187,6 +435,16 @@ export default {
         )
       }
 
+      if (path === '/health/stripe' && request.method === 'GET') {
+        const limited = await enforceRateLimit(request, {
+          limit: 5,
+          windowSec: 60,
+          prefix: 'stripe-readiness',
+        })
+        if (limited) return withCors(env, request, limited)
+        return withCors(env, request, await handleStripeReadiness(env))
+      }
+
       if (path.startsWith('/v2/directions/') && request.method === 'POST') {
         const identity = await requireFirebaseUser(env, request)
         if (identity instanceof Response) return withCors(env, request, identity)
@@ -200,9 +458,11 @@ export default {
         return withCors(
           env,
           request,
-          await withRoutingCreateQuota(env, identity, () =>
-            handleOrsProxy(request, env, path),
-          ),
+          await withRoutingCreateQuota(env, identity, request, async () => {
+            const filterBlock = await enforceOrsFilterLimit(env, request, identity)
+            if (filterBlock) return filterBlock
+            return handleOrsProxyWithEntitlements(env, identity, request, path)
+          }),
         )
       }
 
@@ -219,7 +479,9 @@ export default {
         return withCors(
           env,
           request,
-          await withRoutingCreateQuota(env, identity, () => handleBikeRoute(request, env)),
+          await withRoutingCreateQuota(env, identity, request, () =>
+            handleBikeRoute(request, env, undefined, identity),
+          ),
         )
       }
 
@@ -233,7 +495,13 @@ export default {
           anonIpLimit: 20,
         })
         if (limited) return withCors(env, request, limited)
-        return withCors(env, request, await handleValhallaProxy(request, env, 'route'))
+        return withCors(
+          env,
+          request,
+          await withRoutingCreateQuota(env, identity, request, () =>
+            handleValhallaProxy(request, env, 'route'),
+          ),
+        )
       }
 
       if (path === '/valhalla/trace_attributes' && request.method === 'POST') {
@@ -315,6 +583,8 @@ export default {
           key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
+        const guestIdentityBlock = await enforceAnonymousIdentityGate(env, request, identity)
+        if (guestIdentityBlock) return withCors(env, request, guestIdentityBlock)
         return withCors(env, request, await handleClaimGpx(env, identity))
       }
 
@@ -354,7 +624,24 @@ export default {
           key: identity.uid,
         })
         if (limited) return withCors(env, request, limited)
+        const accountRequired = requireRegisteredAccount(identity)
+        if (accountRequired) return withCors(env, request, accountRequired)
         return withCors(env, request, await handlePublishRoute(request, env, identity))
+      }
+
+      if (path === '/routes/wind-alert' && request.method === 'POST') {
+        const identity = await requireFirebaseUser(env, request)
+        if (identity instanceof Response) return withCors(env, request, identity)
+        const limited = await enforceRateLimit(request, {
+          limit: 20,
+          windowSec: 60,
+          prefix: 'wind-alert',
+          key: identity.uid,
+        })
+        if (limited) return withCors(env, request, limited)
+        const accountRequired = requireRegisteredAccount(identity)
+        if (accountRequired) return withCors(env, request, accountRequired)
+        return withCors(env, request, await handleSetWindAlert(request, env, identity))
       }
 
       if (path === '/stripe/checkout' && request.method === 'POST') {

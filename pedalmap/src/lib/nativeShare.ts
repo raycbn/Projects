@@ -2,6 +2,8 @@ import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { shareRouteNative, shareRouteToInstagramStory } from '@/lib/routeShare'
 
+const SHARE_IMAGE_DIRECTORY = 'pedalmap-share'
+
 /**
  * Converts a Blob to a base64 string (without data URL prefix) for Capacitor Filesystem.
  */
@@ -25,7 +27,7 @@ async function saveShareImageToCache(
   blob: Blob,
   filename: string,
   flow: 'route' | 'story',
-  shareStartedAt = performance.now(),
+  _shareStartedAt = performance.now(),
 ): Promise<string | null> {
   if (!Capacitor.isNativePlatform()) return null
   console.log('[share-debug] function=saveShareImageToCache phase=before filename=' + filename)
@@ -36,9 +38,19 @@ async function saveShareImageToCache(
     console.log('[share-timing] blobToBase64=' + Math.round(performance.now() - stageStartedAt) + 'ms flow=' + flow)
 
     stageStartedAt = performance.now()
+    console.log('[share-timing] Filesystem.mkdir=start flow=' + flow)
+    await Filesystem.mkdir({
+      path: SHARE_IMAGE_DIRECTORY,
+      directory: Directory.Cache,
+      recursive: true,
+    })
+    console.log('[share-timing] Filesystem.mkdir=' + Math.round(performance.now() - stageStartedAt) + 'ms flow=' + flow)
+
+    stageStartedAt = performance.now()
     console.log('[share-timing] Filesystem.writeFile=start flow=' + flow)
+    const shareImagePath = `${SHARE_IMAGE_DIRECTORY}/${filename}`
     await Filesystem.writeFile({
-      path: filename,
+      path: shareImagePath,
       data: base64,
       directory: Directory.Cache,
     })
@@ -49,7 +61,7 @@ async function saveShareImageToCache(
       console.log('[share-timing] Filesystem.stat=start flow=route')
     }
     const stat = await Filesystem.stat({
-      path: filename,
+      path: shareImagePath,
       directory: Directory.Cache,
     })
     if (flow === 'route') {

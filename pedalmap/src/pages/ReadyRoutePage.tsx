@@ -42,6 +42,7 @@ import {
   canSaveRoute,
 } from '@/services/EntitlementService'
 import { alertService } from '@/services/AlertService'
+import { showRouteReadyNotification } from '@/lib/localNotification'
 import { authService } from '@/services/AuthService'
 import { formatDistance, formatElevation } from '@/lib/stats'
 import {
@@ -614,6 +615,7 @@ export function ReadyRoutePage() {
         )
         setPostSaveHint('wind')
       }
+      const routeSlugForNotification = packet?.shareSlug ?? null
       track('route_saved', {
         distance_m: draft.stats.distanceMeters,
         via: 'ready_route',
@@ -623,6 +625,10 @@ export function ReadyRoutePage() {
         routeTitle: draft.title,
         distanceMeters: draft.stats.distanceMeters,
         elevationGainMeters: draft.stats.elevationGainMeters,
+      })
+      // Local notification: route ready
+      void showRouteReadyNotification({
+        routeSlug: routeSlugForNotification ?? undefined,
       })
     } catch (error) {
       console.error('[ready-route] save', error)
@@ -981,18 +987,21 @@ export function ReadyRoutePage() {
             const durationMinutes = draft.stats.estimatedDurationSeconds / 60
             const elevationGainM = draft.stats.elevationGainMeters
             const temperatureC = selectedWindHour?.temperatureC
-            const fuelContext = { distanceKm, durationMinutes, elevationGainM, temperatureC }
+            const fuelContext = { sport: 'cycling', distanceKm, durationMinutes, elevationGainM, temperatureC }
             if (!canShowFuelCta(fuelContext)) {
               return null
             }
 
-            const handleClick = () => {
-              if (isFuelEmbeddedApp()) {
-                navigate('/fuel', { state: fuelContext })
-                return
+              const handleClick = () => {
+                console.log('[fuel] ReadyRoutePage handleClick source=ReadyRoutePage')
+                console.log('[fuel] ReadyRoute fuelContext created sport=' + fuelContext.sport + ' distance=' + fuelContext.distanceKm + ' duration=' + fuelContext.durationMinutes + ' elevation=' + fuelContext.elevationGainM + ' temperature=' + fuelContext.temperatureC)
+                if (isFuelEmbeddedApp()) {
+                  console.log('[fuel] navigate(/fuel/planner) embedded=true state=' + JSON.stringify(fuelContext))
+                  navigate('/fuel/planner', { state: fuelContext })
+                  return
+                }
+                void openFuelWeb()
               }
-              void openFuelWeb()
-            }
 
             async function openFuelWeb() {
               const fuelWindow = window.open('about:blank', '_blank')
@@ -1211,7 +1220,9 @@ export function ReadyRoutePage() {
           <div className="border-t border-[var(--color-fog)] px-1 pb-2 pt-1">
             <GpsExportPanel
               route={draft}
-              onPremiumRequired={() => showPaywall('gpx_export')}
+              onPremiumRequired={(reason) =>
+            showPaywall(reason === 'guest_identity_limit_reached' ? reason : 'gpx_export')
+          }
             />
           </div>
         </details>
@@ -1261,6 +1272,8 @@ export function ReadyRoutePage() {
           )
         }}
         onExportGpx={() => {
+          console.log('[gpx] EXPORT BUTTON CLICK source=ReadyRoutePage')
+          console.log('[gpx] handler ENTER source=ReadyRoutePage')
           setRideOpen(false)
           setExportOpen(true)
           window.setTimeout(() => {

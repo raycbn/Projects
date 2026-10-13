@@ -406,7 +406,7 @@ export function MyActivitiesPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-trail)]">
             GPS
@@ -418,8 +418,8 @@ export function MyActivitiesPage() {
             Graba en PedalMap o trae salidas de tu ciclocomputador. El análisis Free se queda aquí.
           </p>
         </div>
-        <Link to="/actividad">
-          <Button>Nueva actividad</Button>
+        <Link to="/actividad" className="w-full shrink-0 sm:w-auto">
+          <Button className="w-full sm:w-auto">Nueva actividad</Button>
         </Link>
       </div>
 

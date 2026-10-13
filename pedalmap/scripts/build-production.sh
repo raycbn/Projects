@@ -11,18 +11,18 @@ if [[ -f .env.local ]]; then
   set +a
 fi
 
-# Production overrides (Worker already claimed)
-export VITE_PEDALMAP_API_URL="${VITE_PEDALMAP_API_URL:-https://pedalmap-api.broken-dietician.workers.dev}"
-export VITE_ROUTING_PROXY_URL="${VITE_ROUTING_PROXY_URL:-$VITE_PEDALMAP_API_URL}"
+# Production must never inherit localhost URLs from .env.local.
+# Optional production-only overrides are explicit and intentionally separate.
+export VITE_PEDALMAP_API_URL="${PEDALMAP_PRODUCTION_API_URL:-https://pedalmap-api.broken-dietician.workers.dev}"
+export VITE_ROUTING_PROXY_URL="${PEDALMAP_PRODUCTION_ROUTING_PROXY_URL:-$VITE_PEDALMAP_API_URL}"
 export VITE_USE_ROUTING_PROXY=true
 export VITE_STRIPE_ENABLED=true
 export VITE_ALLOW_DIRECT_ORS=false
 unset VITE_ORS_API_KEY VITE_ROUTING_API_KEY || true
 
-if [[ -z "${VITE_STRIPE_PUBLISHABLE_KEY:-}" ]]; then
-  echo "Missing VITE_STRIPE_PUBLISHABLE_KEY (pk_test_…)" >&2
-  exit 1
-fi
+# Checkout is hosted by Stripe via the Worker API; the browser does not use Stripe.js
+# and must not require a publishable key merely to enable the hosted checkout redirect.
+unset VITE_STRIPE_PUBLISHABLE_KEY || true
 
 echo "Building with API=$VITE_PEDALMAP_API_URL stripe=$VITE_STRIPE_ENABLED"
 npm run build

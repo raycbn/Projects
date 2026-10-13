@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   GoogleAuthProvider,
   getRedirectResult,
   linkWithCredential,
@@ -24,9 +25,12 @@ import { requestGoogleAccessToken } from '@/lib/googleIdentity'
 import { withAuthLock } from '@/lib/authLock'
 import { track } from '@/lib/analytics'
 import { googleBridgeReturnUrl, pendingAuthTrackProps } from '@/lib/pendingAuthAction'
+import { nativeGoogleSignIn } from '@/lib/googleSignInBridge'
 import { communityService } from '@/services/CommunityService'
 import { applyPremiumAllowlist } from '@/lib/premiumAllowlist'
-import { isoWeekKey, utcMonthKey } from '@/lib/freemium'
+import { utcMonthKey } from '@/lib/freemium'
+import { Capacitor } from '@capacitor/core'
+import { googleOAuthClientId } from '@/lib/googleIdentity'
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
@@ -275,16 +279,104 @@ export class AuthService {
 
   async signInGoogle(): Promise<User | null> {
     track('signup_started', { method: 'google', ...pendingAuthTrackProps() })
-    // Emergency only: VITE_FORCE_GOOGLE_AUTH_BRIDGE=true hops via *.web.app.
     if (typeof window !== 'undefined' && needsGoogleAuthBridge()) {
       startGoogleAuthBridge(googleBridgeReturnUrl(window.location.origin))
       return null
     }
 
     return withAuthLock(async () => {
-      // Primary: Google Identity Services (stays on pedalmap.es, no Firebase redirect).
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const clientId = googleOAuthClientId()
+          const clientSource = import.meta.env.VITE_GOOGLE_CLIENT_ID ? 'VITE_GOOGLE_CLIENT_ID' : 'default-web-client-id'
+          console.log('[auth] native Google sign-in start clientId=' + clientId + ' source=' + clientSource)
+          const native = await nativeGoogleSignIn(clientId)
+          console.log('[auth] native Google sign-in result uid=' + native.uid + ' email=' + native.email + ' idTokenPresent=' + (native.idToken != null))
+          const auth = getFirebaseAuth()
+          const current = auth.currentUser
+          const idToken = native.idToken || ''
+
+          // The native plugin already signs in to Firebase via signInWithCredential.
+          // If Firebase already has a non-anonymous user matching the native uid,
+          // the session is complete — just ensure the profile.
+          console.log('[auth] native flow checking firebase session: currentUid=' + (current?.uid ?? 'null') + ' isAnonymous=' + (current?.isAnonymous ?? 'null') + ' nativeUid=' + (native.uid ?? 'null'))
+          if (current && !current.isAnonymous && current.uid === native.uid) {
+            console.log('[auth] native Firebase session already active uid=' + current.uid)
+            await this.ensureProfile(current)
+            trackSignupCompleted('google')
+            return current
+          }
+
+          // Link anonymous -> Google account (preserves free usage).
+          if (current?.isAnonymous && native.uid && idToken) {
+            try {
+              const credential = GoogleAuthProvider.credential(idToken)
+              const linked = await linkWithCredential(current, credential)
+              console.log('[auth] native Google link uid=' + linked.user.uid)
+              await this.ensureProfile(linked.user)
+              trackSignupCompleted('google_link')
+              return linked.user
+            } catch (error) {
+              const code =
+                typeof error === 'object' && error && 'code' in error
+                  ? String((error as { code?: string }).code || '')
+                  : ''
+              if (
+                code !== 'auth/credential-already-in-use' &&
+                code !== 'auth/email-already-in-use' &&
+                code !== 'auth/provider-already-linked'
+              ) {
+                throw error
+              }
+            }
+          }
+
+          // Fall back: try linking/signing-in with the returned idToken.
+          // If the plugin already authenticated (current.uid === native.uid),
+          // we would have returned above; this is the case where uid mismatch or
+          // the native plugin did NOT complete Firebase sign-in.
+          if (native.uid && native.email && idToken) {
+            const credential = GoogleAuthProvider.credential(idToken)
+            const result = await signInWithCredential(auth, credential)
+            console.log('[auth] native Google sign-inWithCredential uid=' + result.user.uid)
+            await this.ensureProfile(result.user)
+            trackSignupCompleted('google')
+            return result.user
+          }
+
+          // Plugin resolved but no usable idToken: still try to grab the current
+          // Firebase user so GIS/redirect fallback doesn't trigger and cause
+          // origin_mismatch in the native context where web OAuth is unavailable.
+          if (current && !current.isAnonymous && current.uid === native.uid) {
+            console.log('[auth] native Google completed via plugin auth uid=' + current.uid)
+            await this.ensureProfile(current)
+            trackSignupCompleted('google')
+            return current
+          }
+
+          console.warn('[auth] native Google sign-in resolved but no session; cannot complete')
+          throw new Error('Firebase no recibió la sesión de Google.')
+        } catch (error) {
+          console.warn('[auth] native Google sign-in failed', error)
+          const message =
+            typeof error === 'object' && error && 'message' in error
+              ? String((error as { message?: string }).message || '')
+              : 'Inicio con Google no disponible en Android todavía.'
+          throw new Error(message)
+        }
+      }  // <-- cierra el catch native
+
+      // Only reach here on web platform. On native, native sign-in is the
+      // authoritative path — never fall back to browser-based GIS/redirect
+      // (which causes origin_mismatch/400 on Android WebView).
+      if (Capacitor.isNativePlatform()) {
+        throw new Error('Native Google sign-in failed. No web fallback on Android.')
+      }
+
       try {
+        console.log('[auth] web OAuth fallback: requestGoogleAccessToken (GIS) invoked=true')
         const accessToken = await requestGoogleAccessToken()
+        console.log('[auth] GIS accessToken present=' + (accessToken != null && accessToken.length > 0))
         return await this.signInGoogleWithAccessToken(accessToken)
       } catch (error) {
         const code =
@@ -297,6 +389,7 @@ export class AuthService {
         console.warn('[auth] GIS Google sign-in failed, falling back to Firebase helper', error)
       }
 
+      console.log('[auth] web OAuth fallback: signInWithPopup/Redirect invoked=true')
       return this.signInGoogleDirect()
     })
   }
@@ -336,6 +429,23 @@ export class AuthService {
 
   async registerEmail(email: string, password: string, displayName?: string): Promise<User> {
     return withAuthLock(async () => {
+      const auth = getFirebaseAuth()
+      const current = auth.currentUser
+
+      // If currently anonymous, link the email credential to preserve UID and usage
+      if (current?.isAnonymous) {
+        track('signup_started', { method: 'email_link' })
+        const credential = EmailAuthProvider.credential(email, password)
+        const linked = await linkWithCredential(current, credential)
+        if (displayName) {
+          await updateProfile(linked.user, { displayName })
+        }
+        await this.ensureProfile(linked.user)
+        trackSignupCompleted('email_link')
+        return linked.user
+      }
+
+      // Normal signup for non-anonymous users
       track('signup_started', { method: 'email' })
       const result = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password)
       if (displayName) {
@@ -453,57 +563,8 @@ export class AuthService {
     )
   }
 
-  /** Soft Free trial: count one weekly GPX export (Premium skips). */
-  async recordFreeGpxExport(uid: string): Promise<void> {
-    const ref = doc(getDb(), 'users', uid)
-    const snap = await getDoc(ref)
-    const week = isoWeekKey()
-    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
-      routesCreatedThisMonth: 0,
-      routesSaved: 0,
-      monthKey: utcMonthKey(),
-    }
-    const used = usage.freeGpxWeekKey === week ? (usage.freeGpxUsedThisWeek ?? 0) : 0
-    await setDoc(
-      ref,
-      {
-        usage: {
-          ...usage,
-          freeGpxWeekKey: week,
-          freeGpxUsedThisWeek: used + 1,
-        },
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
-  }
-
-  /** Soft Free trial: count one Objetivo create this month (Premium skips). */
-  async recordFreeCircularUsed(uid: string): Promise<void> {
-    const ref = doc(getDb(), 'users', uid)
-    const snap = await getDoc(ref)
-    const key = utcMonthKey()
-    const usage = (snap.data()?.usage as UserProfile['usage'] | undefined) ?? {
-      routesCreatedThisMonth: 0,
-      routesSaved: 0,
-      monthKey: key,
-    }
-    const sameMonth = usage.monthKey === key
-    const used = sameMonth ? (usage.freeCircularUsedThisMonth ?? 0) : 0
-    await setDoc(
-      ref,
-      {
-        usage: {
-          ...usage,
-          monthKey: key,
-          routesCreatedThisMonth: sameMonth ? (usage.routesCreatedThisMonth ?? 0) : 0,
-          freeCircularUsedThisMonth: used + 1,
-        },
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
-  }
+  // GPX and Objetivo quota counters are mutated exclusively by the routing Worker.
+  // Firestore rules intentionally make these usage fields server-owned.
 }
 
 export const authService = new AuthService()

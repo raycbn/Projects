@@ -1,4 +1,5 @@
 name = "pedalmap-api"
+account_id = "8d3dee03d95ea2cd9facc889a6a6e628"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 workers_dev = true
@@ -10,6 +11,8 @@ workers_dev = true
 #   STRIPE_SECRET_KEY
 #   STRIPE_WEBHOOK_SECRET
 #   FIREBASE_SERVICE_ACCOUNT  (JSON string of a Spark-compatible service account)
+#   GUEST_QUOTA_HMAC_SECRET   (stable secret for monthly guest-IP pseudonyms; keep it unchanged
+#                             across deploys/key rotations so the same network cannot reset quotas)
 # Vars:
 #   FIREBASE_PROJECT_ID
 #   STRIPE_PRICE_MONTHLY
@@ -35,7 +38,7 @@ STRIPE_PRICE_YEARLY = "price_1U3K1LD9NwIvrlQEIIFS5oTG"
 STRIPE_PRICE_GRUPETA_MONTHLY = "price_1U3bpPD9NwIvrlQEzgfsjSvB"
 STRIPE_PRICE_GRUPETA_YEARLY = "price_1U3bmtD9NwIvrlQEJc1FhkLw"
 APP_URL = "https://pedalmap.es"
-ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,https://fuel.pedalmap.es,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173,http://localhost:5174,http://127.0.0.1:5174"
+ALLOWED_ORIGINS = "https://pedalmap.es,https://www.pedalmap.es,https://pedalmap-79b3a.web.app,https://pedalmap-79b3a.firebaseapp.com,https://fuel.pedalmap.es,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173,http://localhost:5174,http://127.0.0.1:5174,https://localhost"
 # Transactional From (Resend). Receiving still uses IONOS MX.
 MAIL_FROM = "PedalMap <aviso@pedalmap.es>"
 # 90-day Instagram SEO campaign (cron publishes 1 post/day when secrets exist)

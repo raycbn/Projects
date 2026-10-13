@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { resolveEffectivePlan } from './entitlements'
+import { handleClaimGpx, resolveEffectivePlan } from './entitlements'
 import * as firestore from './firestore'
 import * as stripe from './stripe'
 import * as premiumAllowlist from './premiumAllowlist'
@@ -87,5 +87,51 @@ describe('resolveEffectivePlan fallback', () => {
 
     const result = await resolveEffectivePlan(mockEnv(), { uid: 'uid_123', emailVerified: true, isAnonymous: false })
     expect(result.plan).toBe('free')
+  })
+})
+
+describe('server-side guest GPX quota', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+    vi.resetAllMocks()
+  })
+
+  it('allows anonymous visitors to claim the server-side Free GPX credit', async () => {
+    const claimSpy = vi.spyOn(firestore, 'claimFreeGpxExport').mockResolvedValue({
+      allowed: true,
+      plan: 'free',
+      remaining: 0,
+    })
+
+    const response = await handleClaimGpx(mockEnv(), {
+      uid: 'anonymous-uid',
+      email: undefined,
+      emailVerified: false,
+      isAnonymous: true,
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ ok: true, allowed: true, plan: 'free' })
+    expect(claimSpy).toHaveBeenCalledWith(expect.any(Object), 'anonymous-uid')
+  })
+
+  it('returns the Free GPX weekly limit for an anonymous visitor who has used it', async () => {
+    vi.spyOn(firestore, 'claimFreeGpxExport').mockResolvedValue({
+      allowed: false,
+      plan: 'free',
+      remaining: 0,
+      reason: 'gpx_week_limit',
+    })
+
+    const response = await handleClaimGpx(mockEnv(), {
+      uid: 'anonymous-uid',
+      email: undefined,
+      emailVerified: false,
+      isAnonymous: true,
+    })
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({ allowed: false, code: 'gpx_week_limit' })
   })
 })

@@ -3,6 +3,8 @@ ORS_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 FIREBASE_SERVICE_ACCOUNT=
+# Keep this secret stable between local/deployed Worker restarts. Never commit its value.
+GUEST_QUOTA_HMAC_SECRET=
 STRAVA_CLIENT_ID=
 STRAVA_CLIENT_SECRET=
 WAHOO_CLIENT_ID=

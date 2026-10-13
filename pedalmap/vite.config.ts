@@ -119,6 +119,14 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
-    exclude: ['**/node_modules/**', '**/e2e/**', '**/dist/**'],
+    // The Worker API has its own Node-based Vitest config and suite.
+    // Do not rediscover/run those tests in the browser/jsdom root suite.
+    exclude: [
+      '**/node_modules/**',
+      '**/e2e/**',
+      '**/dist/**',
+      '**/workers/api/**',
+      '.kilo/**',
+    ],
   },
 })

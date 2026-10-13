@@ -21,13 +21,14 @@ import { RoutingError } from '@/domain/types'
 import { routeService } from '@/services/RouteService'
 import { track } from '@/lib/analytics'
 import { canCreateRoute, canUseAdvancedCircular, clampPreferencesForPlan } from '@/services/EntitlementService'
+import { FREE_LIMITS, FREE_TRIALS } from '@/domain/types'
 import { consumeGuestCircular } from '@/lib/freemium'
 import { useAuth } from '@/app/AuthContext'
 import { authService } from '@/services/AuthService'
 import { loadCloudDraft, saveCloudDraft, clearCloudDraft } from '@/services/DraftRepository'
 import { applySelectedOption } from '@/lib/routeOptions'
 import { isRouteOptionPremiumLocked } from '@/lib/routeOptionAccess'
-import { isFirebaseConfigured } from '@/lib/firebase'
+import { getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
 import { clearReadyRoute } from '@/lib/readyRouteHandoff'
 import { slimDraftKeepOptions } from '@/lib/slimRouteDraft'
 
@@ -236,6 +237,13 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     if (!isFirebaseConfigured()) return
     if (authLoading) return
     if (user) return
+    // Opt-in local visual auditing can render signed-out pages without creating
+    // an anonymous Firebase account in the real project just by opening localhost.
+    if (
+      import.meta.env.DEV &&
+      typeof window !== 'undefined' &&
+      window.sessionStorage.getItem('pm_disable_guest_warmup') === 'true'
+    ) return
     let cancelled = false
     void authService.signInGuest().catch((err) => {
       if (!cancelled) console.warn('[planner] anonymous warm-up', err)
@@ -248,6 +256,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   // Pull cloud draft when signing in if we don't already have a local one.
   useEffect(() => {
     if (!user || user.isAnonymous || !hydratedStorage) return
+    // The DEV auth fixture is synthetic; never query protected production
+    // documents with its fake UID while running the visual audit locally.
+    if (import.meta.env.DEV && user.uid === 'dev-001') return
     if (draft) {
       void saveCloudDraft(user.uid, draft).catch(() => undefined)
       return
@@ -281,7 +292,16 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         }
       }
       const liveProfile = profile ?? (await peekLiveProfile())
-      const entitlement = canCreateRoute(liveProfile, guestCreates)
+      if (!liveProfile && isFirebaseConfigured()) {
+        // Do not fall back to a resettable local counter when server-backed
+        // auth is configured but the account/usage profile could not be read.
+        setStatus('error')
+        setErrorMessage('No hemos podido verificar tu cuenta ni tus límites. Reinténtalo en unos segundos.')
+        return null
+      }
+      const liveAuthUser = isFirebaseConfigured() ? getFirebaseAuth().currentUser : user
+      const liveIsAnonymous = liveAuthUser?.isAnonymous ?? user?.isAnonymous ?? false
+      const entitlement = canCreateRoute(liveProfile, guestCreates, liveIsAnonymous)
       if (!entitlement.ok) {
         const reason = entitlement.reason ?? 'create_limit'
         track('paywall_shown', { reason })
@@ -343,19 +363,16 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           setGuestCreates(nextGuest)
           writeGuestCreates(nextGuest)
         }
-        // Soft Free trial: count Objetivo when the user is not Premium.
-        if (routeType === 'circular') {
-          if (liveProfile?.plan === 'premium') {
-            /* unlimited */
-          } else if (user && !user.isAnonymous && liveProfile) {
-            void authService.recordFreeCircularUsed(user.uid).catch((err) => {
-              console.warn('[planner] free circular', err)
-            })
-            track('free_trial_used', { kind: 'circular' })
-          } else {
-            consumeGuestCircular()
-            track('free_trial_used', { kind: 'circular', guest: true })
-          }
+        // The Worker is the source of truth for the monthly circular trial.
+        // Only retain a local counter in non-Firebase development mode; client
+        // writes to usage.freeCircularUsedThisMonth are correctly denied by rules.
+        if (routeType === 'circular' && liveProfile?.plan !== 'premium') {
+          const currentAuthUser = isFirebaseConfigured() ? getFirebaseAuth().currentUser : user
+          if (!isFirebaseConfigured()) consumeGuestCircular()
+          track('free_trial_used', {
+            kind: 'circular',
+            guest: currentAuthUser?.isAnonymous ?? !liveProfile,
+          })
         }
         track('route_created', {
           distance_km: Math.round(result.stats.distanceMeters / 1000),
@@ -378,6 +395,43 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           setPaywallReason('create_limit')
           setErrorMessage(
             'Has alcanzado el límite de creaciones del plan Free este mes. Pasa a Premium para seguir creando rutas.',
+          )
+        } else if (error instanceof RoutingError && error.code === 'anonymous_limit_reached') {
+          setPaywallReason('anonymous_limit_reached')
+          setErrorMessage(
+            'Has usado tus 3 rutas de prueba. Regístrate gratis para seguir creando rutas.',
+          )
+        } else if (error instanceof RoutingError && error.code === 'guest_identity_limit_reached') {
+          setPaywallReason('guest_identity_limit_reached')
+          setErrorMessage(
+            'Esta red ya ha usado la prueba de invitado este mes. Crea una cuenta gratis para continuar.',
+          )
+        } else if (error instanceof RoutingError && error.code === 'quota_unavailable') {
+          setErrorMessage(
+            'No podemos verificar tu cuota ahora. Inténtalo de nuevo en unos segundos.',
+          )
+        } else if (error instanceof RoutingError && error.code === 'free_circular_limit') {
+          const currentAuthUser = isFirebaseConfigured() ? getFirebaseAuth().currentUser : user
+          if (currentAuthUser?.isAnonymous) {
+            setPaywallReason('free_circular_guest_limit')
+            setErrorMessage(
+              'Has usado el Objetivo gratuito de este mes. Crea una cuenta gratis para conservar tus rutas y acceder a 15 creaciones mensuales.',
+            )
+          } else {
+            setPaywallReason('free_circular_limit')
+            setErrorMessage(
+              'Has usado tu Objetivo circular gratuito de este mes. Premium desbloquea Objetivo ilimitado.',
+            )
+          }
+        } else if (error instanceof RoutingError && error.code === 'filter_limit') {
+          setPaywallReason('filter_limit')
+          setErrorMessage(
+            `Has alcanzado el límite de ${FREE_LIMITS.maxActivePreferences} filtros simultáneos del plan Free. Desactiva alguno o pasa a Premium.`,
+          )
+        } else if (error instanceof RoutingError && error.code === 'wind_alert_limit') {
+          setPaywallReason('wind_alert_limit')
+          setErrorMessage(
+            `Has alcanzado el límite de ${FREE_TRIALS.windAlertRoutes} alerta de viento activa del plan Free. Desactiva otra o pasa a Premium.`,
           )
         } else if (error instanceof RoutingError && error.code === 'network') {
           setErrorMessage(

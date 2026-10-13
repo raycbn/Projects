@@ -216,6 +216,8 @@ export interface UserProfile {
     freeGpxUsedThisWeek?: number
     /** Soft Free trial: Objetivos used in the current monthKey. */
     freeCircularUsedThisMonth?: number
+    /** Total route creations by this anonymous UID (no monthly reset). */
+    anonymousRoutesCreated?: number
   }
   createdAt: string
   updatedAt: string
@@ -229,6 +231,7 @@ export interface FreemiumLimits {
   advancedFilters: boolean
   /** Max simultaneous route preferences on free; premium is unlimited. */
   maxActivePreferences: number
+  freeMaxCircularPerMonth: number
 }
 
 /**
@@ -251,6 +254,7 @@ export const FREE_LIMITS: FreemiumLimits = {
   advancedCircular: false,
   advancedFilters: false,
   maxActivePreferences: 2,
+  freeMaxCircularPerMonth: 1,
 }
 
 /** Soft Free trials — taste Premium without a hard wall. */
@@ -278,6 +282,7 @@ export const PREMIUM_LIMITS: FreemiumLimits = {
   advancedCircular: true,
   advancedFilters: true,
   maxActivePreferences: Number.POSITIVE_INFINITY,
+  freeMaxCircularPerMonth: Number.POSITIVE_INFINITY,
 }
 
 export interface PlaceSuggestion {
@@ -308,6 +313,8 @@ export interface RoutingResult {
   elevationProfile: ElevationPoint[]
   stats: RouteStats
   provider: string
+  /** Server-derived total selectable route options allowed by the current plan. */
+  maxRouteOptions?: 2 | 3
   rawInstructions?: string[]
   surfaceEdges?: Array<{
     length?: number
@@ -343,6 +350,12 @@ export class RoutingError extends Error {
     | 'network'
     | 'invalid_request'
     | 'provider_error'
+    | 'anonymous_limit_reached'
+    | 'guest_identity_limit_reached'
+    | 'quota_unavailable'
+    | 'free_circular_limit'
+    | 'filter_limit'
+    | 'wind_alert_limit'
   override readonly cause?: unknown
 
   constructor(
@@ -354,7 +367,13 @@ export class RoutingError extends Error {
       | 'create_limit'
       | 'network'
       | 'invalid_request'
-      | 'provider_error',
+      | 'provider_error'
+      | 'anonymous_limit_reached'
+      | 'guest_identity_limit_reached'
+      | 'quota_unavailable'
+      | 'free_circular_limit'
+      | 'filter_limit'
+      | 'wind_alert_limit',
     cause?: unknown,
   ) {
     super(message)

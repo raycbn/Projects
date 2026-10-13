@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/app/AuthContext'
 import { authErrorMessage } from '@/services/AuthService'
-import { clearPendingAuthAction, postLoginPath } from '@/lib/pendingAuthAction'
+import { postLoginPath } from '@/lib/pendingAuthAction'
 import { markSorteoSignup } from '@/lib/sorteoSignup'
 
 type Mode = 'login' | 'register' | 'forgot'
@@ -18,7 +18,6 @@ export function AuthForm({ mode }: AuthFormProps) {
     signInEmail,
     registerEmail,
     signInGoogle,
-    signInGuest,
     resetPassword,
     firebaseReady,
     authError,
@@ -79,7 +78,11 @@ export function AuthForm({ mode }: AuthFormProps) {
       <p className="mt-2 text-sm text-[var(--color-stone)]">
         {fromSorteo
           ? 'Cuenta nueva con email (Google o correo). El invitado no entra en el cupo Premium.'
-          : 'Puedes planificar rutas sin cuenta. Regístrate cuando quieras guardar o sincronizar.'}
+          : mode === 'register'
+            ? 'Crea una cuenta Free para conservar tus rutas y disfrutar de 15 creaciones al mes, 5 rutas guardadas y 1 GPX semanal. Premium es opcional.'
+            : mode === 'login'
+            ? 'Entra para recuperar tus rutas y preferencias. ¿Aún no tienes cuenta? Crea una cuenta Free para conservar tus rutas y continuar con tus límites mensuales.'
+            : 'Te enviaremos las instrucciones para recuperar el acceso a tu cuenta.'}
       </p>
 
       <form className="mt-6 space-y-3" onSubmit={(e) => void onSubmit(e)}>
@@ -139,31 +142,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           >
             Continuar con Google
           </Button>
-          {fromSorteo ? null : (
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            disabled={loading}
-            onClick={() => {
-              setError(null)
-              clearAuthError()
-              setLoading(true)
-              void signInGuest()
-                .then(() => {
-                  clearPendingAuthAction()
-                  navigate('/route-planner', { replace: true })
-                })
-                .catch((err) => {
-                  console.error(err)
-                  setError(authErrorMessage(err, 'No se pudo entrar como invitado.'))
-                })
-                .finally(() => setLoading(false))
-            }}
-          >
-            Seguir como invitado
-          </Button>
-          )}
+
         </div>
       )}
 

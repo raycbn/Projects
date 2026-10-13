@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1024592974606",
+    "project_id": "pedalmap-79b3a",
+    "storage_bucket": "pedalmap-79b3a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024592974606:android:f8cb8df691bdc0cf1b7d5f",
+        "android_client_info": {
+          "package_name": "com.pedalmap.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1024592974606-s654020obj41er1118l7qvcht01j5m0l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pedalmap.app",
+            "certificate_hash": "2637acd0604146cd90a09726fd5d74f2a91cc39a"
+          }
+        },
+        {
+          "client_id": "1024592974606-tiq9ipsv4est4he707q04qroksef47tv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPBxrF5z9bzGt6mXtKA450rcXppWO7tD8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1024592974606-tiq9ipsv4est4he707q04qroksef47tv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

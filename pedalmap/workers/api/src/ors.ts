@@ -3,7 +3,12 @@ import { ORS_BASE, json } from './types'
 
 const PROFILE_RE = /^cycling-(regular|road|mountain|electric)$/
 
-export async function handleOrsProxy(request: Request, env: Env, path: string): Promise<Response> {
+export async function handleOrsProxy(
+  request: Request,
+  env: Env,
+  path: string,
+  maxRouteOptions: 2 | 3 = 3,
+): Promise<Response> {
   if (!env.ORS_API_KEY) {
     return json({ error: 'ORS_API_KEY not configured on worker' }, 500)
   }
@@ -20,7 +25,30 @@ export async function handleOrsProxy(request: Request, env: Env, path: string): 
     )
   }
 
-  const body = await request.text()
+  let body = await request.text()
+  try {
+    const parsed = JSON.parse(body) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const payload = parsed as Record<string, unknown>
+      let changed = false
+      if ('pedalmapPreferences' in payload) {
+        delete payload.pedalmapPreferences
+        changed = true
+      }
+      const alternatives = payload.alternative_routes
+      if (alternatives && typeof alternatives === 'object' && !Array.isArray(alternatives)) {
+        const optionPayload = alternatives as Record<string, unknown>
+        const requested = Number(optionPayload.target_count)
+        if (Number.isFinite(requested) && requested > maxRouteOptions) {
+          optionPayload.target_count = maxRouteOptions
+          changed = true
+        }
+      }
+      if (changed) body = JSON.stringify(payload)
+    }
+  } catch {
+    // Leave malformed JSON unchanged so the upstream response remains authoritative.
+  }
   let upstream: Response
   try {
     upstream = await fetch(`${ORS_BASE}/v2/directions/${profile}/geojson`, {

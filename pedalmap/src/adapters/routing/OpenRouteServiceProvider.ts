@@ -120,6 +120,8 @@ type OrsGeoJsonFeature = {
 
 type OrsGeoJsonResponse = {
   features?: OrsGeoJsonFeature[]
+  /** Worker marks the one permitted Free circular trial as consumed. */
+  pedalmapQuotaConsumed?: boolean
 }
 
 export function geometryFromOrsCoordinates(
@@ -251,14 +253,18 @@ export class OpenRouteServiceProvider implements RoutingProvider {
     apiKey: string | undefined = resolveApiKey(),
     baseUrl?: string,
   ) {
-    const proxy = resolveProxyUrl()
+    // An explicit base URL is an explicit direct/test target; do not silently
+    // turn it into a proxy request because Vite has a global proxy configured.
+    const proxy = baseUrl === undefined ? resolveProxyUrl() : undefined
     this.viaProxy = Boolean(proxy)
     this.apiKey = this.viaProxy ? undefined : apiKey
     this.baseUrl = (baseUrl ?? proxy ?? ORS_BASE).replace(/\/+$/, '')
   }
 
   isConfigured(): boolean {
-    return Boolean(this.apiKey) || this.viaProxy || Boolean(resolveProxyUrl())
+    // Configuration is resolved once in the constructor. Re-reading global env
+    // here can make an explicitly unconfigured provider appear configured.
+    return Boolean(this.apiKey) || this.viaProxy
   }
 
   async calculateRoute(request: RoutingRequest): Promise<RoutingResult> {
@@ -332,6 +338,9 @@ export class OpenRouteServiceProvider implements RoutingProvider {
               request.circularDistanceMeters,
               request.routeType === 'circular' ? seed : undefined,
             ),
+            // The Worker validates the original app-level preference count then
+            // strips this metadata before sending the payload to ORS.
+            ...(this.viaProxy ? { pedalmapPreferences: request.preferences } : {}),
           }
 
           // Ask for alternate geometries so we can pick the one that best matches the bike.
@@ -398,6 +407,46 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                   (text.includes('create_limit') || text.includes('"code":"create_limit"'))
                 ) {
                   throw new RoutingError('Create limit exceeded', 'create_limit', text)
+                }
+                if (
+                  response.status === 403 &&
+                  (text.includes('anonymous_limit_reached') || text.includes('"code":"anonymous_limit_reached"'))
+                ) {
+                  throw new RoutingError(
+                    'Has usado tus 3 rutas de prueba. Regístrate gratis para seguir creando rutas.',
+                    'anonymous_limit_reached',
+                    text,
+                  )
+                }
+                if (
+                  response.status === 403 &&
+                  (text.includes('guest_identity_limit_reached') || text.includes('"code":"guest_identity_limit_reached"'))
+                ) {
+                  throw new RoutingError(
+                    'Esta red ya ha usado la prueba de invitado este mes. Crea una cuenta gratis para continuar.',
+                    'guest_identity_limit_reached',
+                    text,
+                  )
+                }
+                if (
+                  response.status === 403 &&
+                  (text.includes('free_circular_limit') || text.includes('"code":"free_circular_limit"'))
+                ) {
+                  throw new RoutingError(
+                    'Has usado tu Objetivo circular gratuito de este mes. Regístrate para continuar.',
+                    'free_circular_limit',
+                    text,
+                  )
+                }
+                if (
+                  response.status === 503 &&
+                  (text.includes('quota_unavailable') || text.includes('"code":"quota_unavailable"'))
+                ) {
+                  throw new RoutingError(
+                    'No podemos verificar tu cuota ahora. Inténtalo de nuevo en unos segundos.',
+                    'quota_unavailable',
+                    text,
+                  )
                 }
                 if (response.status === 404 || text.toLowerCase().includes('could not find routable')) {
                   break profileLoop
@@ -470,6 +519,12 @@ export class OpenRouteServiceProvider implements RoutingProvider {
                 provider: this.name,
                 rawInstructions: chosen.rawInstructions,
                 alternatives,
+              }
+
+              if (request.routeType === 'circular' && data.pedalmapQuotaConsumed) {
+                // Server has consumed this user's one Free circular trial.
+                // Return the first valid route rather than searching more seeds.
+                return candidate
               }
 
               const suit = candidate.stats.surfaceStats?.suitability?.score ?? 0
